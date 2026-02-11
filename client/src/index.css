@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Add style for required form labels */
+  .required:after {
+    content: " *";
+    color: hsl(var(--destructive));
+  }
+  
+  /* Animation for highlighted cells when calculations are updated */
+  .highlight-updated {
+    animation: highlight-fade 2s ease-in-out;
+  }
+  
+  @keyframes highlight-fade {
+    0% {
+      background-color: rgba(136, 236, 185, 0.2);
+    }
+    30% {
+      background-color: rgba(136, 236, 185, 0.5);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+  
+  /* Fix for dropdown menus in modal dialogs */
+  .payment-distribution-modal .select-dropdown,
+  .view-distribution-modal .select-dropdown {
+    z-index: 9999 !important; /* Higher than modal backdrop */
+  }
+  
+  /* Ensure all dropdowns render on top of other elements */
+  [data-radix-popper-content-wrapper] {
+    z-index: 9999 !important;
+  }
+  
+  /* Force all select content to use highest z-index */
+  .radix-select-content,
+  [role="listbox"],
+  [cmdk-list] {
+    z-index: 9999 !important;
+  }
+  
+  /* Fix for all modal content to ensure proper stacking context */
+  .payment-distribution-modal,
+  .view-distribution-modal {
+    position: relative;
+    overflow: visible !important;
+  }
+}
+
+@layer base {
+  :root {
+    --sidebar: 220 15% 95% / 0.5;
+    --sidebar-foreground: 220 15% 20%;
+    --sidebar-border: 220 15% 85% / 0.3;
+    --sidebar-accent: 220 15% 90% / 0.3;
+    --sidebar-accent-foreground: 222.2 47.4% 11.2%;
+    --sidebar-ring: 215 20.2% 65.1%;
+  }
+
+  .dark {
+    --sidebar: 222.2 84% 4.9% / 0.7;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5% / 0.4;
+    --sidebar-accent: 217.2 32.6% 17.5% / 0.4;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-ring: 212.7 26.8% 83.9%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased text-foreground;
+    background: transparent;
+  }
+}

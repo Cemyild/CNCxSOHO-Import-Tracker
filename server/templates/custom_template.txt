@@ -1,0 +1,36 @@
+SOHO TURKEY - Payment Report
+Generated on: {{summary.report_date}}
+
+----- PAYMENT SUMMARY -----
+Total Payments Received: {{summary.total_payments_received}}
+Total Distributed: {{summary.total_distributed}}
+Total Pending Distribution: {{summary.total_pending_distribution}}
+Procedures with Distributions: {{summary.procedures_with_distributions}}
+
+----- ALL INCOMING PAYMENTS -----
+{#each payment_details.rows}
+Payment ID: {{payment_id}}
+Date Received: {{payment_date}}
+Amount: {{amount}}
+Status: {{status}}
+------------------------------
+{/each}
+
+----- PAYMENT DISTRIBUTIONS BY PROCEDURE -----
+{#each distribution_details.groups}
+Procedure: {{reference}}
+BL/AWB Reference: {{bl_reference}}
+
+Payment Distributions:
+{#each distributions}
+  - Payment ID: {{payment_id}}
+    Date: {{payment_date}}
+    Type: {{payment_type}}
+    Amount: {{amount}}
+{/each}
+Total Distributed: {{total_distributed}}
+------------------------------
+{/each}
+
+This report was automatically generated on {{summary.report_date}}
+SOHO TURKEY • Payment Management System

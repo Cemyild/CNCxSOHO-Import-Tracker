@@ -1,0 +1,4172 @@
+
+import { 
+  users, documentTypes, procedureDocuments, procedures, procedureComments, procedureActivities, taxes, 
+  importExpenses, importServiceInvoices, expenseDocuments, procedureStatusDetails, payments,
+  invoiceLineItems, invoiceLineItemsConfig, costDistributionMethodEnum,
+  type User, type InsertUser, 
+  type Procedure, type InsertProcedure,
+  type ProcedureDocument, type InsertProcedureDocument,
+  type DocumentType, type InsertDocumentType,
+  type ProcedureComment, type InsertProcedureComment,
+  type ProcedureActivity, type InsertProcedureActivity,
+  type Tax, type InsertTax,
+  type ImportExpense, type InsertImportExpense,
+  type ImportServiceInvoice, type InsertImportServiceInvoice,
+  type ExpenseDocument, type InsertExpenseDocument,
+  type ProcedureStatusDetail, type InsertProcedureStatusDetail,
+  type Payment, type InsertPayment,
+  type InvoiceLineItem, type InsertInvoiceLineItem,
+  type InvoiceLineItemsConfig, type InsertInvoiceLineItemsConfig
+} from "@shared/schema";
+
+import { eq, and, or, SQL, inArray, sql, gte, lte, isNull, isNotNull } from "drizzle-orm";
+import { db } from "./db";
+
+export interface IStorage {
+  // User operations
+  getUser(id: number): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
+  deleteUser(id: number): Promise<boolean>;
+  
+  // Procedure operations
+  getProcedure(id: number): Promise<Procedure | undefined>;
+  getAllProcedures(): Promise<Procedure[]>;
+  getProceduresByUser(userId: number): Promise<Procedure[]>;
+  getProceduresByStatus(statusType: string, statusValue: string): Promise<Procedure[]>;
+  getProcedureByReference(reference: string): Promise<Procedure[]>;
+  createProcedure(procedure: InsertProcedure): Promise<Procedure>;
+  updateProcedure(id: number, procedure: Partial<InsertProcedure>): Promise<Procedure | undefined>;
+  updateFreightAmount(reference: string, freightAmount: number): Promise<Procedure | undefined>;
+  deleteProcedure(id: number): Promise<boolean>;
+  
+  // Procedure Status Details operations
+  getProcedureStatusDetails(procedureReference: string): Promise<ProcedureStatusDetail[]>;
+  getProcedureStatusDetailsByCategory(procedureReference: string, category: string): Promise<ProcedureStatusDetail[]>;
+  upsertProcedureStatusDetail(statusDetail: InsertProcedureStatusDetail): Promise<ProcedureStatusDetail>;
+  updateProcedureStatusDetails(procedureReference: string, category: string, statusList: InsertProcedureStatusDetail[]): Promise<ProcedureStatusDetail[]>;
+  deleteProcedureStatusDetail(id: number): Promise<boolean>;
+  
+  // Tax operations
+  getTax(id: number): Promise<Tax | undefined>;
+  getTaxByProcedureReference(reference: string): Promise<Tax | undefined>;
+  getAllTaxes(): Promise<Tax[]>;
+  createTax(tax: InsertTax): Promise<Tax>;
+  updateTax(id: number, tax: Partial<InsertTax>): Promise<Tax | undefined>;
+  deleteTax(id: number): Promise<boolean>;
+  
+  // Import Expense operations
+  getImportExpense(id: number): Promise<ImportExpense | undefined>;
+  getImportExpensesByReference(reference: string): Promise<ImportExpense[]>;
+  getImportExpensesByCategory(reference: string, category: string): Promise<ImportExpense[]>;
+  createImportExpense(expense: InsertImportExpense): Promise<ImportExpense>;
+  updateImportExpense(id: number, expense: Partial<InsertImportExpense>): Promise<ImportExpense | undefined>;
+  deleteImportExpense(id: number): Promise<boolean>;
+  getAllImportExpenses(): Promise<ImportExpense[]>;
+  getExpensesByDateRange(startDate: Date, endDate: Date): Promise<ImportExpense[]>;
+  getExpensesByCategoryAndDateRange(
+    startDate: string | Date, 
+    endDate: string | Date,
+    procedureReferences?: string[]
+  ): Promise<{ category: string; totalAmount: number; count: number; }[]>;
+  
+  // Import Service Invoice operations
+  getImportServiceInvoice(id: number): Promise<ImportServiceInvoice | undefined>;
+  getAllImportServiceInvoices(): Promise<ImportServiceInvoice[]>;
+  getImportServiceInvoicesByReference(reference: string): Promise<ImportServiceInvoice[]>;
+  createImportServiceInvoice(invoice: InsertImportServiceInvoice): Promise<ImportServiceInvoice>;
+  updateImportServiceInvoice(id: number, invoice: Partial<InsertImportServiceInvoice>): Promise<ImportServiceInvoice | undefined>;
+  deleteImportServiceInvoice(id: number): Promise<boolean>;
+  
+  // Expense Document operations
+  getExpenseDocument(id: number): Promise<ExpenseDocument | undefined>;
+  getExpenseDocumentsByExpense(expenseType: string, expenseId: number): Promise<ExpenseDocument[]>;
+  getExpenseDocumentsByReference(reference: string): Promise<ExpenseDocument[]>;
+  uploadExpenseDocument(document: InsertExpenseDocument): Promise<ExpenseDocument>;
+  deleteExpenseDocument(id: number): Promise<boolean>;
+  
+  // Document operations
+  getDocumentType(id: number): Promise<DocumentType | undefined>;
+  getAllDocumentTypes(): Promise<DocumentType[]>;
+  createDocumentType(documentType: InsertDocumentType): Promise<DocumentType>;
+  deleteDocumentType(id: number): Promise<boolean>;
+  
+  uploadDocument(document: InsertProcedureDocument): Promise<ProcedureDocument>;
+  getDocuments(procedureId: number): Promise<ProcedureDocument[]>;
+  getDocument(id: number): Promise<ProcedureDocument | undefined>;
+  deleteDocument(id: number): Promise<boolean>;
+  
+  // Comment operations
+  createComment(comment: InsertProcedureComment): Promise<ProcedureComment>;
+  getComments(procedureId: number): Promise<ProcedureComment[]>;
+  deleteComment(id: number): Promise<boolean>;
+  
+  // Activity operations
+  logActivity(activity: InsertProcedureActivity): Promise<ProcedureActivity>;
+  getActivities(procedureId: number): Promise<ProcedureActivity[]>;
+  
+  // Payment operations
+  getPayment(id: number): Promise<Payment | undefined>;
+  getAllPayments(): Promise<Payment[]>;
+  getPaymentsByProcedureReference(reference: string): Promise<Payment[]>;
+  getPaymentsByType(paymentType: string): Promise<Payment[]>;
+  createPayment(payment: InsertPayment): Promise<Payment>;
+  updatePayment(id: number, payment: Partial<InsertPayment>): Promise<Payment | undefined>;
+  deletePayment(id: number): Promise<boolean>;
+  calculateFinancialSummary(reference: string): Promise<{
+    totalExpenses: number;
+    advancePayments: number;
+    balancePayments: number;
+    totalPayments: number;
+    remainingBalance: number;
+  }>;
+
+  // Invoice Line Item operations
+  getInvoiceLineItem(id: number): Promise<InvoiceLineItem | undefined>;
+  getInvoiceLineItemsByReference(reference: string): Promise<InvoiceLineItem[]>;
+  createInvoiceLineItem(lineItem: InsertInvoiceLineItem): Promise<InvoiceLineItem>;
+  updateInvoiceLineItem(id: number, lineItem: Partial<InsertInvoiceLineItem>): Promise<InvoiceLineItem | undefined>;
+  deleteInvoiceLineItem(id: number): Promise<boolean>;
+  deleteAllInvoiceLineItems(procedureReference: string): Promise<number>;
+  bulkCreateInvoiceLineItems(lineItems: InsertInvoiceLineItem[]): Promise<InvoiceLineItem[]>;
+  
+  // Calculate and update the cost factors for all line items
+  calculateInvoiceLineItemCosts(reference: string): Promise<{
+    totalLineItems: number;
+    costMultiplier: number;
+    success: boolean;
+  }>;
+  
+  // Invoice Line Item Config operations
+  getInvoiceLineItemsConfig(reference: string): Promise<InvoiceLineItemsConfig | undefined>;
+  createOrUpdateInvoiceLineItemsConfig(config: InsertInvoiceLineItemsConfig): Promise<InvoiceLineItemsConfig>;
+  
+  // Freight operations
+  updateFreightAmount(reference: string, freightAmount: number): Promise<Procedure | undefined>;
+}
+
+export class PostgresStorage implements IStorage {
+  constructor() {
+    // Set up database connection
+  }
+  
+  async updateFreightAmount(reference: string, freightAmount: number): Promise<Procedure | undefined> {
+    console.log("[PostgresStorage.updateFreightAmount] Updating freight amount for procedure:", reference, "to", freightAmount);
+    
+    try {
+      // First get the procedure to ensure it exists
+      const procedureResult = await db.select().from(procedures).where(eq(procedures.reference, reference)).limit(1);
+      
+      if (!procedureResult || procedureResult.length === 0) {
+        console.log("[PostgresStorage.updateFreightAmount] ERROR: Cannot find procedure with reference:", reference);
+        return undefined;
+      }
+      
+      const currentProcedure = procedureResult[0];
+      
+      // Execute the update query
+      const result = await db.update(procedures)
+        .set({ 
+          freight_amount: freightAmount.toString(),
+          updatedAt: new Date()
+        })
+        .where(eq(procedures.reference, reference))
+        .returning();
+      
+      if (result.length > 0) {
+        console.log("[PostgresStorage.updateFreightAmount] Update successful for procedure:", reference);
+        
+        await this.logActivity({
+          procedureId: currentProcedure.id,
+          userId: currentProcedure.createdBy,
+          action: 'update',
+          details: `Updated freight amount to ${freightAmount}`
+        });
+        
+        return result[0];
+      } else {
+        console.log("[PostgresStorage.updateFreightAmount] No rows updated or rows not returned");
+        return undefined;
+      }
+    } catch (error) {
+      console.error('[PostgresStorage.updateFreightAmount] Error:', error);
+      throw error;
+    }
+  }
+
+  // User operations
+  async getUser(id: number): Promise<User | undefined> {
+    const result = await db.select().from(users).where(({ id: userId }) => userId === id).limit(1);
+    return result[0];
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(({ username: un }) => un === username).limit(1);
+    return result[0];
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const result = await db.insert(users).values(user).returning();
+    return result[0];
+  }
+
+  async updateUser(id: number, userData: Partial<InsertUser>): Promise<User | undefined> {
+    const result = await db.update(users)
+      .set({ ...userData, updatedAt: new Date() })
+      .where(({ id: userId }) => userId === id)
+      .returning();
+    return result[0];
+  }
+
+  async deleteUser(id: number): Promise<boolean> {
+    const result = await db.delete(users).where(({ id: userId }) => userId === id).returning();
+    return result.length > 0;
+  }
+
+  // Procedure operations
+  async getProcedure(id: number): Promise<Procedure | undefined> {
+    const result = await db.select().from(procedures).where(({ id: procId }) => procId === id).limit(1);
+    return result[0];
+  }
+
+  async getAllProcedures(): Promise<Procedure[]> {
+    return await db.select().from(procedures);
+  }
+
+  async getProceduresByUser(userId: number): Promise<Procedure[]> {
+    return await db.select().from(procedures)
+      .where(({ assignedTo, createdBy }) => assignedTo === userId || createdBy === userId);
+  }
+
+  // Get procedures by document, payment, or shipment status
+  async getProceduresByStatus(statusType: string, statusValue: string): Promise<Procedure[]> {
+    if (statusType === 'document') {
+      return await db.select().from(procedures)
+        .where(({ document_status }) => document_status === statusValue);
+    } else if (statusType === 'payment') {
+      return await db.select().from(procedures)
+        .where(({ payment_status }) => payment_status === statusValue);
+    } else if (statusType === 'shipment') {
+      return await db.select().from(procedures)
+        .where(({ shipment_status }) => shipment_status === statusValue);
+    }
+    
+    return [];
+  }
+  
+  // Get procedures by reference
+  async getProcedureByReference(reference: string): Promise<Procedure[]> {
+    return await db.select().from(procedures)
+      .where(eq(procedures.reference, reference));
+  }
+
+  async createProcedure(procedure: InsertProcedure): Promise<Procedure> {
+    const result = await db.insert(procedures).values(procedure).returning();
+    await this.logActivity({
+      procedureId: result[0].id,
+      userId: procedure.createdBy,
+      action: 'create',
+      details: `Procedure created`
+    });
+    return result[0];
+  }
+
+  async updateProcedure(id: number, procedureData: Partial<InsertProcedure>): Promise<Procedure | undefined> {
+    console.log("[storage.updateProcedure] Updating procedure with ID:", id, "and data:", JSON.stringify(procedureData));
+    
+    try {
+      // First, always get the procedure using the ID to ensure we have the right one
+      const targetProc = await db.select().from(procedures).where(eq(procedures.id, id)).limit(1);
+      
+      if (!targetProc || targetProc.length === 0) {
+        console.log("[storage.updateProcedure] ERROR: Cannot find procedure with ID:", id);
+        return undefined;
+      }
+      
+      const currentProcedure = targetProc[0];
+      console.log("[storage.updateProcedure] Found procedure to update:", JSON.stringify({
+        id: currentProcedure.id,
+        reference: currentProcedure.reference,
+        shipment_status: currentProcedure.shipment_status,
+        payment_status: currentProcedure.payment_status,
+        document_status: currentProcedure.document_status
+      }));
+      
+      // Create update data
+      const updateData = { ...procedureData, updatedAt: new Date() };
+      console.log("[storage.updateProcedure] Final update data:", JSON.stringify(updateData));
+      
+      // Execute the update query with explicit ID equality
+      const result = await db.update(procedures)
+        .set(updateData)
+        .where(eq(procedures.id, id))
+        .returning();
+      
+      if (result.length > 0) {
+        console.log("[storage.updateProcedure] Update successful, returned:", JSON.stringify({
+          id: result[0].id,
+          reference: result[0].reference,
+          shipment_status: result[0].shipment_status,
+          payment_status: result[0].payment_status,
+          document_status: result[0].document_status
+        }));
+        
+        await this.logActivity({
+          procedureId: id,
+          userId: procedureData.createdBy || currentProcedure.createdBy || 1,
+          action: 'update',
+          details: `Procedure updated: ${Object.keys(procedureData).join(', ')}`
+        });
+        
+        // Compare old and new values for debug
+        console.log("[storage.updateProcedure] Status changes:");
+        if (procedureData.shipment_status) {
+          console.log("  shipment_status:", currentProcedure.shipment_status, "->", procedureData.shipment_status);
+        }
+        if (procedureData.payment_status) {
+          console.log("  payment_status:", currentProcedure.payment_status, "->", procedureData.payment_status);
+        }
+        if (procedureData.document_status) {
+          console.log("  document_status:", currentProcedure.document_status, "->", procedureData.document_status);
+        }
+      } else {
+        console.log("[storage.updateProcedure] No rows updated or rows not returned");
+      }
+      
+      return result[0];
+    } catch (error) {
+      console.error("[storage.updateProcedure] Error:", error);
+      throw error;
+    }
+  }
+
+
+
+  async deleteProcedure(id: number): Promise<boolean> {
+    // First get the procedure to log who deleted it
+    const proc = await this.getProcedure(id);
+    if (!proc) return false;
+    
+    const result = await db.delete(procedures).where(({ id: procId }) => procId === id).returning();
+    
+    if (result.length > 0) {
+      await this.logActivity({
+        procedureId: id,
+        userId: proc.createdBy,
+        action: 'delete',
+        details: `Procedure deleted`
+      });
+    }
+    
+    return result.length > 0;
+  }
+  
+  // Procedure Status Details operations
+  async getProcedureStatusDetails(procedureReference: string): Promise<ProcedureStatusDetail[]> {
+    return await db.select().from(procedureStatusDetails)
+      .where(eq(procedureStatusDetails.procedureReference, procedureReference));
+  }
+  
+  async getProcedureStatusDetailsByCategory(procedureReference: string, category: string): Promise<ProcedureStatusDetail[]> {
+    return await db.select().from(procedureStatusDetails)
+      .where(and(
+        eq(procedureStatusDetails.procedureReference, procedureReference),
+        eq(procedureStatusDetails.category, category)
+      ));
+  }
+  
+  async upsertProcedureStatusDetail(statusDetail: InsertProcedureStatusDetail): Promise<ProcedureStatusDetail> {
+    // Check if status already exists
+    const existing = await db.select().from(procedureStatusDetails)
+      .where(and(
+        eq(procedureStatusDetails.procedureReference, statusDetail.procedureReference),
+        eq(procedureStatusDetails.category, statusDetail.category),
+        eq(procedureStatusDetails.status, statusDetail.status)
+      ))
+      .limit(1);
+    
+    if (existing.length > 0) {
+      // Update existing status
+      const result = await db.update(procedureStatusDetails)
+        .set({ 
+          isActive: statusDetail.isActive,
+          updatedBy: statusDetail.updatedBy,
+          updatedAt: new Date()
+        })
+        .where(eq(procedureStatusDetails.id, existing[0].id))
+        .returning();
+      
+      return result[0];
+    } else {
+      // Insert new status
+      const result = await db.insert(procedureStatusDetails)
+        .values({
+          ...statusDetail,
+          updatedAt: new Date()
+        })
+        .returning();
+      
+      return result[0];
+    }
+  }
+  
+  async updateProcedureStatusDetails(
+    procedureReference: string, 
+    category: string, 
+    statusList: InsertProcedureStatusDetail[]
+  ): Promise<ProcedureStatusDetail[]> {
+    const results: ProcedureStatusDetail[] = [];
+    
+    // Process each status in the list
+    for (const statusDetail of statusList) {
+      const result = await this.upsertProcedureStatusDetail(statusDetail);
+      results.push(result);
+    }
+    
+    // Get all current statuses for this category and reference
+    const proc = await db.select().from(procedures)
+      .where(eq(procedures.reference, procedureReference))
+      .limit(1);
+    
+    if (proc.length > 0) {
+      // Log activity
+      await this.logActivity({
+        procedureId: proc[0].id,
+        userId: statusList[0]?.updatedBy || 1,
+        action: 'status_update',
+        details: `${category} status options updated for procedure ${procedureReference}`
+      });
+    }
+    
+    return results;
+  }
+  
+  async deleteProcedureStatusDetail(id: number): Promise<boolean> {
+    const status = await db.select().from(procedureStatusDetails)
+      .where(eq(procedureStatusDetails.id, id))
+      .limit(1);
+    
+    if (!status.length) return false;
+    
+    const result = await db.delete(procedureStatusDetails)
+      .where(eq(procedureStatusDetails.id, id))
+      .returning();
+    
+    if (result.length > 0 && status[0]) {
+      // Get procedure for activity logging
+      const proc = await db.select().from(procedures)
+        .where(eq(procedures.reference, status[0].procedureReference))
+        .limit(1);
+      
+      if (proc.length > 0) {
+        await this.logActivity({
+          procedureId: proc[0].id,
+          userId: status[0].updatedBy || 1,
+          action: 'status_delete',
+          details: `Status '${status[0].status}' deleted from ${status[0].category} category`
+        });
+      }
+    }
+    
+    return result.length > 0;
+  }
+
+  // Tax operations
+  async getTax(id: number): Promise<Tax | undefined> {
+    const result = await db.select().from(taxes).where(eq(taxes.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getTaxByProcedureReference(reference: string): Promise<Tax | undefined> {
+    const result = await db.select().from(taxes)
+      .where(eq(taxes.procedureReference, reference))
+      .limit(1);
+    return result[0];
+  }
+  
+  async getAllTaxes(): Promise<Tax[]> {
+    try {
+      console.log('[PostgresStorage.getAllTaxes] Retrieving all tax records');
+      const result = await db.select().from(taxes);
+      console.log(`[PostgresStorage.getAllTaxes] Retrieved ${result.length} tax records`);
+      return result;
+    } catch (error) {
+      console.error('[PostgresStorage.getAllTaxes] Error retrieving tax records:', error);
+      // Return empty array instead of throwing to avoid breaking batch operations
+      return [];
+    }
+  }
+
+  async createTax(tax: InsertTax): Promise<Tax> {
+    // Verify that the procedure reference exists first
+    const proc = await db.select().from(procedures)
+      .where(eq(procedures.reference, tax.procedureReference))
+      .limit(1);
+    
+    if (proc.length === 0) {
+      throw new Error(`Procedure with reference ${tax.procedureReference} does not exist`);
+    }
+    
+    const result = await db.insert(taxes).values(tax).returning();
+    
+    await this.logActivity({
+      procedureId: proc[0].id,
+      userId: tax.createdBy || 3, // Using admin user ID 3 instead of 1,
+      action: 'tax_create',
+      details: `Tax information added for procedure with reference ${tax.procedureReference}`
+    });
+    
+    return result[0];
+  }
+
+  async updateTax(id: number, taxData: Partial<InsertTax>): Promise<Tax | undefined> {
+    console.log('storage.updateTax - Looking up tax with ID:', id);
+    const tax = await this.getTax(id);
+    console.log('storage.updateTax - Current tax data:', JSON.stringify(tax));
+    
+    if (!tax) {
+      console.log('storage.updateTax - Tax not found with ID:', id);
+      return undefined;
+    }
+    
+    // Create update data with proper type conversion
+    const updateValues = {
+      ...taxData,
+      updatedAt: new Date()
+    };
+    
+    console.log('storage.updateTax - Preparing update with values:', JSON.stringify(updateValues));
+    
+    // Create query with SQL debugging
+    const query = db.update(taxes)
+      .set(updateValues)
+      .where(eq(taxes.id, id))
+      .returning();
+    
+    console.log('storage.updateTax - Executing SQL update query');
+    const result = await query;
+    
+    // Get procedure ID for activity logging
+    if (result.length > 0) {
+      const proc = await db.select().from(procedures)
+        .where(eq(procedures.reference, tax.procedureReference))
+        .limit(1);
+      
+      if (proc.length > 0) {
+        await this.logActivity({
+          procedureId: proc[0].id,
+          userId: taxData.createdBy || tax.createdBy || 3, // Using admin user ID 3 instead of 1,
+          action: 'tax_update',
+          details: `Tax information updated for procedure with reference ${tax.procedureReference}`
+        });
+      }
+    }
+    
+    return result[0];
+  }
+
+  async deleteTax(id: number): Promise<boolean> {
+    const tax = await this.getTax(id);
+    if (!tax) return false;
+    
+    const result = await db.delete(taxes).where(eq(taxes.id, id)).returning();
+    
+    if (result.length > 0) {
+      // Get procedure ID for activity logging
+      const proc = await db.select().from(procedures)
+        .where(eq(procedures.reference, tax.procedureReference))
+        .limit(1);
+      
+      if (proc.length > 0) {
+        await this.logActivity({
+          procedureId: proc[0].id,
+          userId: tax.createdBy || 3, // Using admin user ID 3 instead of 1,
+          action: 'tax_delete',
+          details: `Tax information deleted for procedure with reference ${tax.procedureReference}`
+        });
+      }
+    }
+    
+    return result.length > 0;
+  }
+
+  // Import Expense operations
+  async getImportExpense(id: number): Promise<ImportExpense | undefined> {
+    const result = await db.select().from(importExpenses).where(({ id: expenseId }) => expenseId === id).limit(1);
+    return result[0];
+  }
+
+  async getImportExpensesByReference(reference: string): Promise<ImportExpense[]> {
+    return await db.select().from(importExpenses)
+      .where(({ procedureReference }) => procedureReference === reference);
+  }
+
+  async getImportExpensesByCategory(reference: string, category: string): Promise<ImportExpense[]> {
+    return await db.select().from(importExpenses)
+      .where(({ procedureReference, category: cat }) => 
+        procedureReference === reference && cat === category
+      );
+  }
+
+  async createImportExpense(expense: InsertImportExpense): Promise<ImportExpense> {
+    // Verify that the procedure reference exists first
+    const proc = await db.select().from(procedures)
+      .where(({ reference }) => reference === expense.procedureReference)
+      .limit(1);
+    
+    if (proc.length === 0) {
+      throw new Error(`Procedure with reference ${expense.procedureReference} does not exist`);
+    }
+    
+    const result = await db.insert(importExpenses).values(expense).returning();
+    
+    await this.logActivity({
+      procedureId: proc[0].id,
+      userId: expense.createdBy || 3, // Using admin user ID 3 instead of 1,
+      action: 'expense_create',
+      details: `Import expense added for ${expense.category} category with amount ${expense.amount} ${expense.currency}`
+    });
+    
+    return result[0];
+  }
+
+  async updateImportExpense(id: number, expenseData: Partial<InsertImportExpense>): Promise<ImportExpense | undefined> {
+    const expense = await this.getImportExpense(id);
+    if (!expense) return undefined;
+    
+    const result = await db.update(importExpenses)
+      .set({ ...expenseData, updatedAt: new Date() })
+      .where(({ id: expenseId }) => expenseId === id)
+      .returning();
+    
+    // Get procedure ID for activity logging
+    if (result.length > 0) {
+      const proc = await db.select().from(procedures)
+        .where(({ reference }) => reference === expense.procedureReference)
+        .limit(1);
+      
+      if (proc.length > 0) {
+        await this.logActivity({
+          procedureId: proc[0].id,
+          userId: expenseData.createdBy || expense.createdBy || 3, // Using admin user ID 3 instead of 1,
+          action: 'expense_update',
+          details: `Import expense updated for ${expense.category} category: ${Object.keys(expenseData).join(', ')}`
+        });
+      }
+    }
+    
+    return result[0];
+  }
+
+  async deleteImportExpense(id: number): Promise<boolean> {
+    const expense = await this.getImportExpense(id);
+    if (!expense) return false;
+    
+    try {
+      console.log(`Attempting to delete import expense with ID ${id}`);
+      
+      // First delete any associated expense documents
+      await db.delete(expenseDocuments)
+        .where(eq(expenseDocuments.expenseType, 'import_expense'))
+        .where(eq(expenseDocuments.expenseId, id));
+      
+      console.log(`Associated expense documents deleted for expense ID ${id}`);
+      
+      // Then delete the expense itself
+      const result = await db.delete(importExpenses)
+        .where(eq(importExpenses.id, id))
+        .returning();
+      
+      console.log(`Delete operation result for expense ID ${id}:`, result);
+      
+      if (result.length > 0) {
+        // Get procedure ID for activity logging
+        const proc = await db.select().from(procedures)
+          .where(eq(procedures.reference, expense.procedureReference))
+          .limit(1);
+        
+        if (proc.length > 0) {
+          await this.logActivity({
+            procedureId: proc[0].id,
+            userId: expense.createdBy || 3, // Using admin user ID 3 instead of 1,
+            action: 'expense_delete',
+            details: `Import expense deleted for ${expense.category} category with amount ${expense.amount} ${expense.currency}`
+          });
+        }
+      }
+      
+      return result.length > 0;
+    } catch (error) {
+      console.error('Error deleting import expense:', error);
+      console.error('Error details:', error.stack);
+      return false;
+    }
+  }
+  
+  async getAllImportExpenses(): Promise<ImportExpense[]> {
+    try {
+      console.log('[PostgresStorage.getAllImportExpenses] Retrieving all import expense records');
+      const result = await db.select().from(importExpenses);
+      console.log(`[PostgresStorage.getAllImportExpenses] Retrieved ${result.length} import expense records`);
+      return result;
+    } catch (error) {
+      console.error('[PostgresStorage.getAllImportExpenses] Error retrieving import expense records:', error);
+      // Return empty array instead of throwing to avoid breaking batch operations
+      return [];
+    }
+  }
+  
+  async getExpensesByDateRange(startDate: Date, endDate: Date): Promise<ImportExpense[]> {
+    try {
+      console.log(`[PostgresStorage.getExpensesByDateRange] Retrieving expenses between ${startDate} and ${endDate}`);
+      
+      const result = await db.select().from(importExpenses)
+        .where(
+          and(
+            gte(importExpenses.createdAt as any, startDate),
+            lte(importExpenses.createdAt as any, endDate)
+          )
+        );
+      
+      console.log(`[PostgresStorage.getExpensesByDateRange] Retrieved ${result.length} expense records`);
+      return result;
+    } catch (error) {
+      console.error('[PostgresStorage.getExpensesByDateRange] Error retrieving expenses by date range:', error);
+      return [];
+    }
+  }
+  
+  async getExpensesByCategoryAndDateRange(
+    startDate: string | Date,
+    endDate: string | Date,
+    procedureReferences?: string[]
+  ): Promise<{ category: string; totalAmount: number; count: number; }[]> {
+    try {
+      console.log(`[PostgresStorage.getExpensesByCategoryAndDateRange] Retrieving expenses by category between ${startDate} and ${endDate}`);
+      
+      // Convert string dates to Date objects if needed
+      const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
+      const end = typeof endDate === 'string' ? new Date(endDate) : endDate;
+      
+      // Base query to get all expenses in the date range
+      let query = db.select().from(importExpenses)
+        .where(
+          and(
+            gte(importExpenses.createdAt as any, start),
+            lte(importExpenses.createdAt as any, end)
+          )
+        );
+      
+      // Add procedure reference filter if provided
+      if (procedureReferences && procedureReferences.length > 0) {
+        query = query.where(
+          inArray(importExpenses.procedureReference, procedureReferences)
+        );
+      }
+      
+      const expenses = await query;
+      console.log(`[PostgresStorage.getExpensesByCategoryAndDateRange] Retrieved ${expenses.length} raw expense records`);
+      
+      // Group expenses by category and calculate totals
+      const categoryMap: Record<string, { totalAmount: number; count: number }> = {};
+      
+      for (const expense of expenses) {
+        const category = expense.category || 'Uncategorized';
+        
+        if (!categoryMap[category]) {
+          categoryMap[category] = { totalAmount: 0, count: 0 };
+        }
+        
+        const amount = parseFloat(expense.amount?.toString() || '0');
+        categoryMap[category].totalAmount += amount;
+        categoryMap[category].count += 1;
+      }
+      
+      // Convert to array format
+      const result = Object.entries(categoryMap).map(([category, data]) => ({
+        category,
+        totalAmount: data.totalAmount,
+        count: data.count
+      }));
+      
+      console.log(`[PostgresStorage.getExpensesByCategoryAndDateRange] Grouped into ${result.length} categories`);
+      return result;
+    } catch (error) {
+      console.error('[PostgresStorage.getExpensesByCategoryAndDateRange] Error retrieving expenses by category and date range:', error);
+      return [];
+    }
+  }
+  
+  // Import Service Invoice operations
+  async getImportServiceInvoice(id: number): Promise<ImportServiceInvoice | undefined> {
+    const result = await db.select().from(importServiceInvoices).where(({ id: invoiceId }) => invoiceId === id).limit(1);
+    return result[0];
+  }
+
+  async getAllImportServiceInvoices(): Promise<ImportServiceInvoice[]> {
+    return await db.select().from(importServiceInvoices);
+  }
+
+  async getImportServiceInvoicesByReference(reference: string): Promise<ImportServiceInvoice[]> {
+    return await db.select().from(importServiceInvoices)
+      .where(({ procedureReference }) => procedureReference === reference);
+  }
+
+  async createImportServiceInvoice(invoice: InsertImportServiceInvoice): Promise<ImportServiceInvoice> {
+    // Verify that the procedure reference exists first
+    const proc = await db.select().from(procedures)
+      .where(({ reference }) => reference === invoice.procedureReference)
+      .limit(1);
+    
+    if (proc.length === 0) {
+      throw new Error(`Procedure with reference ${invoice.procedureReference} does not exist`);
+    }
+    
+    const result = await db.insert(importServiceInvoices).values(invoice).returning();
+    
+    await this.logActivity({
+      procedureId: proc[0].id,
+      userId: invoice.createdBy || 3, // Using admin user ID 3 instead of 1,
+      action: 'service_invoice_create',
+      details: `Import service invoice added with amount ${invoice.amount}, invoice number ${invoice.invoiceNumber}`
+    });
+    
+    return result[0];
+  }
+
+  async updateImportServiceInvoice(id: number, invoiceData: Partial<InsertImportServiceInvoice>): Promise<ImportServiceInvoice | undefined> {
+    const invoice = await this.getImportServiceInvoice(id);
+    if (!invoice) return undefined;
+    
+    const result = await db.update(importServiceInvoices)
+      .set({ ...invoiceData, updatedAt: new Date() })
+      .where(({ id: invoiceId }) => invoiceId === id)
+      .returning();
+    
+    // Get procedure ID for activity logging
+    if (result.length > 0) {
+      const proc = await db.select().from(procedures)
+        .where(({ reference }) => reference === invoice.procedureReference)
+        .limit(1);
+      
+      if (proc.length > 0) {
+        await this.logActivity({
+          procedureId: proc[0].id,
+          userId: invoiceData.createdBy || invoice.createdBy || 3, // Using admin user ID 3 instead of 1,
+          action: 'service_invoice_update',
+          details: `Import service invoice updated: ${Object.keys(invoiceData).join(', ')}`
+        });
+      }
+    }
+    
+    return result[0];
+  }
+
+  async deleteImportServiceInvoice(id: number): Promise<boolean> {
+    const invoice = await this.getImportServiceInvoice(id);
+    if (!invoice) return false;
+    
+    try {
+      console.log(`Attempting to delete import service invoice with ID ${id}`);
+      
+      // First delete any associated expense documents
+      await db.delete(expenseDocuments)
+        .where(eq(expenseDocuments.expenseType, 'service_invoice'))
+        .where(eq(expenseDocuments.expenseId, id));
+      
+      console.log(`Associated expense documents deleted for service invoice ID ${id}`);
+      
+      // Then delete the service invoice itself
+      const result = await db.delete(importServiceInvoices)
+        .where(eq(importServiceInvoices.id, id))
+        .returning();
+      
+      console.log(`Delete operation result for service invoice ID ${id}:`, result);
+      
+      if (result.length > 0) {
+        // Get procedure ID for activity logging
+        const proc = await db.select().from(procedures)
+          .where(eq(procedures.reference, invoice.procedureReference))
+          .limit(1);
+        
+        if (proc.length > 0) {
+          await this.logActivity({
+            procedureId: proc[0].id,
+            userId: invoice.createdBy || 3, // Using admin user ID 3 instead of 1,
+            action: 'service_invoice_delete',
+            details: `Import service invoice deleted with amount ${invoice.amount}, invoice number ${invoice.invoiceNumber}`
+          });
+        }
+      }
+      
+      return result.length > 0;
+    } catch (error) {
+      console.error('Error deleting import service invoice:', error);
+      console.error('Error details:', error.stack);
+      return false;
+    }
+  }
+  
+  // Expense Document operations
+  async getExpenseDocument(id: number): Promise<ExpenseDocument | undefined> {
+    const result = await db.select().from(expenseDocuments).where(eq(expenseDocuments.id, id)).limit(1);
+    return result[0];
+  }
+  
+  async getExpenseDocumentsByExpense(expenseType: string, expenseId: number): Promise<ExpenseDocument[]> {
+    return await db.select().from(expenseDocuments)
+      .where(eq(expenseDocuments.expenseType, expenseType))
+      .where(eq(expenseDocuments.expenseId, expenseId));
+  }
+  
+  async getExpenseDocumentsByReference(reference: string): Promise<ExpenseDocument[]> {
+    return await db.select().from(expenseDocuments)
+      .where(eq(expenseDocuments.procedureReference, reference));
+  }
+  
+  async uploadExpenseDocument(document: InsertExpenseDocument): Promise<ExpenseDocument> {
+    // Verify that the procedure reference exists
+    const proc = await db.select().from(procedures)
+      .where(eq(procedures.reference, document.procedureReference))
+      .limit(1);
+    
+    if (proc.length === 0) {
+      throw new Error(`Procedure with reference ${document.procedureReference} does not exist`);
+    }
+    
+    // Add the document
+    const result = await db.insert(expenseDocuments).values(document).returning();
+    
+    // Log the activity
+    await this.logActivity({
+      procedureId: proc[0].id,
+      userId: document.uploadedBy || 3, // Using admin user ID 3 instead of 1
+      action: 'document_upload',
+      details: `Document "${document.originalFilename}" uploaded for ${document.expenseType} with ID ${document.expenseId}`
+    });
+    
+    return result[0];
+  }
+  
+  async deleteExpenseDocument(id: number): Promise<boolean> {
+    const document = await this.getExpenseDocument(id);
+    if (!document) return false;
+    
+    const result = await db.delete(expenseDocuments).where(eq(expenseDocuments.id, id)).returning();
+    
+    if (result.length > 0) {
+      // Get procedure ID for activity logging
+      const proc = await db.select().from(procedures)
+        .where(eq(procedures.reference, document.procedureReference))
+        .limit(1);
+      
+      if (proc.length > 0) {
+        await this.logActivity({
+          procedureId: proc[0].id,
+          userId: document.uploadedBy || 3, // Using admin user ID 3 instead of 1
+          action: 'document_delete',
+          details: `Document "${document.originalFilename}" deleted from ${document.expenseType} with ID ${document.expenseId}`
+        });
+      }
+    }
+    
+    return result.length > 0;
+  }
+
+  // Document type operations
+  async getDocumentType(id: number): Promise<DocumentType | undefined> {
+    const result = await db.select().from(documentTypes).where(eq(documentTypes.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getAllDocumentTypes(): Promise<DocumentType[]> {
+    return await db.select().from(documentTypes);
+  }
+
+  async createDocumentType(docType: InsertDocumentType): Promise<DocumentType> {
+    const result = await db.insert(documentTypes).values(docType).returning();
+    return result[0];
+  }
+
+  async deleteDocumentType(id: number): Promise<boolean> {
+    try {
+      console.log(`Attempting to delete document type with ID ${id}`);
+      const result = await db.delete(documentTypes).where(eq(documentTypes.id, id)).returning();
+      console.log(`Delete operation result for document type ID ${id}:`, result);
+      return result.length > 0;
+    } catch (error) {
+      console.error('Error deleting document type:', error);
+      console.error('Error details:', error.stack);
+      return false;
+    }
+  }
+
+  // Document operations
+  async uploadDocument(document: InsertProcedureDocument): Promise<ProcedureDocument> {
+    const result = await db.insert(procedureDocuments).values(document).returning();
+    
+    await this.logActivity({
+      procedureId: document.procedureId,
+      userId: document.uploadedBy || 3, // Using admin user ID 3 instead of 1,
+      action: 'upload',
+      details: `Document "${document.name}" uploaded`
+    });
+    
+    return result[0];
+  }
+
+  async getDocument(id: number): Promise<ProcedureDocument | undefined> {
+    const result = await db.select().from(procedureDocuments).where(eq(procedureDocuments.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getDocuments(procedureId: number): Promise<ProcedureDocument[]> {
+    return await db.select().from(procedureDocuments)
+      .where(eq(procedureDocuments.procedureId, procedureId));
+  }
+
+  async deleteDocument(id: number): Promise<boolean> {
+    try {
+      const doc = await this.getDocument(id);
+      if (!doc) return false;
+      
+      console.log(`Attempting to delete document with ID ${id}`);
+      const result = await db.delete(procedureDocuments).where(eq(procedureDocuments.id, id)).returning();
+      console.log(`Delete operation result for document ID ${id}:`, result);
+      
+      if (result.length > 0) {
+        await this.logActivity({
+          procedureId: doc.procedureId,
+          userId: doc.uploadedBy || 3, // Using admin user ID 3 instead of 1,
+          action: 'delete',
+          details: `Document "${doc.name}" deleted`
+        });
+      }
+      
+      return result.length > 0;
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      console.error('Error details:', error.stack);
+      return false;
+    }
+  }
+
+  // Freight amount operations
+  // Method implementation at line 154 is used instead
+
+  // Comment operations
+  async createComment(comment: InsertProcedureComment): Promise<ProcedureComment> {
+    const result = await db.insert(procedureComments).values(comment).returning();
+    
+    await this.logActivity({
+      procedureId: comment.procedureId,
+      userId: comment.createdBy,
+      action: 'comment',
+      details: 'New comment added'
+    });
+    
+    return result[0];
+  }
+
+  async getComments(procedureId: number): Promise<ProcedureComment[]> {
+    return await db.select().from(procedureComments)
+      .where(eq(procedureComments.procedureId, procedureId));
+  }
+
+  async deleteComment(id: number): Promise<boolean> {
+    try {
+      const comment = await db.select().from(procedureComments).where(eq(procedureComments.id, id)).limit(1);
+      if (!comment.length) return false;
+      
+      console.log(`Attempting to delete comment with ID ${id}`);
+      const result = await db.delete(procedureComments).where(eq(procedureComments.id, id)).returning();
+      console.log(`Delete operation result for comment ID ${id}:`, result);
+      
+      if (result.length > 0) {
+        await this.logActivity({
+          procedureId: comment[0].procedureId,
+          userId: comment[0].createdBy,
+          action: 'delete_comment',
+          details: 'Comment deleted'
+        });
+      }
+      
+      return result.length > 0;
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      console.error('Error details:', error.stack);
+      return false;
+    }
+  }
+
+  // Activity operations
+  async logActivity(activity: InsertProcedureActivity): Promise<ProcedureActivity> {
+    const result = await db.insert(procedureActivities).values(activity).returning();
+    return result[0];
+  }
+
+  async getActivities(procedureId: number): Promise<ProcedureActivity[]> {
+    return await db.select().from(procedureActivities)
+      .where(eq(procedureActivities.procedureId, procedureId));
+  }
+  
+  // Payment operations
+  async getPayment(id: number): Promise<Payment | undefined> {
+    const result = await db.select().from(payments).where(eq(payments.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getAllPayments(): Promise<Payment[]> {
+    return await db.select().from(payments);
+  }
+
+  async getPaymentsByProcedureReference(reference: string): Promise<Payment[]> {
+    return await db.select().from(payments)
+      .where(eq(payments.procedureReference, reference));
+  }
+
+  async getPaymentsByType(paymentType: string): Promise<Payment[]> {
+    return await db.select().from(payments)
+      .where(eq(payments.paymentType, paymentType));
+  }
+
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    // Verify that the procedure reference exists first
+    const proc = await db.select().from(procedures)
+      .where(eq(procedures.reference, payment.procedureReference))
+      .limit(1);
+    
+    if (proc.length === 0) {
+      throw new Error(`Procedure with reference ${payment.procedureReference} does not exist`);
+    }
+    
+    const result = await db.insert(payments).values(payment).returning();
+    
+    // Log the activity
+    await this.logActivity({
+      procedureId: proc[0].id,
+      userId: payment.createdBy || 1,
+      action: 'payment_create',
+      details: `New ${payment.paymentType} payment of ${payment.amount} added`
+    });
+    
+    return result[0];
+  }
+
+  async updatePayment(id: number, paymentData: Partial<InsertPayment>): Promise<Payment | undefined> {
+    const currentPayment = await this.getPayment(id);
+    if (!currentPayment) return undefined;
+    
+    const result = await db.update(payments)
+      .set({ ...paymentData, updatedAt: new Date() })
+      .where(eq(payments.id, id))
+      .returning();
+    
+    if (result.length > 0) {
+      // Get procedure for activity logging
+      const proc = await db.select().from(procedures)
+        .where(eq(procedures.reference, result[0].procedureReference))
+        .limit(1);
+      
+      if (proc.length > 0) {
+        await this.logActivity({
+          procedureId: proc[0].id,
+          userId: paymentData.createdBy || currentPayment.createdBy || 1,
+          action: 'payment_update',
+          details: `Payment updated: ${Object.keys(paymentData).join(', ')}`
+        });
+      }
+    }
+    
+    return result[0];
+  }
+
+  async deletePayment(id: number): Promise<boolean> {
+    const payment = await this.getPayment(id);
+    if (!payment) return false;
+    
+    const result = await db.delete(payments)
+      .where(eq(payments.id, id))
+      .returning();
+    
+    if (result.length > 0) {
+      // Get procedure for activity logging
+      const proc = await db.select().from(procedures)
+        .where(eq(procedures.reference, payment.procedureReference))
+        .limit(1);
+      
+      if (proc.length > 0) {
+        await this.logActivity({
+          procedureId: proc[0].id,
+          userId: payment.createdBy || 1,
+          action: 'payment_delete',
+          details: `Payment of ${payment.amount} (${payment.paymentType}) deleted`
+        });
+      }
+    }
+    
+    return result.length > 0;
+  }
+
+  async calculateFinancialSummary(reference: string): Promise<{
+    totalExpenses: number;
+    totalPayments: number;
+    remainingBalance: number;
+  }> {
+    // Initialize summary
+    const summary = {
+      totalExpenses: 0,
+      totalPayments: 0,
+      remainingBalance: 0
+    };
+    
+    // Get tax data
+    const tax = await this.getTaxByProcedureReference(reference);
+    if (tax) {
+      const customsTax = parseFloat(tax.customsTax?.toString() || '0');
+      const additionalCustomsTax = parseFloat(tax.additionalCustomsTax?.toString() || '0');
+      const kkdf = parseFloat(tax.kkdf?.toString() || '0');
+      const vat = parseFloat(tax.vat?.toString() || '0');
+      const stampTax = parseFloat(tax.stampTax?.toString() || '0');
+      
+      summary.totalExpenses += customsTax + additionalCustomsTax + kkdf + vat + stampTax;
+    }
+    
+    // Get import expenses
+    const importExpenses = await this.getImportExpensesByReference(reference);
+    for (const expense of importExpenses) {
+      summary.totalExpenses += parseFloat(expense.amount?.toString() || '0');
+    }
+    
+    // Get service invoices
+    const serviceInvoices = await this.getImportServiceInvoicesByReference(reference);
+    for (const invoice of serviceInvoices) {
+      summary.totalExpenses += parseFloat(invoice.amount?.toString() || '0');
+    }
+    
+    // Get payments
+    const allPayments = await this.getPaymentsByProcedureReference(reference);
+    for (const payment of allPayments) {
+      summary.totalPayments += parseFloat(payment.amount?.toString() || '0');
+    }
+    
+    // Calculate remaining balance
+    summary.remainingBalance = summary.totalExpenses - summary.totalPayments;
+    
+    return summary;
+  }
+}
+
+// Create a memory storage implementation for backward compatibility
+export class MemStorage implements IStorage {
+  private users: Map<number, User>;
+  private documentTypes: Map<number, any>;
+  private documents: Map<number, any>;
+  private procedureList: Map<number, Procedure>;
+  private taxList: Map<number, Tax>;
+  private importExpenses: Map<number, ImportExpense>;
+  private importServiceInvoices: Map<number, ImportServiceInvoice>;
+  private expenseDocuments: Map<number, ExpenseDocument>;
+  private comments: Map<number, ProcedureComment>;
+  private activities: Map<number, ProcedureActivity>;
+  private procedureStatusDetails: Map<number, ProcedureStatusDetail>;
+  private payments: Map<number, Payment>;
+  currentId: number;
+
+  constructor() {
+    this.users = new Map();
+    this.documentTypes = new Map();
+    this.documents = new Map();
+    this.procedureList = new Map();
+    this.taxList = new Map();
+    this.importExpenses = new Map();
+    this.procedureStatusDetails = new Map();
+    this.importServiceInvoices = new Map();
+    this.expenseDocuments = new Map();
+    this.comments = new Map();
+    this.activities = new Map();
+    this.payments = new Map();
+    this.currentId = 1;
+    
+    // Create default admin user
+    this.createUser({
+      username: 'admin',
+      password: 'admin123', // Change this in production
+      role: 'admin'
+    });
+  }
+
+  // User operations
+  async getUser(id: number): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.username === username,
+    );
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = this.currentId++;
+    const user = { ...insertUser, id } as User;
+    this.users.set(id, user);
+    return user;
+  }
+
+  async updateUser(id: number, userData: Partial<InsertUser>): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updatedUser = { ...user, ...userData, updatedAt: new Date() };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  async deleteUser(id: number): Promise<boolean> {
+    return this.users.delete(id);
+  }
+
+  // Procedure operations
+  async getProcedure(id: number): Promise<Procedure | undefined> {
+    return this.procedureList.get(id);
+  }
+
+  async getAllProcedures(): Promise<Procedure[]> {
+    return Array.from(this.procedureList.values());
+  }
+
+  async getProceduresByUser(userId: number): Promise<Procedure[]> {
+    return Array.from(this.procedureList.values()).filter(
+      proc => proc.assignedTo === userId || proc.createdBy === userId
+    );
+  }
+
+  async getProceduresByStatus(statusType: string, statusValue: string): Promise<Procedure[]> {
+    if (statusType === 'document') {
+      return Array.from(this.procedureList.values()).filter(
+        proc => proc.document_status === statusValue
+      );
+    } else if (statusType === 'payment') {
+      return Array.from(this.procedureList.values()).filter(
+        proc => proc.payment_status === statusValue
+      );
+    } else if (statusType === 'shipment') {
+      return Array.from(this.procedureList.values()).filter(
+        proc => proc.shipment_status === statusValue
+      );
+    }
+    
+    return [];
+  }
+  
+  async getProcedureByReference(reference: string): Promise<Procedure[]> {
+    return Array.from(this.procedureList.values()).filter(
+      proc => proc.reference === reference
+    );
+  }
+
+  async createProcedure(procedure: InsertProcedure): Promise<Procedure> {
+    const id = this.currentId++;
+    const now = new Date();
+    const newProcedure = { 
+      ...procedure, 
+      id, 
+      createdAt: now, 
+      updatedAt: now 
+    } as Procedure;
+    
+    this.procedureList.set(id, newProcedure);
+    
+    // Log activity
+    await this.logActivity({
+      procedureId: id,
+      userId: procedure.createdBy,
+      action: 'create',
+      details: `Procedure "${procedure.title}" created`
+    });
+    
+    return newProcedure;
+  }
+
+  async updateProcedure(id: number, procedureData: Partial<InsertProcedure>): Promise<Procedure | undefined> {
+    const procedure = this.procedureList.get(id);
+    if (!procedure) return undefined;
+    
+    const updatedProcedure = { 
+      ...procedure, 
+      ...procedureData, 
+      updatedAt: new Date() 
+    };
+    
+    this.procedureList.set(id, updatedProcedure);
+    
+    // Log activity
+    const userId = procedureData.createdBy || procedure.createdBy;
+    await this.logActivity({
+      procedureId: id,
+      userId,
+      action: 'update',
+      details: `Procedure updated: ${Object.keys(procedureData).join(', ')}`
+    });
+    
+    return updatedProcedure;
+  }
+
+  async deleteProcedure(id: number): Promise<boolean> {
+    const procedure = this.procedureList.get(id);
+    if (!procedure) return false;
+    
+    const result = this.procedureList.delete(id);
+    
+    if (result) {
+      await this.logActivity({
+        procedureId: id,
+        userId: procedure.createdBy,
+        action: 'delete',
+        details: `Procedure with reference ${procedure.reference} deleted`
+      });
+    }
+    
+    return result;
+  }
+  
+  // Freight operations
+  async updateFreightAmount(reference: string, freightAmount: number): Promise<Procedure | undefined> {
+    // Find the procedure with this reference
+    const procedures = Array.from(this.procedureList.values()).filter(
+      proc => proc.reference === reference
+    );
+    
+    if (procedures.length === 0) {
+      return undefined;
+    }
+    
+    const procedure = procedures[0];
+    
+    // Update the freight amount
+    const updatedProcedure = { 
+      ...procedure, 
+      freight_amount: freightAmount.toString(),
+      updatedAt: new Date() 
+    };
+    
+    // Store the updated procedure
+    this.procedureList.set(procedure.id, updatedProcedure);
+    
+    // Log activity
+    await this.logActivity({
+      procedureId: procedure.id,
+      userId: procedure.createdBy,
+      action: 'update',
+      details: `Freight amount updated to ${freightAmount}`
+    });
+    
+    return updatedProcedure;
+  }
+  
+  // Tax operations
+  async getTax(id: number): Promise<Tax | undefined> {
+    return this.taxList.get(id);
+  }
+
+  async getTaxByProcedureReference(reference: string): Promise<Tax | undefined> {
+    return Array.from(this.taxList.values()).find(
+      tax => tax.procedureReference === reference
+    );
+  }
+
+  async createTax(tax: InsertTax): Promise<Tax> {
+    // Verify that the procedure reference exists first
+    const procedure = Array.from(this.procedureList.values()).find(
+      proc => proc.reference === tax.procedureReference
+    );
+    
+    if (!procedure) {
+      throw new Error(`Procedure with reference ${tax.procedureReference} does not exist`);
+    }
+    
+    const id = this.currentId++;
+    const now = new Date();
+    const newTax = { 
+      ...tax, 
+      id, 
+      createdAt: now, 
+      updatedAt: now 
+    } as Tax;
+    
+    this.taxList.set(id, newTax);
+    
+    // Log activity
+    await this.logActivity({
+      procedureId: procedure.id,
+      userId: tax.createdBy || 3, // Using admin user ID 3 instead of 1,
+      action: 'tax_create',
+      details: `Tax information added for procedure with reference ${tax.procedureReference}`
+    });
+    
+    return newTax;
+  }
+
+  async updateTax(id: number, taxData: Partial<InsertTax>): Promise<Tax | undefined> {
+    const tax = this.taxList.get(id);
+    if (!tax) return undefined;
+    
+    const updatedTax = { 
+      ...tax, 
+      ...taxData, 
+      updatedAt: new Date() 
+    };
+    
+    this.taxList.set(id, updatedTax);
+    
+    // Find the procedure for activity logging
+    const procedure = Array.from(this.procedureList.values()).find(
+      proc => proc.reference === tax.procedureReference
+    );
+    
+    if (procedure) {
+      await this.logActivity({
+        procedureId: procedure.id,
+        userId: taxData.createdBy || tax.createdBy || 3, // Using admin user ID 3 instead of 1,
+        action: 'tax_update',
+        details: `Tax information updated for procedure with reference ${tax.procedureReference}`
+      });
+    }
+    
+    return updatedTax;
+  }
+
+  async deleteTax(id: number): Promise<boolean> {
+    const tax = this.taxList.get(id);
+    if (!tax) return false;
+    
+    const result = this.taxList.delete(id);
+    
+    if (result) {
+      // Find the procedure for activity logging
+      const procedure = Array.from(this.procedureList.values()).find(
+        proc => proc.reference === tax.procedureReference
+      );
+      
+      if (procedure) {
+        await this.logActivity({
+          procedureId: procedure.id,
+          userId: tax.createdBy || 3, // Using admin user ID 3 instead of 1,
+          action: 'tax_delete',
+          details: `Tax information deleted for procedure with reference ${tax.procedureReference}`
+        });
+      }
+    }
+    
+    return result;
+  }
+
+  // Import Expense operations
+  async getImportExpense(id: number): Promise<ImportExpense | undefined> {
+    return this.importExpenses.get(id);
+  }
+
+  async getImportExpensesByReference(reference: string): Promise<ImportExpense[]> {
+    return Array.from(this.importExpenses.values()).filter(
+      expense => expense.procedureReference === reference
+    );
+  }
+
+  async getImportExpensesByCategory(reference: string, category: string): Promise<ImportExpense[]> {
+    return Array.from(this.importExpenses.values()).filter(
+      expense => expense.procedureReference === reference && expense.category === category
+    );
+  }
+
+  async createImportExpense(expense: InsertImportExpense): Promise<ImportExpense> {
+    // Verify that the procedure reference exists first
+    const procedure = Array.from(this.procedureList.values()).find(
+      proc => proc.reference === expense.procedureReference
+    );
+    
+    if (!procedure) {
+      throw new Error(`Procedure with reference ${expense.procedureReference} does not exist`);
+    }
+    
+    const id = this.currentId++;
+    const now = new Date();
+    const newExpense = { 
+      ...expense, 
+      id, 
+      createdAt: now, 
+      updatedAt: now 
+    } as ImportExpense;
+    
+    this.importExpenses.set(id, newExpense);
+    
+    // Log activity
+    await this.logActivity({
+      procedureId: procedure.id,
+      userId: expense.createdBy || 3, // Using admin user ID 3 instead of 1,
+      action: 'expense_create',
+      details: `Import expense added for ${expense.category} category with amount ${expense.amount} ${expense.currency}`
+    });
+    
+    return newExpense;
+  }
+
+  async updateImportExpense(id: number, expenseData: Partial<InsertImportExpense>): Promise<ImportExpense | undefined> {
+    const expense = this.importExpenses.get(id);
+    if (!expense) return undefined;
+    
+    const updatedExpense = { 
+      ...expense, 
+      ...expenseData, 
+      updatedAt: new Date() 
+    };
+    
+    this.importExpenses.set(id, updatedExpense);
+    
+    // Find the procedure for activity logging
+    const procedure = Array.from(this.procedureList.values()).find(
+      proc => proc.reference === expense.procedureReference
+    );
+    
+    if (procedure) {
+      await this.logActivity({
+        procedureId: procedure.id,
+        userId: expenseData.createdBy || expense.createdBy || 3, // Using admin user ID 3 instead of 1,
+        action: 'expense_update',
+        details: `Import expense updated for ${expense.category} category: ${Object.keys(expenseData).join(', ')}`
+      });
+    }
+    
+    return updatedExpense;
+  }
+
+  async deleteImportExpense(id: number): Promise<boolean> {
+    const expense = this.importExpenses.get(id);
+    if (!expense) return false;
+    
+    const result = this.importExpenses.delete(id);
+    
+    if (result) {
+      // Find the procedure for activity logging
+      const procedure = Array.from(this.procedureList.values()).find(
+        proc => proc.reference === expense.procedureReference
+      );
+      
+      if (procedure) {
+        await this.logActivity({
+          procedureId: procedure.id,
+          userId: expense.createdBy || 3, // Using admin user ID 3 instead of 1,
+          action: 'expense_delete',
+          details: `Import expense deleted for ${expense.category} category with amount ${expense.amount} ${expense.currency}`
+        });
+      }
+    }
+    
+    return result;
+  }
+
+  // Import Service Invoice operations
+  async getImportServiceInvoice(id: number): Promise<ImportServiceInvoice | undefined> {
+    return this.importServiceInvoices.get(id);
+  }
+
+  async getAllImportServiceInvoices(): Promise<ImportServiceInvoice[]> {
+    return Array.from(this.importServiceInvoices.values());
+  }
+
+  async getImportServiceInvoicesByReference(reference: string): Promise<ImportServiceInvoice[]> {
+    return Array.from(this.importServiceInvoices.values()).filter(
+      invoice => invoice.procedureReference === reference
+    );
+  }
+  
+  // Expense Document operations
+  async getExpenseDocument(id: number): Promise<ExpenseDocument | undefined> {
+    return this.expenseDocuments.get(id);
+  }
+  
+  async getExpenseDocumentsByExpense(expenseType: string, expenseId: number): Promise<ExpenseDocument[]> {
+    return Array.from(this.expenseDocuments.values()).filter(
+      doc => doc.expenseType === expenseType && doc.expenseId === expenseId
+    );
+  }
+  
+  async getExpenseDocumentsByReference(reference: string): Promise<ExpenseDocument[]> {
+    return Array.from(this.expenseDocuments.values()).filter(
+      doc => doc.procedureReference === reference
+    );
+  }
+  
+  async uploadExpenseDocument(document: InsertExpenseDocument): Promise<ExpenseDocument> {
+    // Verify that the procedure reference exists first
+    const procedure = Array.from(this.procedureList.values()).find(
+      proc => proc.reference === document.procedureReference
+    );
+    
+    if (!procedure) {
+      throw new Error(`Procedure with reference ${document.procedureReference} does not exist`);
+    }
+    
+    const id = this.currentId++;
+    const now = new Date();
+    const newDocument = { 
+      ...document, 
+      id, 
+      createdAt: now,
+      updatedAt: now
+    } as ExpenseDocument;
+    
+    this.expenseDocuments.set(id, newDocument);
+    
+    // Log activity
+    await this.logActivity({
+      procedureId: procedure.id,
+      userId: document.uploadedBy || 3, // Using admin user ID 3 instead of 1,
+      action: 'document_upload',
+      details: `Document "${document.originalFilename}" uploaded for ${document.expenseType} with ID ${document.expenseId}`
+    });
+    
+    return newDocument;
+  }
+  
+  async deleteExpenseDocument(id: number): Promise<boolean> {
+    const document = this.expenseDocuments.get(id);
+    if (!document) return false;
+    
+    const result = this.expenseDocuments.delete(id);
+    
+    if (result) {
+      // Find the procedure for activity logging
+      const procedure = Array.from(this.procedureList.values()).find(
+        proc => proc.reference === document.procedureReference
+      );
+      
+      if (procedure) {
+        await this.logActivity({
+          procedureId: procedure.id,
+          userId: document.uploadedBy || 3, // Using admin user ID 3 instead of 1,
+          action: 'document_delete',
+          details: `Document "${document.originalFilename}" deleted from ${document.expenseType} with ID ${document.expenseId}`
+        });
+      }
+    }
+    
+    return result;
+  }
+
+  async createImportServiceInvoice(invoice: InsertImportServiceInvoice): Promise<ImportServiceInvoice> {
+    // Verify that the procedure reference exists first
+    const procedure = Array.from(this.procedureList.values()).find(
+      proc => proc.reference === invoice.procedureReference
+    );
+    
+    if (!procedure) {
+      throw new Error(`Procedure with reference ${invoice.procedureReference} does not exist`);
+    }
+    
+    const id = this.currentId++;
+    const now = new Date();
+    const newInvoice = { 
+      ...invoice, 
+      id, 
+      createdAt: now, 
+      updatedAt: now 
+    } as ImportServiceInvoice;
+    
+    this.importServiceInvoices.set(id, newInvoice);
+    
+    // Log activity
+    await this.logActivity({
+      procedureId: procedure.id,
+      userId: invoice.createdBy || 3, // Using admin user ID 3 instead of 1,
+      action: 'invoice_create',
+      details: `Import service invoice added with amount ${invoice.amount} ${invoice.currency}`
+    });
+    
+    return newInvoice;
+  }
+
+  async updateImportServiceInvoice(id: number, invoiceData: Partial<InsertImportServiceInvoice>): Promise<ImportServiceInvoice | undefined> {
+    const invoice = this.importServiceInvoices.get(id);
+    if (!invoice) return undefined;
+    
+    const updatedInvoice = { 
+      ...invoice, 
+      ...invoiceData, 
+      updatedAt: new Date() 
+    };
+    
+    this.importServiceInvoices.set(id, updatedInvoice);
+    
+    // Find the procedure for activity logging
+    const procedure = Array.from(this.procedureList.values()).find(
+      proc => proc.reference === invoice.procedureReference
+    );
+    
+    if (procedure) {
+      await this.logActivity({
+        procedureId: procedure.id,
+        userId: invoiceData.createdBy || invoice.createdBy || 3, // Using admin user ID 3 instead of 1,
+        action: 'invoice_update',
+        details: `Import service invoice updated: ${Object.keys(invoiceData).join(', ')}`
+      });
+    }
+    
+    return updatedInvoice;
+  }
+
+  async deleteImportServiceInvoice(id: number): Promise<boolean> {
+    const invoice = this.importServiceInvoices.get(id);
+    if (!invoice) return false;
+    
+    const result = this.importServiceInvoices.delete(id);
+    
+    if (result) {
+      // Find the procedure for activity logging
+      const procedure = Array.from(this.procedureList.values()).find(
+        proc => proc.reference === invoice.procedureReference
+      );
+      
+      if (procedure) {
+        await this.logActivity({
+          procedureId: procedure.id,
+          userId: invoice.createdBy || 3, // Using admin user ID 3 instead of 1,
+          action: 'invoice_delete',
+          details: `Import service invoice deleted with amount ${invoice.amount} ${invoice.currency}`
+        });
+      }
+    }
+    
+    return result;
+  }
+
+  // Document type operations
+  async getDocumentType(id: number): Promise<DocumentType | undefined> {
+    return this.documentTypes.get(id);
+  }
+
+  async getAllDocumentTypes(): Promise<DocumentType[]> {
+    return Array.from(this.documentTypes.values());
+  }
+
+  async createDocumentType(docType: InsertDocumentType): Promise<DocumentType> {
+    const id = this.currentId++;
+    const newDocType = { ...docType, id, createdAt: new Date() } as DocumentType;
+    this.documentTypes.set(id, newDocType);
+    return newDocType;
+  }
+
+  async deleteDocumentType(id: number): Promise<boolean> {
+    return this.documentTypes.delete(id);
+  }
+
+  // Document operations
+  async uploadDocument(document: InsertProcedureDocument): Promise<ProcedureDocument> {
+    const id = this.currentId++;
+    const newDocument = { ...document, id, createdAt: new Date() } as ProcedureDocument;
+    this.documents.set(id, newDocument);
+    
+    await this.logActivity({
+      procedureId: document.procedureId,
+      userId: document.uploadedBy || 3, // Using admin user ID 3 instead of 1,
+      action: 'upload',
+      details: `Document "${document.name}" uploaded`
+    });
+    
+    return newDocument;
+  }
+
+  async getDocument(id: number): Promise<ProcedureDocument | undefined> {
+    return this.documents.get(id);
+  }
+
+  async getDocuments(procedureId: number): Promise<ProcedureDocument[]> {
+    return Array.from(this.documents.values())
+      .filter(doc => doc.procedureId === procedureId);
+  }
+
+  async deleteDocument(id: number): Promise<boolean> {
+    const doc = this.documents.get(id);
+    if (!doc) return false;
+    
+    const result = this.documents.delete(id);
+    
+    if (result) {
+      await this.logActivity({
+        procedureId: doc.procedureId,
+        userId: doc.uploadedBy || 3, // Using admin user ID 3 instead of 1,
+        action: 'delete',
+        details: `Document "${doc.name}" deleted`
+      });
+    }
+    
+    return result;
+  }
+
+  // Comment operations
+  async createComment(comment: InsertProcedureComment): Promise<ProcedureComment> {
+    const id = this.currentId++;
+    const now = new Date();
+    const newComment = { 
+      ...comment, 
+      id, 
+      createdAt: now, 
+      updatedAt: now 
+    } as ProcedureComment;
+    
+    this.comments.set(id, newComment);
+    
+    await this.logActivity({
+      procedureId: comment.procedureId,
+      userId: comment.createdBy,
+      action: 'comment',
+      details: 'New comment added'
+    });
+    
+    return newComment;
+  }
+
+  async getComments(procedureId: number): Promise<ProcedureComment[]> {
+    return Array.from(this.comments.values())
+      .filter(comment => comment.procedureId === procedureId);
+  }
+
+  async deleteComment(id: number): Promise<boolean> {
+    const comment = this.comments.get(id);
+    if (!comment) return false;
+    
+    const result = this.comments.delete(id);
+    
+    if (result) {
+      await this.logActivity({
+        procedureId: comment.procedureId,
+        userId: comment.createdBy,
+        action: 'delete_comment',
+        details: 'Comment deleted'
+      });
+    }
+    
+    return result;
+  }
+
+  // Activity operations
+  async logActivity(activity: InsertProcedureActivity): Promise<ProcedureActivity> {
+    const id = this.currentId++;
+    const newActivity = { ...activity, id, createdAt: new Date() } as ProcedureActivity;
+    this.activities.set(id, newActivity);
+    return newActivity;
+  }
+
+  async getActivities(procedureId: number): Promise<ProcedureActivity[]> {
+    return Array.from(this.activities.values())
+      .filter(activity => activity.procedureId === procedureId);
+  }
+  
+  // Payment operations
+  async getPayment(id: number): Promise<Payment | undefined> {
+    return this.payments.get(id);
+  }
+
+  async getAllPayments(): Promise<Payment[]> {
+    return Array.from(this.payments.values());
+  }
+
+  async getPaymentsByProcedureReference(reference: string): Promise<Payment[]> {
+    return Array.from(this.payments.values()).filter(
+      payment => payment.procedureReference === reference
+    );
+  }
+
+  async getPaymentsByType(paymentType: string): Promise<Payment[]> {
+    return Array.from(this.payments.values()).filter(
+      payment => payment.paymentType === paymentType
+    );
+  }
+
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    // Verify that the procedure reference exists first
+    const procedure = Array.from(this.procedureList.values()).find(
+      proc => proc.reference === payment.procedureReference
+    );
+    
+    if (!procedure) {
+      throw new Error(`Procedure with reference ${payment.procedureReference} does not exist`);
+    }
+    
+    const id = this.currentId++;
+    const now = new Date();
+    const newPayment = { 
+      ...payment, 
+      id, 
+      createdAt: now, 
+      updatedAt: now 
+    } as Payment;
+    
+    this.payments.set(id, newPayment);
+    
+    // Log activity
+    await this.logActivity({
+      procedureId: procedure.id,
+      userId: payment.createdBy || 1,
+      action: 'payment_create',
+      details: `New ${payment.paymentType} payment of ${payment.amount} added`
+    });
+    
+    return newPayment;
+  }
+
+  async updatePayment(id: number, paymentData: Partial<InsertPayment>): Promise<Payment | undefined> {
+    const payment = this.payments.get(id);
+    if (!payment) return undefined;
+    
+    const updatedPayment = { 
+      ...payment, 
+      ...paymentData, 
+      updatedAt: new Date() 
+    };
+    
+    this.payments.set(id, updatedPayment);
+    
+    // Find the procedure for activity logging
+    const procedure = Array.from(this.procedureList.values()).find(
+      proc => proc.reference === payment.procedureReference
+    );
+    
+    if (procedure) {
+      await this.logActivity({
+        procedureId: procedure.id,
+        userId: paymentData.createdBy || payment.createdBy || 1,
+        action: 'payment_update',
+        details: `Payment updated: ${Object.keys(paymentData).join(', ')}`
+      });
+    }
+    
+    return updatedPayment;
+  }
+
+  async deletePayment(id: number): Promise<boolean> {
+    const payment = this.payments.get(id);
+    if (!payment) return false;
+    
+    const result = this.payments.delete(id);
+    
+    if (result) {
+      // Find the procedure for activity logging
+      const procedure = Array.from(this.procedureList.values()).find(
+        proc => proc.reference === payment.procedureReference
+      );
+      
+      if (procedure) {
+        await this.logActivity({
+          procedureId: procedure.id,
+          userId: payment.createdBy || 1,
+          action: 'payment_delete',
+          details: `Payment of ${payment.amount} (${payment.paymentType}) deleted`
+        });
+      }
+    }
+    
+    return result;
+  }
+
+  async calculateFinancialSummary(reference: string): Promise<{
+    totalExpenses: number;
+    totalPayments: number;
+    remainingBalance: number;
+  }> {
+    // Initialize summary
+    const summary = {
+      totalExpenses: 0,
+      totalPayments: 0,
+      remainingBalance: 0
+    };
+    
+    // Get tax data
+    const tax = await this.getTaxByProcedureReference(reference);
+    if (tax) {
+      const customsTax = parseFloat(tax.customsTax?.toString() || '0');
+      const additionalCustomsTax = parseFloat(tax.additionalCustomsTax?.toString() || '0');
+      const kkdf = parseFloat(tax.kkdf?.toString() || '0');
+      const vat = parseFloat(tax.vat?.toString() || '0');
+      const stampTax = parseFloat(tax.stampTax?.toString() || '0');
+      
+      summary.totalExpenses += customsTax + additionalCustomsTax + kkdf + vat + stampTax;
+    }
+    
+    // Get import expenses
+    const importExpenses = await this.getImportExpensesByReference(reference);
+    for (const expense of importExpenses) {
+      summary.totalExpenses += parseFloat(expense.amount?.toString() || '0');
+    }
+    
+    // Get service invoices
+    const serviceInvoices = await this.getImportServiceInvoicesByReference(reference);
+    for (const invoice of serviceInvoices) {
+      summary.totalExpenses += parseFloat(invoice.amount?.toString() || '0');
+    }
+    
+    // Get payments
+    const allPayments = await this.getPaymentsByProcedureReference(reference);
+    for (const payment of allPayments) {
+      summary.totalPayments += parseFloat(payment.amount?.toString() || '0');
+    }
+    
+    // Calculate remaining balance
+    summary.remainingBalance = summary.totalExpenses - summary.totalPayments;
+    
+    return summary;
+  }
+  
+  // Procedure Status Details operations
+  async getProcedureStatusDetails(procedureReference: string): Promise<ProcedureStatusDetail[]> {
+    return Array.from(this.procedureStatusDetails.values()).filter(
+      status => status.procedureReference === procedureReference
+    );
+  }
+  
+  async getProcedureStatusDetailsByCategory(procedureReference: string, category: string): Promise<ProcedureStatusDetail[]> {
+    return Array.from(this.procedureStatusDetails.values()).filter(
+      status => status.procedureReference === procedureReference && status.category === category
+    );
+  }
+  
+  async upsertProcedureStatusDetail(statusDetail: InsertProcedureStatusDetail): Promise<ProcedureStatusDetail> {
+    // Check if status already exists
+    const existing = Array.from(this.procedureStatusDetails.values()).find(
+      status => 
+        status.procedureReference === statusDetail.procedureReference &&
+        status.category === statusDetail.category &&
+        status.status === statusDetail.status
+    );
+    
+    if (existing) {
+      // Update existing status
+      const updatedStatus = { 
+        ...existing, 
+        isActive: statusDetail.isActive,
+        updatedBy: statusDetail.updatedBy,
+        updatedAt: new Date() 
+      };
+      
+      this.procedureStatusDetails.set(existing.id, updatedStatus);
+      return updatedStatus;
+    } else {
+      // Create new status
+      const id = this.currentId++;
+      const now = new Date();
+      const newStatus = { 
+        ...statusDetail, 
+        id, 
+        createdAt: now, 
+        updatedAt: now 
+      } as ProcedureStatusDetail;
+      
+      this.procedureStatusDetails.set(id, newStatus);
+      return newStatus;
+    }
+  }
+  
+  async updateProcedureStatusDetails(
+    procedureReference: string, 
+    category: string, 
+    statusList: InsertProcedureStatusDetail[]
+  ): Promise<ProcedureStatusDetail[]> {
+    const results: ProcedureStatusDetail[] = [];
+    
+    // Process each status in the list
+    for (const statusDetail of statusList) {
+      const result = await this.upsertProcedureStatusDetail(statusDetail);
+      results.push(result);
+    }
+    
+    // Find the procedure for activity logging
+    const procedure = Array.from(this.procedureList.values()).find(
+      proc => proc.reference === procedureReference
+    );
+    
+    if (procedure) {
+      // Log activity
+      await this.logActivity({
+        procedureId: procedure.id,
+        userId: statusList[0]?.updatedBy || 1,
+        action: 'status_update',
+        details: `${category} status options updated for procedure ${procedureReference}`
+      });
+    }
+    
+    return results;
+  }
+  
+  async deleteProcedureStatusDetail(id: number): Promise<boolean> {
+    const status = this.procedureStatusDetails.get(id);
+    if (!status) return false;
+    
+    const result = this.procedureStatusDetails.delete(id);
+    
+    if (result) {
+      // Find the procedure for activity logging
+      const procedure = Array.from(this.procedureList.values()).find(
+        proc => proc.reference === status.procedureReference
+      );
+      
+      if (procedure) {
+        await this.logActivity({
+          procedureId: procedure.id,
+          userId: status.updatedBy || 1,
+          action: 'status_delete',
+          details: `Status '${status.status}' deleted from ${status.category} category`
+        });
+      }
+    }
+    
+    return result;
+  }
+}
+
+// Choose which storage implementation to use based on environment
+// PostgresStorage implementation using Neon serverless
+export class PostgresStorage implements IStorage {
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+
+  async updateUser(id: number, userData: Partial<InsertUser>): Promise<User | undefined> {
+    const [user] = await db.update(users)
+      .set({ ...userData, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async deleteUser(id: number): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Procedure operations
+  async getProcedure(id: number): Promise<Procedure | undefined> {
+    const [procedure] = await db.select().from(procedures).where(eq(procedures.id, id));
+    return procedure;
+  }
+
+  async getAllProcedures(): Promise<Procedure[]> {
+    return db.select().from(procedures);
+  }
+
+  async getProceduresByUser(userId: number): Promise<Procedure[]> {
+    return db.select().from(procedures)
+      .where(
+        or(
+          eq(procedures.assignedTo, userId),
+          eq(procedures.createdBy, userId)
+        )
+      );
+  }
+
+  async getProceduresByStatus(statusType: string, statusValue: string): Promise<Procedure[]> {
+    if (statusType === 'document') {
+      return db.select().from(procedures)
+        .where(eq(procedures.document_status, statusValue));
+    } else if (statusType === 'payment') {
+      return db.select().from(procedures)
+        .where(eq(procedures.payment_status, statusValue));
+    } else if (statusType === 'shipment') {
+      return db.select().from(procedures)
+        .where(eq(procedures.shipment_status, statusValue));
+    }
+    
+    return [];
+  }
+  
+  async getProcedureByReference(reference: string): Promise<Procedure[]> {
+    return db.select().from(procedures)
+      .where(eq(procedures.reference, reference));
+  }
+
+  async createProcedure(procedure: InsertProcedure): Promise<Procedure> {
+    const [result] = await db.insert(procedures).values(procedure).returning();
+    await this.logActivity({
+      procedureId: result.id,
+      userId: procedure.createdBy,
+      action: 'create',
+      details: `Procedure created`
+    });
+    return result;
+  }
+
+  async updateProcedure(id: number, procedureData: Partial<InsertProcedure>): Promise<Procedure | undefined> {
+    console.log("[storage.updateProcedure] Updating procedure with ID:", id, "and data:", JSON.stringify(procedureData));
+    
+    try {
+      // First, always get the procedure using the ID to ensure we have the right one
+      const [currentProcedure] = await db.select().from(procedures).where(eq(procedures.id, id));
+      
+      if (!currentProcedure) {
+        console.log("[storage.updateProcedure] ERROR: Cannot find procedure with ID:", id);
+        return undefined;
+      }
+      
+      console.log("[storage.updateProcedure] Found procedure to update:", JSON.stringify({
+        id: currentProcedure.id,
+        reference: currentProcedure.reference,
+        shipment_status: currentProcedure.shipment_status,
+        payment_status: currentProcedure.payment_status,
+        document_status: currentProcedure.document_status
+      }));
+      
+      // Create update data
+      const updateData = { ...procedureData, updatedAt: new Date() };
+      console.log("[storage.updateProcedure] Final update data:", JSON.stringify(updateData));
+      
+      // Execute the update query with explicit ID equality
+      const [result] = await db.update(procedures)
+        .set(updateData)
+        .where(eq(procedures.id, id))
+        .returning();
+      
+      if (result) {
+        console.log("[storage.updateProcedure] Update successful, returned:", JSON.stringify({
+          id: result.id,
+          reference: result.reference,
+          shipment_status: result.shipment_status,
+          payment_status: result.payment_status,
+          document_status: result.document_status
+        }));
+        
+        await this.logActivity({
+          procedureId: id,
+          userId: procedureData.createdBy || currentProcedure.createdBy || 1,
+          action: 'update',
+          details: `Procedure updated: ${Object.keys(procedureData).join(', ')}`
+        });
+        
+        // Compare old and new values for debug
+        console.log("[storage.updateProcedure] Status changes:");
+        if (procedureData.shipment_status) {
+          console.log("  shipment_status:", currentProcedure.shipment_status, "->", procedureData.shipment_status);
+        }
+        if (procedureData.payment_status) {
+          console.log("  payment_status:", currentProcedure.payment_status, "->", procedureData.payment_status);
+        }
+        if (procedureData.document_status) {
+          console.log("  document_status:", currentProcedure.document_status, "->", procedureData.document_status);
+        }
+      } else {
+        console.log("[storage.updateProcedure] No rows updated or rows not returned");
+      }
+      
+      return result;
+    } catch (error) {
+      console.error("[storage.updateProcedure] Error:", error);
+      throw error;
+    }
+  }
+
+  async deleteProcedure(id: number): Promise<boolean> {
+    // First get the procedure to log who deleted it
+    const proc = await this.getProcedure(id);
+    if (!proc) return false;
+    
+    const result = await db.delete(procedures).where(eq(procedures.id, id)).returning();
+    
+    if (result.length > 0) {
+      await this.logActivity({
+        procedureId: id,
+        userId: proc.createdBy,
+        action: 'delete',
+        details: `Procedure deleted`
+      });
+    }
+    
+    return result.length > 0;
+  }
+  
+  // Procedure Status Details operations
+  async getProcedureStatusDetails(procedureReference: string): Promise<ProcedureStatusDetail[]> {
+    return db.select().from(procedureStatusDetails)
+      .where(eq(procedureStatusDetails.procedureReference, procedureReference));
+  }
+  
+  async getProcedureStatusDetailsByCategory(procedureReference: string, category: string): Promise<ProcedureStatusDetail[]> {
+    return db.select().from(procedureStatusDetails)
+      .where(and(
+        eq(procedureStatusDetails.procedureReference, procedureReference),
+        eq(procedureStatusDetails.category, category)
+      ));
+  }
+  
+  async upsertProcedureStatusDetail(statusDetail: InsertProcedureStatusDetail): Promise<ProcedureStatusDetail> {
+    // Check if status already exists
+    const [existing] = await db.select().from(procedureStatusDetails)
+      .where(and(
+        eq(procedureStatusDetails.procedureReference, statusDetail.procedureReference),
+        eq(procedureStatusDetails.category, statusDetail.category),
+        eq(procedureStatusDetails.status, statusDetail.status)
+      ));
+    
+    if (existing) {
+      // Update existing status
+      const [result] = await db.update(procedureStatusDetails)
+        .set({ 
+          isActive: statusDetail.isActive,
+          updatedBy: statusDetail.updatedBy,
+          updatedAt: new Date()
+        })
+        .where(eq(procedureStatusDetails.id, existing.id))
+        .returning();
+      
+      return result;
+    } else {
+      // Insert new status
+      const [result] = await db.insert(procedureStatusDetails)
+        .values({
+          ...statusDetail,
+          updatedAt: new Date()
+        })
+        .returning();
+      
+      return result;
+    }
+  }
+  
+  async updateProcedureStatusDetails(
+    procedureReference: string, 
+    category: string, 
+    statusList: InsertProcedureStatusDetail[]
+  ): Promise<ProcedureStatusDetail[]> {
+    const results: ProcedureStatusDetail[] = [];
+    
+    // Process each status in the list
+    for (const statusDetail of statusList) {
+      const result = await this.upsertProcedureStatusDetail(statusDetail);
+      results.push(result);
+    }
+    
+    // Get all current statuses for this category and reference
+    const [proc] = await db.select().from(procedures)
+      .where(eq(procedures.reference, procedureReference));
+    
+    if (proc) {
+      // Log activity
+      await this.logActivity({
+        procedureId: proc.id,
+        userId: statusList[0]?.updatedBy || 1,
+        action: 'status_update',
+        details: `${category} status options updated for procedure ${procedureReference}`
+      });
+    }
+    
+    return results;
+  }
+  
+  async deleteProcedureStatusDetail(id: number): Promise<boolean> {
+    const [status] = await db.select().from(procedureStatusDetails)
+      .where(eq(procedureStatusDetails.id, id));
+    
+    if (!status) return false;
+    
+    const result = await db.delete(procedureStatusDetails)
+      .where(eq(procedureStatusDetails.id, id))
+      .returning();
+    
+    if (result.length > 0 && status) {
+      // Get procedure for activity logging
+      const [proc] = await db.select().from(procedures)
+        .where(eq(procedures.reference, status.procedureReference));
+      
+      if (proc) {
+        await this.logActivity({
+          procedureId: proc.id,
+          userId: status.updatedBy || 1,
+          action: 'status_delete',
+          details: `Status '${status.status}' deleted from ${status.category} category`
+        });
+      }
+    }
+    
+    return result.length > 0;
+  }
+
+  // Tax operations
+  async getTax(id: number): Promise<Tax | undefined> {
+    const [tax] = await db.select().from(taxes).where(eq(taxes.id, id));
+    return tax;
+  }
+
+  async getTaxByProcedureReference(reference: string): Promise<Tax | undefined> {
+    console.log(`[storage.getTaxByProcedureReference] Looking up tax for procedure reference: ${reference}`);
+    
+    // Use raw SQL query for consistency with our other tax-related queries
+    const sqlQuery = `
+      SELECT 
+        id,
+        customs_tax as "customsTax", 
+        additional_customs_tax as "additionalCustomsTax", 
+        kkdf, 
+        vat, 
+        stamp_tax as "stampTax", 
+        procedure_reference as "procedureReference"
+      FROM 
+        taxes
+      WHERE 
+        procedure_reference = '${reference}'
+    `;
+    
+    try {
+      const rawResult = await db.execute(sql.raw(sqlQuery));
+      console.log(`[storage.getTaxByProcedureReference] Raw SQL results structure:`, {
+        hasRows: Boolean(rawResult.rows),
+        rowsIsArray: Array.isArray(rawResult.rows),
+        resultKeys: Object.keys(rawResult)
+      });
+      
+      // The raw SQL result contains a rows property with the actual results
+      const taxResults = rawResult.rows || [];
+      
+      // Check if we found any tax records
+      if (taxResults.length === 0) {
+        console.log(`[storage.getTaxByProcedureReference] No tax record found for procedure reference: ${reference}`);
+        return undefined;
+      }
+      
+      // Return the first tax record
+      console.log(`[storage.getTaxByProcedureReference] Found tax record:`, taxResults[0]);
+      return taxResults[0] as Tax;
+    } catch (error) {
+      console.error(`[storage.getTaxByProcedureReference] Error retrieving tax:`, error);
+      throw error;
+    }
+  }
+  
+  async getAllTaxes(): Promise<Tax[]> {
+    console.log(`[storage.getAllTaxes] Getting all tax records`);
+    
+    // Use a raw SQL query to be consistent with getTaxByProcedureReference
+    const sqlQuery = `
+      SELECT 
+        id,
+        customs_tax as "customsTax", 
+        additional_customs_tax as "additionalCustomsTax", 
+        kkdf, 
+        vat, 
+        stamp_tax as "stampTax", 
+        procedure_reference as "procedureReference"
+      FROM 
+        taxes
+    `;
+    
+    try {
+      const rawResult = await db.execute(sql.raw(sqlQuery));
+      
+      // The raw SQL result contains a rows property with the actual results
+      const taxResults = rawResult.rows || [];
+      console.log(`[storage.getAllTaxes] Retrieved ${taxResults.length} tax records`);
+      
+      return taxResults as Tax[];
+    } catch (error) {
+      console.error(`[storage.getAllTaxes] Error retrieving all taxes:`, error);
+      throw error;
+    }
+  }
+
+  async createTax(tax: InsertTax): Promise<Tax> {
+    // Verify that the procedure reference exists first
+    const [proc] = await db.select().from(procedures)
+      .where(eq(procedures.reference, tax.procedureReference));
+    
+    if (!proc) {
+      throw new Error(`Procedure with reference ${tax.procedureReference} does not exist`);
+    }
+    
+    const [result] = await db.insert(taxes).values(tax).returning();
+    
+    // Log activity
+    await this.logActivity({
+      procedureId: proc.id,
+      userId: tax.createdBy || 1,
+      action: 'tax_create',
+      details: `Tax information added for procedure ${tax.procedureReference}`
+    });
+    
+    return result;
+  }
+
+  async updateTax(id: number, taxData: Partial<InsertTax>): Promise<Tax | undefined> {
+    const [tax] = await db.select().from(taxes).where(eq(taxes.id, id));
+    if (!tax) return undefined;
+    
+    const [result] = await db.update(taxes)
+      .set({ ...taxData, updatedAt: new Date() })
+      .where(eq(taxes.id, id))
+      .returning();
+    
+    // Get procedure for activity logging
+    const [proc] = await db.select().from(procedures)
+      .where(eq(procedures.reference, tax.procedureReference));
+    
+    if (proc) {
+      await this.logActivity({
+        procedureId: proc.id,
+        userId: taxData.createdBy || tax.createdBy || 1,
+        action: 'tax_update',
+        details: `Tax information updated for procedure ${tax.procedureReference}`
+      });
+    }
+    
+    return result;
+  }
+
+  async deleteTax(id: number): Promise<boolean> {
+    const [tax] = await db.select().from(taxes).where(eq(taxes.id, id));
+    if (!tax) return false;
+    
+    const result = await db.delete(taxes).where(eq(taxes.id, id)).returning();
+    
+    if (result.length > 0) {
+      // Get procedure for activity logging
+      const [proc] = await db.select().from(procedures)
+        .where(eq(procedures.reference, tax.procedureReference));
+      
+      if (proc) {
+        await this.logActivity({
+          procedureId: proc.id,
+          userId: tax.createdBy || 1,
+          action: 'tax_delete',
+          details: `Tax information deleted for procedure ${tax.procedureReference}`
+        });
+      }
+    }
+    
+    return result.length > 0;
+  }
+
+  // Import Expense operations
+  async getImportExpense(id: number): Promise<ImportExpense | undefined> {
+    const [expense] = await db.select().from(importExpenses).where(eq(importExpenses.id, id));
+    return expense;
+  }
+
+  async getImportExpensesByReference(reference: string): Promise<ImportExpense[]> {
+    return db.select().from(importExpenses)
+      .where(eq(importExpenses.procedureReference, reference));
+  }
+
+  async getImportExpensesByCategory(reference: string, category: string): Promise<ImportExpense[]> {
+    return db.select().from(importExpenses)
+      .where(and(
+        eq(importExpenses.procedureReference, reference),
+        eq(importExpenses.category, category)
+      ));
+  }
+
+  async createImportExpense(expense: InsertImportExpense): Promise<ImportExpense> {
+    // Verify that the procedure reference exists first
+    const [proc] = await db.select().from(procedures)
+      .where(eq(procedures.reference, expense.procedureReference));
+    
+    if (!proc) {
+      throw new Error(`Procedure with reference ${expense.procedureReference} does not exist`);
+    }
+    
+    const [result] = await db.insert(importExpenses).values(expense).returning();
+    
+    // Log activity
+    await this.logActivity({
+      procedureId: proc.id,
+      userId: expense.createdBy || 1,
+      action: 'expense_create',
+      details: `Import expense added: ${expense.category} for procedure ${expense.procedureReference}`
+    });
+    
+    return result;
+  }
+
+  async updateImportExpense(id: number, expenseData: Partial<InsertImportExpense>): Promise<ImportExpense | undefined> {
+    const [expense] = await db.select().from(importExpenses).where(eq(importExpenses.id, id));
+    if (!expense) return undefined;
+    
+    const [result] = await db.update(importExpenses)
+      .set({ ...expenseData, updatedAt: new Date() })
+      .where(eq(importExpenses.id, id))
+      .returning();
+    
+    // Get procedure for activity logging
+    const [proc] = await db.select().from(procedures)
+      .where(eq(procedures.reference, expense.procedureReference));
+    
+    if (proc) {
+      await this.logActivity({
+        procedureId: proc.id,
+        userId: expenseData.createdBy || expense.createdBy || 1,
+        action: 'expense_update',
+        details: `Import expense updated: ${expense.category} for procedure ${expense.procedureReference}`
+      });
+    }
+    
+    return result;
+  }
+
+  async deleteImportExpense(id: number): Promise<boolean> {
+    const [expense] = await db.select().from(importExpenses).where(eq(importExpenses.id, id));
+    if (!expense) return false;
+    
+    const result = await db.delete(importExpenses).where(eq(importExpenses.id, id)).returning();
+    
+    if (result.length > 0) {
+      // Get procedure for activity logging
+      const [proc] = await db.select().from(procedures)
+        .where(eq(procedures.reference, expense.procedureReference));
+      
+      if (proc) {
+        await this.logActivity({
+          procedureId: proc.id,
+          userId: expense.createdBy || 1,
+          action: 'expense_delete',
+          details: `Import expense deleted: ${expense.category} for procedure ${expense.procedureReference}`
+        });
+      }
+    }
+    
+    return result.length > 0;
+  }
+  
+  async getAllImportExpenses(): Promise<ImportExpense[]> {
+    return db.select().from(importExpenses);
+  }
+  
+  async getExpensesByDateRange(startDate: Date, endDate: Date): Promise<ImportExpense[]> {
+    return db.select().from(importExpenses)
+      .where(
+        and(
+          gte(importExpenses.createdAt, startDate),
+          lte(importExpenses.createdAt, endDate)
+        )
+      );
+  }
+  
+  async getExpensesByCategoryAndDateRange(
+    startDate: Date, 
+    endDate: Date,
+    procedureReferences: string[] = []
+  ): Promise<{ category: string, totalAmount: number, count: number }[]> {
+    let query = db.select({
+      category: importExpenses.category,
+      totalAmount: sql`SUM(CAST(${importExpenses.amount} AS DECIMAL))`,
+      count: sql`COUNT(*)`
+    }).from(importExpenses)
+      .where(
+        and(
+          gte(importExpenses.createdAt, startDate),
+          lte(importExpenses.createdAt, endDate)
+        )
+      );
+    
+    // Add procedure filter if references are provided
+    if (procedureReferences.length > 0) {
+      query = query.where(
+        inArray(importExpenses.procedureReference, procedureReferences)
+      );
+    }
+    
+    return query.groupBy(importExpenses.category);
+  }
+
+  // Import Service Invoice operations
+  async getImportServiceInvoice(id: number): Promise<ImportServiceInvoice | undefined> {
+    const [invoice] = await db.select().from(importServiceInvoices).where(eq(importServiceInvoices.id, id));
+    return invoice;
+  }
+
+  async getAllImportServiceInvoices(): Promise<ImportServiceInvoice[]> {
+    return db.select().from(importServiceInvoices);
+  }
+
+  async getImportServiceInvoicesByReference(reference: string): Promise<ImportServiceInvoice[]> {
+    return db.select().from(importServiceInvoices)
+      .where(eq(importServiceInvoices.procedureReference, reference));
+  }
+
+  async createImportServiceInvoice(invoice: InsertImportServiceInvoice): Promise<ImportServiceInvoice> {
+    // Verify that the procedure reference exists first
+    const [proc] = await db.select().from(procedures)
+      .where(eq(procedures.reference, invoice.procedureReference));
+    
+    if (!proc) {
+      throw new Error(`Procedure with reference ${invoice.procedureReference} does not exist`);
+    }
+    
+    const [result] = await db.insert(importServiceInvoices).values(invoice).returning();
+    
+    // Log activity
+    await this.logActivity({
+      procedureId: proc.id,
+      userId: invoice.createdBy || 1,
+      action: 'invoice_create',
+      details: `Service invoice added for procedure ${invoice.procedureReference}: ${invoice.invoiceNumber}`
+    });
+    
+    return result;
+  }
+
+  async updateImportServiceInvoice(id: number, invoiceData: Partial<InsertImportServiceInvoice>): Promise<ImportServiceInvoice | undefined> {
+    const [invoice] = await db.select().from(importServiceInvoices).where(eq(importServiceInvoices.id, id));
+    if (!invoice) return undefined;
+    
+    const [result] = await db.update(importServiceInvoices)
+      .set({ ...invoiceData, updatedAt: new Date() })
+      .where(eq(importServiceInvoices.id, id))
+      .returning();
+    
+    // Get procedure for activity logging
+    const [proc] = await db.select().from(procedures)
+      .where(eq(procedures.reference, invoice.procedureReference));
+    
+    if (proc) {
+      await this.logActivity({
+        procedureId: proc.id,
+        userId: invoiceData.createdBy || invoice.createdBy || 1,
+        action: 'invoice_update',
+        details: `Service invoice updated for procedure ${invoice.procedureReference}: ${invoice.invoiceNumber}`
+      });
+    }
+    
+    return result;
+  }
+
+  async deleteImportServiceInvoice(id: number): Promise<boolean> {
+    const [invoice] = await db.select().from(importServiceInvoices).where(eq(importServiceInvoices.id, id));
+    if (!invoice) return false;
+    
+    const result = await db.delete(importServiceInvoices).where(eq(importServiceInvoices.id, id)).returning();
+    
+    if (result.length > 0) {
+      // Get procedure for activity logging
+      const [proc] = await db.select().from(procedures)
+        .where(eq(procedures.reference, invoice.procedureReference));
+      
+      if (proc) {
+        await this.logActivity({
+          procedureId: proc.id,
+          userId: invoice.createdBy || 1,
+          action: 'invoice_delete',
+          details: `Service invoice deleted for procedure ${invoice.procedureReference}: ${invoice.invoiceNumber}`
+        });
+      }
+    }
+    
+    return result.length > 0;
+  }
+
+  // Expense Document operations
+  async getExpenseDocument(id: number): Promise<ExpenseDocument | undefined> {
+    const [document] = await db.select().from(expenseDocuments).where(eq(expenseDocuments.id, id));
+    return document;
+  }
+
+  async getExpenseDocumentsByExpense(expenseType: string, expenseId: number): Promise<ExpenseDocument[]> {
+    return db.select().from(expenseDocuments).where(and(
+      eq(expenseDocuments.expenseType, expenseType),
+      eq(expenseDocuments.expenseId, expenseId)
+    ));
+  }
+
+  async getExpenseDocumentsByReference(reference: string): Promise<ExpenseDocument[]> {
+    return db.select().from(expenseDocuments)
+      .where(eq(expenseDocuments.procedureReference, reference));
+  }
+
+  async uploadExpenseDocument(document: InsertExpenseDocument): Promise<ExpenseDocument> {
+    const [result] = await db.insert(expenseDocuments).values(document).returning();
+    
+    // Get procedure for activity logging
+    const [proc] = await db.select().from(procedures)
+      .where(eq(procedures.reference, document.procedureReference));
+    
+    if (proc) {
+      let docType = document.importDocumentType 
+        ? `Import document (${document.importDocumentType})`
+        : `${document.expenseType} document`;
+        
+      await this.logActivity({
+        procedureId: proc.id,
+        userId: document.uploadedBy || 1,
+        action: 'document_upload',
+        details: `${docType} uploaded for procedure ${document.procedureReference}: ${document.originalFilename}`
+      });
+    }
+    
+    return result;
+  }
+
+  async deleteExpenseDocument(id: number): Promise<boolean> {
+    const [document] = await db.select().from(expenseDocuments).where(eq(expenseDocuments.id, id));
+    if (!document) return false;
+    
+    const result = await db.delete(expenseDocuments).where(eq(expenseDocuments.id, id)).returning();
+    
+    if (result.length > 0) {
+      // Get procedure for activity logging
+      const [proc] = await db.select().from(procedures)
+        .where(eq(procedures.reference, document.procedureReference));
+      
+      if (proc) {
+        let docType = document.importDocumentType 
+          ? `Import document (${document.importDocumentType})`
+          : `${document.expenseType} document`;
+          
+        await this.logActivity({
+          procedureId: proc.id,
+          userId: document.uploadedBy || 1,
+          action: 'document_delete',
+          details: `${docType} deleted for procedure ${document.procedureReference}: ${document.originalFilename}`
+        });
+      }
+    }
+    
+    return result.length > 0;
+  }
+
+  // Document operations
+  async getDocumentType(id: number): Promise<DocumentType | undefined> {
+    const [docType] = await db.select().from(documentTypes).where(eq(documentTypes.id, id));
+    return docType;
+  }
+
+  async getAllDocumentTypes(): Promise<DocumentType[]> {
+    return db.select().from(documentTypes);
+  }
+
+  async createDocumentType(documentType: InsertDocumentType): Promise<DocumentType> {
+    const [result] = await db.insert(documentTypes).values(documentType).returning();
+    return result;
+  }
+
+  async deleteDocumentType(id: number): Promise<boolean> {
+    const result = await db.delete(documentTypes).where(eq(documentTypes.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async uploadDocument(document: InsertProcedureDocument): Promise<ProcedureDocument> {
+    const [result] = await db.insert(procedureDocuments).values(document).returning();
+    
+    // Log activity
+    const proc = await this.getProcedure(document.procedureId);
+    if (proc) {
+      await this.logActivity({
+        procedureId: document.procedureId,
+        userId: document.uploadedBy || 1,
+        action: 'document_upload',
+        details: `Document uploaded: ${document.name} (${document.type})`
+      });
+    }
+    
+    return result;
+  }
+
+  async getDocuments(procedureId: number): Promise<ProcedureDocument[]> {
+    return db.select().from(procedureDocuments)
+      .where(eq(procedureDocuments.procedureId, procedureId));
+  }
+
+  async getDocument(id: number): Promise<ProcedureDocument | undefined> {
+    const [document] = await db.select().from(procedureDocuments).where(eq(procedureDocuments.id, id));
+    return document;
+  }
+
+  async deleteDocument(id: number): Promise<boolean> {
+    const [document] = await db.select().from(procedureDocuments).where(eq(procedureDocuments.id, id));
+    if (!document) return false;
+    
+    const result = await db.delete(procedureDocuments).where(eq(procedureDocuments.id, id)).returning();
+    
+    if (result.length > 0) {
+      await this.logActivity({
+        procedureId: document.procedureId,
+        userId: document.uploadedBy || 1,
+        action: 'document_delete',
+        details: `Document deleted: ${document.name} (${document.type})`
+      });
+    }
+    
+    return result.length > 0;
+  }
+
+  // Comment operations
+  async createComment(comment: InsertProcedureComment): Promise<ProcedureComment> {
+    const [result] = await db.insert(procedureComments).values(comment).returning();
+    
+    await this.logActivity({
+      procedureId: comment.procedureId,
+      userId: comment.createdBy,
+      action: 'comment_add',
+      details: `Comment added to procedure`
+    });
+    
+    return result;
+  }
+
+  async getComments(procedureId: number): Promise<ProcedureComment[]> {
+    return db.select().from(procedureComments)
+      .where(eq(procedureComments.procedureId, procedureId));
+  }
+
+  async deleteComment(id: number): Promise<boolean> {
+    const [comment] = await db.select().from(procedureComments).where(eq(procedureComments.id, id));
+    if (!comment) return false;
+    
+    const result = await db.delete(procedureComments).where(eq(procedureComments.id, id)).returning();
+    
+    if (result.length > 0) {
+      await this.logActivity({
+        procedureId: comment.procedureId,
+        userId: comment.createdBy,
+        action: 'comment_delete',
+        details: `Comment deleted from procedure`
+      });
+    }
+    
+    return result.length > 0;
+  }
+
+  // Activity operations
+  async logActivity(activity: InsertProcedureActivity): Promise<ProcedureActivity> {
+    const [result] = await db.insert(procedureActivities).values(activity).returning();
+    return result;
+  }
+
+  async getActivities(procedureId: number): Promise<ProcedureActivity[]> {
+    return db.select().from(procedureActivities)
+      .where(eq(procedureActivities.procedureId, procedureId));
+  }
+  
+  // Payment operations
+  async getPayment(id: number): Promise<Payment | undefined> {
+    const [payment] = await db.select().from(payments).where(eq(payments.id, id));
+    return payment;
+  }
+
+  async getAllPayments(): Promise<Payment[]> {
+    return db.select().from(payments);
+  }
+
+  async getPaymentsByProcedureReference(reference: string): Promise<Payment[]> {
+    return db.select().from(payments)
+      .where(eq(payments.procedureReference, reference));
+  }
+
+  async getPaymentsByType(paymentType: string): Promise<Payment[]> {
+    return db.select().from(payments)
+      .where(eq(payments.paymentType, paymentType));
+  }
+
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    // Verify that the procedure reference exists first
+    const [proc] = await db.select().from(procedures)
+      .where(eq(procedures.reference, payment.procedureReference));
+    
+    if (!proc) {
+      throw new Error(`Procedure with reference ${payment.procedureReference} does not exist`);
+    }
+    
+    const [result] = await db.insert(payments).values(payment).returning();
+    
+    // Log the activity
+    await this.logActivity({
+      procedureId: proc.id,
+      userId: payment.createdBy || 1,
+      action: 'payment_create',
+      details: `New ${payment.paymentType} payment of ${payment.amount} added`
+    });
+    
+    return result;
+  }
+
+  async updatePayment(id: number, paymentData: Partial<InsertPayment>): Promise<Payment | undefined> {
+    const [currentPayment] = await db.select().from(payments).where(eq(payments.id, id));
+    if (!currentPayment) return undefined;
+    
+    const [result] = await db.update(payments)
+      .set({ ...paymentData, updatedAt: new Date() })
+      .where(eq(payments.id, id))
+      .returning();
+    
+    if (result) {
+      // Get procedure for activity logging
+      const [proc] = await db.select().from(procedures)
+        .where(eq(procedures.reference, result.procedureReference));
+      
+      if (proc) {
+        await this.logActivity({
+          procedureId: proc.id,
+          userId: paymentData.createdBy || currentPayment.createdBy || 1,
+          action: 'payment_update',
+          details: `Payment updated: ${Object.keys(paymentData).join(', ')}`
+        });
+      }
+    }
+    
+    return result;
+  }
+
+  async deletePayment(id: number): Promise<boolean> {
+    const [payment] = await db.select().from(payments).where(eq(payments.id, id));
+    if (!payment) return false;
+    
+    const result = await db.delete(payments)
+      .where(eq(payments.id, id))
+      .returning();
+    
+    if (result.length > 0) {
+      // Get procedure for activity logging
+      const [proc] = await db.select().from(procedures)
+        .where(eq(procedures.reference, payment.procedureReference));
+      
+      if (proc) {
+        await this.logActivity({
+          procedureId: proc.id,
+          userId: payment.createdBy || 1,
+          action: 'payment_delete',
+          details: `Payment of ${payment.amount} (${payment.paymentType}) deleted`
+        });
+      }
+    }
+    
+    return result.length > 0;
+  }
+
+  async calculateFinancialSummary(reference: string): Promise<{
+    totalExpenses: number;
+    advancePayments: number;
+    balancePayments: number;
+    totalPayments: number;
+    remainingBalance: number;
+  }> {
+    console.log(`[storage.calculateFinancialSummary] Starting for procedure: ${reference}`);
+    
+    // Initialize summary
+    const summary = {
+      totalExpenses: 0,
+      advancePayments: 0,
+      balancePayments: 0,
+      totalPayments: 0,
+      remainingBalance: 0
+    };
+    
+    try {
+      // Get tax data using raw SQL query for consistency with other tax methods
+      const taxSqlQuery = `
+        SELECT 
+          id,
+          customs_tax as "customsTax", 
+          additional_customs_tax as "additionalCustomsTax", 
+          kkdf, 
+          vat, 
+          stamp_tax as "stampTax", 
+          procedure_reference as "procedureReference"
+        FROM 
+          taxes
+        WHERE 
+          procedure_reference = '${reference}'
+      `;
+      
+      const rawTaxResult = await db.execute(sql.raw(taxSqlQuery));
+      const taxResults = rawTaxResult.rows || [];
+      
+      console.log(`[storage.calculateFinancialSummary] Tax data result:`, {
+        hasRows: Boolean(rawTaxResult.rows),
+        rowCount: taxResults.length
+      });
+      // Process tax expenses
+      if (taxResults.length > 0) {
+        const tax = taxResults[0];
+        console.log(`[storage.calculateFinancialSummary] Found tax record:`, tax);
+        
+        const customsTax = parseFloat(tax.customsTax?.toString() || '0');
+        const additionalCustomsTax = parseFloat(tax.additionalCustomsTax?.toString() || '0');
+        const kkdf = parseFloat(tax.kkdf?.toString() || '0');
+        const vat = parseFloat(tax.vat?.toString() || '0');
+        const stampTax = parseFloat(tax.stampTax?.toString() || '0');
+        
+        const taxTotal = customsTax + additionalCustomsTax + kkdf + vat + stampTax;
+        summary.totalExpenses += taxTotal;
+        
+        console.log(`[storage.calculateFinancialSummary] Tax breakdown:`, {
+          customsTax,
+          additionalCustomsTax,
+          kkdf,
+          vat, 
+          stampTax,
+          totalTax: taxTotal
+        });
+      } else {
+        console.log(`[storage.calculateFinancialSummary] No tax record found for procedure: ${reference}`);
+      }
+      
+      // Get import expenses
+      const expensesList = await db.select().from(importExpenses)
+        .where(eq(importExpenses.procedureReference, reference));
+      
+      let importExpensesTotal = 0;
+      for (const expense of expensesList) {
+        const amount = parseFloat(expense.amount?.toString() || '0');
+        importExpensesTotal += amount;
+      }
+      
+      summary.totalExpenses += importExpensesTotal;
+      console.log(`[storage.calculateFinancialSummary] Import expenses total: ${importExpensesTotal} (${expensesList.length} items)`);
+      
+      // Get service invoices
+      const serviceInvoices = await db.select().from(importServiceInvoices)
+        .where(eq(importServiceInvoices.procedureReference, reference));
+      
+      let serviceInvoicesTotal = 0;
+      for (const invoice of serviceInvoices) {
+        const amount = parseFloat(invoice.amount?.toString() || '0');
+        serviceInvoicesTotal += amount;
+      }
+      
+      summary.totalExpenses += serviceInvoicesTotal;
+      console.log(`[storage.calculateFinancialSummary] Service invoices total: ${serviceInvoicesTotal} (${serviceInvoices.length} items)`);
+      
+      // Get payments and separate by type
+      const allPayments = await db.select().from(payments)
+        .where(eq(payments.procedureReference, reference));
+      
+      console.log(`[storage.calculateFinancialSummary] Found ${allPayments.length} payments`);
+      
+      for (const payment of allPayments) {
+        const amount = parseFloat(payment.amount?.toString() || '0');
+        
+        // Categorize payments by type - support both formats
+        if (payment.paymentType === 'Advance Payment' || payment.paymentType === 'advance') {
+          summary.advancePayments += amount;
+        } else if (payment.paymentType === 'Balance Payment' || payment.paymentType === 'balance') {
+          summary.balancePayments += amount;
+        }
+        
+        // Add to total payments
+        summary.totalPayments += amount;
+      }
+      
+      console.log(`[storage.calculateFinancialSummary] Payment totals:`, {
+        advancePayments: summary.advancePayments,
+        balancePayments: summary.balancePayments,
+        totalPayments: summary.totalPayments
+      });
+      
+      // Calculate remaining balance (Total Expenses - Total Payments)
+      summary.remainingBalance = summary.totalExpenses - summary.totalPayments;
+      
+      console.log(`[storage.calculateFinancialSummary] Final summary:`, {
+        totalExpenses: summary.totalExpenses,
+        totalPayments: summary.totalPayments,
+        remainingBalance: summary.remainingBalance
+      });
+      
+      return summary;
+    } catch (error) {
+      console.error(`[storage.calculateFinancialSummary] Error calculating financial summary for procedure ${reference}:`, error);
+      throw error;
+    }
+  }
+  
+  async getExpensesByCategoryAndDateRange(
+    startDate: string | Date, 
+    endDate: string | Date, 
+    procedureReferences: string[] = []
+  ): Promise<{ category: string; totalAmount: number; count: number }[]> {
+    // Handle string or Date inputs
+    const startDateObj = typeof startDate === 'string' ? new Date(startDate) : startDate;
+    const endDateObj = typeof endDate === 'string' ? new Date(endDate) : endDate;
+    
+    console.log('[storage.getExpensesByCategoryAndDateRange] Started with params:', {
+      startDate: typeof startDate === 'string' ? startDate : startDate.toISOString(),
+      endDate: typeof endDate === 'string' ? endDate : endDate.toISOString(),
+      procedureReferences
+    });
+    
+    // Start with an empty result array
+    const analyticsResults: { [key: string]: { totalAmount: number; count: number } } = {};
+
+    // IMPORT EXPENSES SECTION
+    console.log('[storage.getExpensesByCategoryAndDateRange] Querying import expenses...');
+    
+    // Create date filters for import_expenses using invoice_date per schema
+    const importExpensesDateFilter = and(
+      gte(importExpenses.invoiceDate, startDateObj),
+      lte(importExpenses.invoiceDate, endDateObj)
+    );
+    
+    // For debugging, get a count of expenses in the date range
+    const expenseCount = await db.select({
+      count: sql`count(*)`
+    }).from(importExpenses)
+      .where(importExpensesDateFilter);
+    
+    console.log('[storage.getExpensesByCategoryAndDateRange] Total import expenses in date range:', 
+      expenseCount[0]?.count || 0);
+      
+    // Query import expenses
+    let expensesQuery = db.select({
+      category: importExpenses.category,
+      amount: importExpenses.amount,
+      invoiceDate: importExpenses.invoiceDate,
+      procedureReference: importExpenses.procedureReference
+    }).from(importExpenses)
+      .where(importExpensesDateFilter);
+    
+    // Add procedure filter if provided
+    if (procedureReferences.length > 0) {
+      expensesQuery = expensesQuery.where(inArray(importExpenses.procedureReference, procedureReferences));
+      console.log('[storage.getExpensesByCategoryAndDateRange] Added procedure filter for import expenses:', procedureReferences);
+    }
+    
+    const expensesResults = await expensesQuery;
+    
+    console.log('[storage.getExpensesByCategoryAndDateRange] Import expenses retrieved:', {
+      count: expensesResults.length,
+      samples: expensesResults.slice(0, 2) // Show first 2 results as samples
+    });
+    
+    // Process import expenses into categories
+    for (const row of expensesResults) {
+      const category = row.category;
+      const amount = parseFloat(row.amount?.toString() || '0');
+      
+      // Initialize the category if it doesn't exist
+      if (!analyticsResults[category]) {
+        analyticsResults[category] = { totalAmount: 0, count: 0 };
+      }
+      
+      // Add the expense
+      analyticsResults[category].totalAmount += amount;
+      analyticsResults[category].count += 1;
+    }
+    
+    console.log('[storage.getExpensesByCategoryAndDateRange] Import expenses processed by category:', 
+      Object.keys(analyticsResults).length > 0 ? analyticsResults : 'No categories processed');
+    
+    // TAX EXPENSES SECTION
+    console.log('[storage.getExpensesByCategoryAndDateRange] Querying tax expenses...');
+    
+    // For tax expenses, we MUST join with procedures to filter by import_dec_date
+    console.log('[storage.getExpensesByCategoryAndDateRange] Using completely custom SQL query for tax expenses:', { 
+      startDate: typeof startDate === 'string' ? startDate : startDateObj.toISOString(), 
+      endDate: typeof endDate === 'string' ? endDate : endDateObj.toISOString() 
+    });
+    
+    // Use direct SQL query as a last resort
+    // Just extract the date part YYYY-MM-DD from either the string or Date object
+    const startDateStr = typeof startDate === 'string' ? startDate.split('T')[0] : startDateObj.toISOString().split('T')[0];
+    const endDateStr = typeof endDate === 'string' ? endDate.split('T')[0] : endDateObj.toISOString().split('T')[0];
+    
+    console.log('[storage.getExpensesByCategoryAndDateRange] Using date strings:', { 
+      startDateStr,
+      endDateStr
+    });
+    
+    // Construct the SQL query to find procedures where the date part matches exactly
+    let sqlQuery = `
+      SELECT 
+        t.customs_tax as "customsTax", 
+        t.additional_customs_tax as "additionalCustomsTax", 
+        t.kkdf, 
+        t.vat, 
+        t.stamp_tax as "stampTax", 
+        t.procedure_reference as "procedureReference"
+      FROM 
+        taxes t
+      JOIN 
+        procedures p ON t.procedure_reference = p.reference
+      WHERE 
+        to_char(p.import_dec_date, 'YYYY-MM-DD') >= '${startDateStr}' 
+        AND to_char(p.import_dec_date, 'YYYY-MM-DD') <= '${endDateStr}'
+    `;
+    
+    // Add procedure filter if needed
+    if (procedureReferences.length > 0) {
+      // Create 'IN' clause with references
+      const placeholders = procedureReferences.map(ref => `'${ref}'`).join(', ');
+      sqlQuery += ` AND t.procedure_reference IN (${placeholders})`;
+      console.log('[storage.getExpensesByCategoryAndDateRange] Added procedure filter to direct SQL:', procedureReferences);
+    }
+    
+    console.log('[storage.getExpensesByCategoryAndDateRange] Executing SQL query:', sqlQuery);
+    
+    // Execute the final SQL with all needed filters
+    const rawTaxesResults = await db.execute(sql.raw(sqlQuery));
+    
+    // The rawTaxesResults from db.execute(sql.raw()) is not an array, so convert it to one
+    // It returns { rows: [...], fields: [...] } structure
+    const taxesResults = rawTaxesResults.rows || [];
+    
+    // Log query details for debugging
+    console.log('[storage.getExpensesByCategoryAndDateRange] Used direct SQL approach:', {
+      filterType: 'direct SQL query with date string comparison',
+      usesImportDecDate: true,
+      fallbackToCreatedAt: false,
+      startDateStr,
+      endDateStr
+    });
+    
+    // Just log the count and samples for debugging
+    console.log('[storage.getExpensesByCategoryAndDateRange] Retrieved tax expenses count:', taxesResults.length);
+    
+    console.log('[storage.getExpensesByCategoryAndDateRange] Raw SQL results structure:', {
+      hasRows: Boolean(rawTaxesResults.rows),
+      rowsIsArray: Array.isArray(rawTaxesResults.rows),
+      resultKeys: Object.keys(rawTaxesResults)
+    });
+    
+    // Add procedure filter as a WHERE clause extension to the SQL if needed
+    if (procedureReferences.length > 0) {
+      console.log('[storage.getExpensesByCategoryAndDateRange] Will filter by procedure references:', procedureReferences);
+      // Note: Procedure filtering already handled in the custom SQL query
+    }
+    
+    console.log('[storage.getExpensesByCategoryAndDateRange] Tax expenses retrieved:', {
+      count: taxesResults.length,
+      samples: taxesResults.slice(0, 2) // Show first 2 results as samples
+    });
+    
+    // Process different tax types as separate categories
+    const taxTypes = [
+      { field: 'customsTax', category: 'customs_tax' },
+      { field: 'additionalCustomsTax', category: 'additional_customs_tax' },
+      { field: 'kkdf', category: 'kkdf' },
+      { field: 'vat', category: 'vat' },
+      { field: 'stampTax', category: 'stamp_tax' }
+    ];
+    
+    // Process each tax type separately
+    for (const row of taxesResults) {
+      for (const taxType of taxTypes) {
+        const amount = parseFloat(row[taxType.field]?.toString() || '0');
+        
+        // Skip zero amounts
+        if (amount === 0) continue;
+        
+        // Initialize the category if it doesn't exist
+        if (!analyticsResults[taxType.category]) {
+          analyticsResults[taxType.category] = { totalAmount: 0, count: 0 };
+        }
+        
+        // Add the tax amount
+        analyticsResults[taxType.category].totalAmount += amount;
+        analyticsResults[taxType.category].count += 1;
+      }
+    }
+    
+    // SERVICE INVOICES SECTION
+    console.log('[storage.getExpensesByCategoryAndDateRange] Querying service invoices...');
+    
+    // Create date filters for service invoices using date field per schema
+    const serviceInvoicesDateFilter = and(
+      gte(importServiceInvoices.date, startDateObj),
+      lte(importServiceInvoices.date, endDateObj)
+    );
+    
+    // For debugging, get a count of service invoices in the date range
+    const invoiceCount = await db.select({
+      count: sql`count(*)`
+    }).from(importServiceInvoices)
+      .where(serviceInvoicesDateFilter);
+    
+    console.log('[storage.getExpensesByCategoryAndDateRange] Total service invoices in date range:', 
+      invoiceCount[0]?.count || 0);
+    
+    let serviceInvoicesQuery = db.select({
+      amount: importServiceInvoices.amount,
+      date: importServiceInvoices.date,
+      procedureReference: importServiceInvoices.procedureReference
+    }).from(importServiceInvoices)
+      .where(serviceInvoicesDateFilter);
+    
+    // Add procedure filter if provided
+    if (procedureReferences.length > 0) {
+      serviceInvoicesQuery = serviceInvoicesQuery.where(
+        inArray(importServiceInvoices.procedureReference, procedureReferences)
+      );
+      console.log('[storage.getExpensesByCategoryAndDateRange] Added procedure filter for service invoices:', procedureReferences);
+    }
+    
+    const serviceInvoicesResults = await serviceInvoicesQuery;
+    
+    console.log('[storage.getExpensesByCategoryAndDateRange] Service invoices retrieved:', {
+      count: serviceInvoicesResults.length,
+      samples: serviceInvoicesResults.slice(0, 2) // Show first 2 results as samples
+    });
+    
+    // Add service invoices to a special "service_invoice" category
+    if (!analyticsResults['service_invoice']) {
+      analyticsResults['service_invoice'] = { totalAmount: 0, count: 0 };
+    }
+    
+    for (const row of serviceInvoicesResults) {
+      const amount = parseFloat(row.amount?.toString() || '0');
+      analyticsResults['service_invoice'].totalAmount += amount;
+      analyticsResults['service_invoice'].count += 1;
+    }
+    
+    // Convert the results object to the required array format
+    const finalResults = Object.entries(analyticsResults).map(([category, data]) => ({
+      category,
+      totalAmount: data.totalAmount,
+      count: data.count
+    }));
+    
+    console.log('[storage.getExpensesByCategoryAndDateRange] Final processed results:', {
+      categories: finalResults.length,
+      totalAmount: finalResults.reduce((sum, item) => sum + item.totalAmount, 0),
+      totalCount: finalResults.reduce((sum, item) => sum + item.count, 0),
+      categoryBreakdown: finalResults
+    });
+    
+    return finalResults;
+  }
+  
+  // Get a summary of financial data for a specific procedure
+  async getProcedureFinancialSummary(procedureReference: string): Promise<{
+    totalExpenses: number;
+    totalPayments: number;
+    advancePayments: number;
+    balancePayments: number;
+    remainingBalance: number;
+    taxExpenses: number;
+    importExpensesTotal: number;
+    serviceInvoicesTotal: number;
+  }> {
+    console.log(`[storage.getProcedureFinancialSummary] Getting financial summary for procedure: ${procedureReference}`);
+    
+    // Initialize the summary object
+    const summary = {
+      totalExpenses: 0,
+      totalPayments: 0,
+      advancePayments: 0,
+      balancePayments: 0,
+      remainingBalance: 0,
+      taxExpenses: 0,
+      importExpensesTotal: 0,
+      serviceInvoicesTotal: 0
+    };
+    
+    try {
+      // 1. Get all tax expenses for the procedure - using direct SQL for consistency
+      const taxQuery = `
+        SELECT 
+          customs_tax as "customsTax", 
+          additional_customs_tax as "additionalCustomsTax", 
+          kkdf, 
+          vat, 
+          stamp_tax as "stampTax"
+        FROM 
+          taxes
+        WHERE 
+          procedure_reference = '${procedureReference}'
+      `;
+      
+      console.log(`[storage.getProcedureFinancialSummary] Executing tax query: ${taxQuery}`);
+      const rawTaxResults = await db.execute(sql.raw(taxQuery));
+      
+      // Convert to array format
+      const taxResults = rawTaxResults.rows || [];
+      
+      console.log(`[storage.getProcedureFinancialSummary] Tax results structure:`, {
+        hasRows: Boolean(rawTaxResults.rows),
+        resultKeys: Object.keys(rawTaxResults),
+        resultsLength: taxResults.length
+      });
+      
+      // Calculate total tax expenses
+      if (taxResults.length > 0) {
+        const tax = taxResults[0];
+        summary.taxExpenses = 
+          Number(tax.customsTax || 0) +
+          Number(tax.additionalCustomsTax || 0) +
+          Number(tax.kkdf || 0) +
+          Number(tax.vat || 0) +
+          Number(tax.stampTax || 0);
+      }
+      
+      console.log(`[storage.getProcedureFinancialSummary] Tax expenses total: ${summary.taxExpenses}`);
+      
+      // 2. Get all import expenses for the procedure
+      const importExpensesResults = await db.select({
+        amount: importExpenses.amount
+      })
+      .from(importExpenses)
+      .where(eq(importExpenses.procedureReference, procedureReference));
+      
+      // Calculate total import expenses
+      for (const expense of importExpensesResults) {
+        summary.importExpensesTotal += Number(expense.amount || 0);
+      }
+      
+      console.log(`[storage.getProcedureFinancialSummary] Import expenses total: ${summary.importExpensesTotal}`);
+      
+      // 3. Get all service invoices for the procedure
+      const serviceInvoicesResults = await db.select({
+        amount: importServiceInvoices.amount
+      })
+      .from(importServiceInvoices)
+      .where(eq(importServiceInvoices.procedureReference, procedureReference));
+      
+      // Calculate total service invoices
+      for (const invoice of serviceInvoicesResults) {
+        summary.serviceInvoicesTotal += Number(invoice.amount || 0);
+      }
+      
+      console.log(`[storage.getProcedureFinancialSummary] Service invoices total: ${summary.serviceInvoicesTotal}`);
+      
+      // 4. Calculate total expenses
+      summary.totalExpenses = summary.taxExpenses + summary.importExpensesTotal + summary.serviceInvoicesTotal;
+      
+      console.log(`[storage.getProcedureFinancialSummary] Total expenses: ${summary.totalExpenses}`);
+      
+      // 5. Get all payments for the procedure
+      const paymentsResults = await db.select({
+        amount: payments.amount,
+        paymentType: payments.paymentType
+      })
+      .from(payments)
+      .where(eq(payments.procedureReference, procedureReference));
+      
+      // Calculate total payments, separating advance and balance
+      for (const payment of paymentsResults) {
+        const amount = Number(payment.amount || 0);
+        
+        if (payment.paymentType === 'advance') {
+          summary.advancePayments += amount;
+        } else if (payment.paymentType === 'balance') {
+          summary.balancePayments += amount;
+        }
+      }
+      
+      summary.totalPayments = summary.advancePayments + summary.balancePayments;
+      
+      console.log(`[storage.getProcedureFinancialSummary] Advance payments: ${summary.advancePayments}`);
+      console.log(`[storage.getProcedureFinancialSummary] Balance payments: ${summary.balancePayments}`);
+      console.log(`[storage.getProcedureFinancialSummary] Total payments: ${summary.totalPayments}`);
+      
+      // 6. Calculate remaining balance (positive value = remaining to pay, negative = excess payment)
+      summary.remainingBalance = summary.totalExpenses - summary.totalPayments;
+      
+      console.log(`[storage.getProcedureFinancialSummary] Remaining balance: ${summary.remainingBalance}`);
+      
+    } catch (error) {
+      console.error('[storage.getProcedureFinancialSummary] Error getting financial summary:', error);
+    }
+    
+    return summary;
+  }
+  
+  // Invoice Line Item operations
+  async getInvoiceLineItem(id: number): Promise<InvoiceLineItem | undefined> {
+    const result = await db.select().from(invoiceLineItems)
+      .where(eq(invoiceLineItems.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getInvoiceLineItemsByReference(reference: string): Promise<InvoiceLineItem[]> {
+    return await db.select().from(invoiceLineItems)
+      .where(eq(invoiceLineItems.procedureReference, reference));
+  }
+
+  async createInvoiceLineItem(lineItem: InsertInvoiceLineItem): Promise<InvoiceLineItem> {
+    const result = await db.insert(invoiceLineItems).values(lineItem).returning();
+    return result[0];
+  }
+
+  async updateInvoiceLineItem(id: number, lineItemData: Partial<InsertInvoiceLineItem>): Promise<InvoiceLineItem | undefined> {
+    const result = await db.update(invoiceLineItems)
+      .set({ ...lineItemData, updatedAt: new Date() })
+      .where(eq(invoiceLineItems.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteInvoiceLineItem(id: number): Promise<boolean> {
+    const result = await db.delete(invoiceLineItems)
+      .where(eq(invoiceLineItems.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  async deleteAllInvoiceLineItems(procedureReference: string): Promise<number> {
+    const result = await db.delete(invoiceLineItems)
+      .where(eq(invoiceLineItems.procedureReference, procedureReference))
+      .returning();
+    return result.length;
+  }
+
+  async bulkCreateInvoiceLineItems(lineItems: InsertInvoiceLineItem[]): Promise<InvoiceLineItem[]> {
+    if (lineItems.length === 0) {
+      return [];
+    }
+    
+    const results: InvoiceLineItem[] = [];
+    
+    // Create batches to avoid too many inserts at once
+    const batchSize = 50;
+    for (let i = 0; i < lineItems.length; i += batchSize) {
+      const batch = lineItems.slice(i, i + batchSize);
+      const batchResult = await db.insert(invoiceLineItems).values(batch).returning();
+      results.push(...batchResult);
+    }
+    
+    return results;
+  }
+
+  async calculateInvoiceLineItemCosts(reference: string): Promise<{
+    totalLineItems: number;
+    costMultiplier: number;
+    success: boolean;
+  }> {
+    console.log(`[storage.calculateInvoiceLineItemCosts] Starting calculation for procedure: ${reference}`);
+    
+    try {
+      // Get all line items for this procedure
+      const lineItems = await this.getInvoiceLineItemsByReference(reference);
+      if (lineItems.length === 0) {
+        console.log(`[storage.calculateInvoiceLineItemCosts] No line items found for procedure: ${reference}`);
+        return {
+          totalLineItems: 0,
+          costMultiplier: 0,
+          success: false
+        };
+      }
+      
+      // Get the configuration for this procedure
+      const configResult = await this.getInvoiceLineItemsConfig(reference);
+      const distributionMethod = configResult?.distributionMethod || "proportional";
+      
+      // Get the procedure and financial summary
+      const procedureResult = await this.getProcedureByReference(reference);
+      if (procedureResult.length === 0) {
+        console.log(`[storage.calculateInvoiceLineItemCosts] Procedure not found: ${reference}`);
+        return {
+          totalLineItems: lineItems.length,
+          costMultiplier: 0,
+          success: false
+        };
+      }
+      
+      const procedure = procedureResult[0];
+      const financialSummary = await this.calculateFinancialSummary(reference);
+      
+      // Calculate the total value of the invoice
+      let invoiceValue = 0;
+      if (procedure.amount) {
+        if (procedure.currency === "USD" && procedure.usdtl_rate) {
+          // If USD, convert to TL using exchange rate
+          invoiceValue = parseFloat(procedure.amount.toString()) * parseFloat(procedure.usdtl_rate.toString());
+        } else {
+          // If already TL, use as is
+          invoiceValue = parseFloat(procedure.amount.toString());
+        }
+      }
+      
+      // Calculate the cost multiplier factor (Total Cost / Invoice Value)
+      const totalCost = invoiceValue + financialSummary.totalExpenses;
+      const costMultiplier = invoiceValue > 0 ? totalCost / invoiceValue : 0;
+      
+      console.log(`[storage.calculateInvoiceLineItemCosts] Calculation parameters:`, {
+        invoiceValue,
+        totalExpenses: financialSummary.totalExpenses,
+        totalCost,
+        costMultiplier,
+        distributionMethod
+      });
+      
+      if (costMultiplier <= 0) {
+        console.log(`[storage.calculateInvoiceLineItemCosts] Invalid cost multiplier: ${costMultiplier}`);
+        return {
+          totalLineItems: lineItems.length,
+          costMultiplier: 0,
+          success: false
+        };
+      }
+      
+      // Apply the cost calculation to each line item
+      for (const item of lineItems) {
+        // Original item total price
+        const totalPrice = parseFloat(item.totalPrice.toString());
+        
+        let finalCost = 0;
+        let finalCostPerItem = 0;
+        
+        if (distributionMethod === "proportional") {
+          // Proportional distribution based on item price
+          finalCost = totalPrice * costMultiplier;
+          finalCostPerItem = item.quantity > 0 ? finalCost / item.quantity : 0;
+        } else {
+          // Equal distribution (divide total expenses equally among all items)
+          const equalShare = financialSummary.totalExpenses / lineItems.length;
+          finalCost = totalPrice + equalShare;
+          finalCostPerItem = item.quantity > 0 ? finalCost / item.quantity : 0;
+        }
+        
+        // Update the line item with calculated costs
+        await db.update(invoiceLineItems)
+          .set({
+            finalCost: finalCost.toString(),
+            finalCostPerItem: finalCostPerItem.toString(),
+            costMultiplier: costMultiplier.toString(),
+            updatedAt: new Date()
+          })
+          .where(eq(invoiceLineItems.id, item.id));
+      }
+      
+      console.log(`[storage.calculateInvoiceLineItemCosts] Successfully updated ${lineItems.length} line items with cost factor ${costMultiplier}`);
+      
+      return {
+        totalLineItems: lineItems.length,
+        costMultiplier,
+        success: true
+      };
+    } catch (error) {
+      console.error(`[storage.calculateInvoiceLineItemCosts] Error calculating costs:`, error);
+      return {
+        totalLineItems: 0,
+        costMultiplier: 0,
+        success: false
+      };
+    }
+  }
+  
+  // Invoice Line Item operations
+  async getInvoiceLineItem(id: number): Promise<InvoiceLineItem | undefined> {
+    try {
+      console.log(`[PostgresStorage.getInvoiceLineItem] Getting line item with ID ${id}`);
+      const result = await db.select().from(invoiceLineItems)
+        .where(eq(invoiceLineItems.id, id))
+        .limit(1);
+      
+      return result[0];
+    } catch (error) {
+      console.error(`[PostgresStorage.getInvoiceLineItem] Error getting line item with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getInvoiceLineItemsByReference(reference: string): Promise<InvoiceLineItem[]> {
+    try {
+      console.log(`[PostgresStorage.getInvoiceLineItemsByReference] Getting line items for procedure ${reference}`);
+      const result = await db.select().from(invoiceLineItems)
+        .where(eq(invoiceLineItems.procedureReference, reference));
+      
+      console.log(`[PostgresStorage.getInvoiceLineItemsByReference] Found ${result.length} line items for procedure ${reference}`);
+      return result;
+    } catch (error) {
+      console.error(`[PostgresStorage.getInvoiceLineItemsByReference] Error getting line items for procedure ${reference}:`, error);
+      return [];
+    }
+  }
+
+  async createInvoiceLineItem(lineItem: InsertInvoiceLineItem): Promise<InvoiceLineItem> {
+    try {
+      console.log(`[PostgresStorage.createInvoiceLineItem] Creating new line item for procedure ${lineItem.procedureReference}`);
+      
+      // Verify the procedure exists
+      const proc = await db.select().from(procedures)
+        .where(eq(procedures.reference, lineItem.procedureReference))
+        .limit(1);
+      
+      if (proc.length === 0) {
+        throw new Error(`Procedure with reference ${lineItem.procedureReference} does not exist`);
+      }
+      
+      // Create the line item
+      const result = await db.insert(invoiceLineItems)
+        .values({
+          ...lineItem,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+      
+      console.log(`[PostgresStorage.createInvoiceLineItem] Created line item with ID ${result[0].id}`);
+      return result[0];
+    } catch (error) {
+      console.error(`[PostgresStorage.createInvoiceLineItem] Error creating line item:`, error);
+      throw error;
+    }
+  }
+
+  async updateInvoiceLineItem(id: number, lineItem: Partial<InsertInvoiceLineItem>): Promise<InvoiceLineItem | undefined> {
+    try {
+      console.log(`[PostgresStorage.updateInvoiceLineItem] Updating line item with ID ${id}`);
+      
+      // Check if line item exists
+      const existing = await this.getInvoiceLineItem(id);
+      if (!existing) {
+        console.error(`[PostgresStorage.updateInvoiceLineItem] Line item with ID ${id} not found`);
+        return undefined;
+      }
+      
+      // Calculate totalPrice if not provided but unitPrice and quantity are
+      if (!lineItem.totalPrice && lineItem.unitPrice && lineItem.quantity) {
+        const unitPrice = parseFloat(lineItem.unitPrice.toString());
+        const quantity = lineItem.quantity;
+        const totalPrice = (unitPrice * quantity).toFixed(2);
+        lineItem.totalPrice = totalPrice;
+      }
+      
+      // Update the line item
+      const result = await db.update(invoiceLineItems)
+        .set({
+          ...lineItem,
+          updatedAt: new Date()
+        })
+        .where(eq(invoiceLineItems.id, id))
+        .returning();
+      
+      console.log(`[PostgresStorage.updateInvoiceLineItem] Updated line item with ID ${id}`);
+      return result[0];
+    } catch (error) {
+      console.error(`[PostgresStorage.updateInvoiceLineItem] Error updating line item with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async deleteInvoiceLineItem(id: number): Promise<boolean> {
+    try {
+      console.log(`[PostgresStorage.deleteInvoiceLineItem] Deleting line item with ID ${id}`);
+      
+      // Check if line item exists
+      const existing = await this.getInvoiceLineItem(id);
+      if (!existing) {
+        console.error(`[PostgresStorage.deleteInvoiceLineItem] Line item with ID ${id} not found`);
+        return false;
+      }
+      
+      // Delete the line item
+      const result = await db.delete(invoiceLineItems)
+        .where(eq(invoiceLineItems.id, id))
+        .returning();
+      
+      console.log(`[PostgresStorage.deleteInvoiceLineItem] Deleted line item with ID ${id}`);
+      return result.length > 0;
+    } catch (error) {
+      console.error(`[PostgresStorage.deleteInvoiceLineItem] Error deleting line item with ID ${id}:`, error);
+      return false;
+    }
+  }
+
+  async deleteAllInvoiceLineItems(procedureReference: string): Promise<number> {
+    try {
+      console.log(`[PostgresStorage.deleteAllInvoiceLineItems] Deleting all line items for procedure ${procedureReference}`);
+      
+      // Delete all line items for the procedure
+      const result = await db.delete(invoiceLineItems)
+        .where(eq(invoiceLineItems.procedureReference, procedureReference))
+        .returning();
+      
+      console.log(`[PostgresStorage.deleteAllInvoiceLineItems] Deleted ${result.length} line items for procedure ${procedureReference}`);
+      return result.length;
+    } catch (error) {
+      console.error(`[PostgresStorage.deleteAllInvoiceLineItems] Error deleting line items for procedure ${procedureReference}:`, error);
+      return 0;
+    }
+  }
+
+  async bulkCreateInvoiceLineItems(lineItems: InsertInvoiceLineItem[]): Promise<InvoiceLineItem[]> {
+    try {
+      console.log(`[PostgresStorage.bulkCreateInvoiceLineItems] Creating ${lineItems.length} line items`);
+      
+      if (lineItems.length === 0) {
+        return [];
+      }
+      
+      // Verify the procedure exists for the first line item
+      const procedureReference = lineItems[0].procedureReference;
+      const proc = await db.select().from(procedures)
+        .where(eq(procedures.reference, procedureReference))
+        .limit(1);
+      
+      if (proc.length === 0) {
+        throw new Error(`Procedure with reference ${procedureReference} does not exist`);
+      }
+      
+      // Create all line items in a single insert
+      const result = await db.insert(invoiceLineItems)
+        .values(
+          lineItems.map(item => ({
+            ...item,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }))
+        )
+        .returning();
+      
+      console.log(`[PostgresStorage.bulkCreateInvoiceLineItems] Created ${result.length} line items`);
+      return result;
+    } catch (error) {
+      console.error(`[PostgresStorage.bulkCreateInvoiceLineItems] Error creating line items:`, error);
+      throw error;
+    }
+  }
+
+  async calculateInvoiceLineItemCosts(reference: string): Promise<{
+    totalLineItems: number;
+    costMultiplier: number;
+    success: boolean;
+  }> {
+    try {
+      console.log(`[PostgresStorage.calculateInvoiceLineItemCosts] Calculating costs for procedure ${reference}`);
+      
+      // Get all line items for the procedure
+      const lineItems = await this.getInvoiceLineItemsByReference(reference);
+      
+      if (lineItems.length === 0) {
+        console.log(`[PostgresStorage.calculateInvoiceLineItemCosts] No line items found for procedure ${reference}`);
+        return {
+          totalLineItems: 0,
+          costMultiplier: 0,
+          success: false
+        };
+      }
+      
+      // Get the procedure to get the invoice value, freight amount, and expense totals
+      const proc = await db.select().from(procedures)
+        .where(eq(procedures.reference, reference))
+        .limit(1);
+      
+      if (proc.length === 0) {
+        throw new Error(`Procedure with reference ${reference} does not exist`);
+      }
+      
+      const procedure = proc[0];
+      
+      // Get the invoice line items config
+      const config = await this.getInvoiceLineItemsConfig(reference);
+      const distributionMethod = config?.distributionMethod || 'proportional';
+      
+      // Get the financial summary to get total expenses
+      const financialSummary = await this.calculateFinancialSummary(reference);
+      
+      // Calculate the total amount from all line items
+      let totalLineItemsPrice = 0;
+      for (const item of lineItems) {
+        totalLineItemsPrice += parseFloat(item.totalPrice?.toString() || '0');
+      }
+      
+      // Calculate the invoice value and expenses
+      const invoiceValue = parseFloat(procedure.invoiceValue?.toString() || '0');
+      const totalExpenses = financialSummary.totalExpenses;
+      const freightAmount = parseFloat(procedure.freightAmount?.toString() || '0');
+      
+      // Calculate the cost multiplier
+      let costMultiplier = 0;
+      if (totalLineItemsPrice > 0 && invoiceValue > 0) {
+        costMultiplier = (invoiceValue + totalExpenses + freightAmount) / invoiceValue;
+      }
+      
+      // Update each line item with its cost information
+      for (const item of lineItems) {
+        const totalPrice = parseFloat(item.totalPrice?.toString() || '0');
+        
+        let finalCost = 0;
+        if (distributionMethod === 'proportional') {
+          // Proportional: based on item's price relative to total
+          finalCost = totalPrice * costMultiplier;
+        } else {
+          // Equal: divide total costs equally among all items
+          finalCost = (invoiceValue + totalExpenses + freightAmount) / lineItems.length;
+        }
+        
+        // Calculate cost per item
+        const quantity = item.quantity || 1;
+        const finalCostPerItem = finalCost / quantity;
+        
+        // Update the line item
+        await db.update(invoiceLineItems)
+          .set({
+            finalCost: finalCost.toFixed(2),
+            finalCostPerItem: finalCostPerItem.toFixed(2),
+            costMultiplier: costMultiplier.toFixed(4),
+            updatedAt: new Date()
+          })
+          .where(eq(invoiceLineItems.id, item.id));
+      }
+      
+      console.log(`[PostgresStorage.calculateInvoiceLineItemCosts] Successfully calculated costs for ${lineItems.length} line items with multiplier ${costMultiplier}`);
+      return {
+        totalLineItems: lineItems.length,
+        costMultiplier,
+        success: true
+      };
+    } catch (error) {
+      console.error(`[PostgresStorage.calculateInvoiceLineItemCosts] Error calculating costs for procedure ${reference}:`, error);
+      return {
+        totalLineItems: 0,
+        costMultiplier: 0,
+        success: false
+      };
+    }
+  }
+
+  // Invoice Line Item Config operations
+  async getInvoiceLineItemsConfig(reference: string): Promise<InvoiceLineItemsConfig | undefined> {
+    try {
+      console.log(`[PostgresStorage.getInvoiceLineItemsConfig] Getting config for procedure ${reference}`);
+      const result = await db.select().from(invoiceLineItemsConfig)
+        .where(eq(invoiceLineItemsConfig.procedureReference, reference))
+        .limit(1);
+      
+      return result[0]; 
+    } catch (error) {
+      console.error(`[PostgresStorage.getInvoiceLineItemsConfig] Error getting config for procedure ${reference}:`, error);
+      return undefined;
+    }
+  }
+  
+  async createOrUpdateInvoiceLineItemsConfig(config: InsertInvoiceLineItemsConfig): Promise<InvoiceLineItemsConfig> {
+    // Check if config already exists
+    const existing = await this.getInvoiceLineItemsConfig(config.procedureReference);
+    
+    if (existing) {
+      // Update existing config
+      const result = await db.update(invoiceLineItemsConfig)
+        .set({
+          distributionMethod: config.distributionMethod,
+          isVisible: config.isVisible,
+          updatedBy: config.updatedBy,
+          updatedAt: new Date()
+        })
+        .where(eq(invoiceLineItemsConfig.id, existing.id))
+        .returning();
+      
+      return result[0];
+    } else {
+      // Create new config
+      const result = await db.insert(invoiceLineItemsConfig)
+        .values({
+          ...config,
+          updatedAt: new Date()
+        })
+        .returning();
+      
+      return result[0];
+    }
+  }
+}
+
+// Use PostgresStorage to interact with the database
+export const storage = new PostgresStorage();

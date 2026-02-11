@@ -1,0 +1,999 @@
+import * as React from "react";
+import { useId, useRef, useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
+import { 
+  ColumnDef, 
+  ColumnFiltersState, 
+  FilterFn, 
+  PaginationState, 
+  SortingState, 
+  VisibilityState, 
+  flexRender, 
+  getCoreRowModel, 
+  getFacetedUniqueValues, 
+  getFilteredRowModel, 
+  getPaginationRowModel, 
+  getSortedRowModel, 
+  useReactTable 
+} from "@tanstack/react-table";
+
+// Define interfaces for the API responses
+interface FinancialSummary {
+  totalExpenses: number;
+  advancePayments: number;
+  balancePayments: number;
+  totalPayments: number;
+  remainingBalance: number;
+}
+
+interface Tax {
+  id: number;
+  procedureReference: string;
+  customsTax: string | number;
+  additionalCustomsTax: string | number;
+  kkdf: string | number;
+  vat: string | number;
+  stampTax: string | number;
+  createdAt?: Date;
+  updatedAt?: Date;
+  createdBy?: number;
+}
+
+interface TaxResponse {
+  tax: Tax;
+}
+
+interface SummaryResponse {
+  summary: FinancialSummary;
+}
+
+// Interface for the batch financial summaries response
+interface BatchFinancialSummary {
+  totalTax: number;
+  importExpenses: number;
+  serviceInvoices: number;
+  totalExpenses: number;
+  advancePayments: number;
+  balancePayments: number;
+  remainingBalance: number;
+}
+
+interface BatchFinancialSummariesResponse {
+  financialSummaries: Record<string, BatchFinancialSummary>;
+}
+import { 
+  ChevronDown, 
+  ChevronFirst, 
+  ChevronLast, 
+  ChevronLeft, 
+  ChevronRight, 
+  ChevronUp, 
+  Columns3, 
+  Ellipsis, 
+  Filter, 
+  ListFilter,
+  X as CircleX
+} from "lucide-react";
+
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { 
+  DropdownMenu, 
+  DropdownMenuCheckboxItem, 
+  DropdownMenuContent, 
+  DropdownMenuGroup, 
+  DropdownMenuItem, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Pagination, PaginationContent, PaginationItem } from "@/components/ui/pagination";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { 
+  Table, 
+  TableBody, 
+  TableCaption, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+
+import type { Procedure } from "@shared/schema";
+
+// We already have a FinancialSummary interface above, so removing this duplicate
+
+// Custom filter function for multi-column searching
+const multiColumnFilterFn: FilterFn<Procedure> = (row, columnId, filterValue) => {
+  const searchableRowContent = `${row.original.reference || ''} ${row.original.shipper || ''} ${row.original.invoice_no || ''}`.toLowerCase();
+  const searchTerm = (filterValue ?? "").toLowerCase();
+  return searchableRowContent.includes(searchTerm);
+};
+
+export function ExpensesTable(): React.ReactNode {
+  const id = useId();
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
+  });
+  const inputRef = useRef<HTMLInputElement>(null);
+  
+  // Fetch current user data to check role
+  const { data: currentUser } = useQuery({
+    queryKey: ['/api/auth/me'],
+    queryFn: async () => {
+      const response = await fetch('/api/auth/me', {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+      return null;
+    },
+  });
+
+  // Check if current user is admin
+  const isAdmin = currentUser?.role === 'admin';
+  
+  // Store financial data for each procedure
+  const [financialData, setFinancialData] = useState<Record<string, { 
+    totalTax: number; 
+    importExpenses: number; 
+    serviceInvoices: number;
+    isLoading: boolean;
+    error?: boolean; // Flag to indicate if loading failed
+    retries?: number; // Track retry attempts
+  }>>({});
+
+  const [sorting, setSorting] = useState<SortingState>([
+    {
+      id: "reference",
+      desc: false,
+    },
+  ]);
+
+  // Fetch procedures data
+  const { data: { procedures = [] } = {}, isLoading, error } = useQuery({
+    queryKey: ['/api/procedures']
+  });
+  
+  // Log procedures data when loaded
+  useEffect(() => {
+    if (!isLoading && procedures.length) {
+      console.log('Procedures data loaded:', procedures.length, 'items');
+    }
+  }, [procedures, isLoading]);
+  
+  // Fetch financial data for all procedures at once using the batch API
+  useEffect(() => {
+    // Don't run if procedures aren't loaded yet
+    if (isLoading || !procedures.length) return;
+    
+    console.log(`Loading financial data for all procedures using batch API`);
+    
+    // Create an AbortController to cancel in-flight requests if needed
+    const abortController = new AbortController();
+    const signal = abortController.signal;
+    
+    // Initialize loading state for all visible procedures
+    const initialFinancialData: Record<string, { 
+      totalTax: number; 
+      importExpenses: number; 
+      serviceInvoices: number;
+      isLoading: boolean;
+      error?: boolean;
+      retries?: number;
+    }> = {};
+    
+    // Initialize loading state for all procedures
+    procedures.forEach((procedure: Procedure) => {
+      const reference = procedure.reference;
+      if (!reference) return;
+      
+      // Set initial loading state
+      initialFinancialData[reference] = { 
+        totalTax: 0, 
+        importExpenses: 0, 
+        serviceInvoices: 0, 
+        isLoading: true,
+        error: false,
+        retries: 0
+      };
+    });
+    
+    // Update state with initial loading data
+    setFinancialData({...initialFinancialData});
+    
+    const fetchAllFinancialData = async () => {
+      try {
+        console.log('Fetching batch financial data from API');
+        
+        // Create a timeout promise that rejects after 5 seconds
+        const timeout = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`Timeout fetching batch financial data`)), 5000);
+        });
+        
+        // Fetch all financial data at once
+        const batchPromise = apiRequest('GET', '/api/financial-summaries/batch', undefined, { signal });
+        const batchRes = await Promise.race([batchPromise, timeout]);
+        
+        // Check if the response is valid before parsing JSON
+        if (!batchRes.ok) {
+          console.error(`Batch financial API returned ${batchRes.status}`);
+          throw new Error(`Failed to fetch batch financial data: ${batchRes.statusText}`);
+        }
+        
+        // Parse the JSON response
+        const batchResponse = await batchRes.json() as BatchFinancialSummariesResponse;
+        
+        // Process the batch response
+        if (batchResponse && batchResponse.financialSummaries) {
+          const { financialSummaries } = batchResponse;
+          
+          console.log(`Received batch financial data for ${Object.keys(financialSummaries).length} procedures`);
+          
+          // Update state with all financial data at once
+          const newFinancialData: Record<string, {
+            totalTax: number;
+            importExpenses: number;
+            serviceInvoices: number;
+            isLoading: boolean;
+            error?: boolean;
+          }> = {};
+          
+          // Process all procedure references, including ones not in the current page
+          Object.keys(initialFinancialData).forEach(reference => {
+            if (financialSummaries[reference]) {
+              // We have data for this procedure from the batch API
+              const summaryData = financialSummaries[reference];
+              
+              newFinancialData[reference] = {
+                totalTax: summaryData.totalTax,
+                importExpenses: summaryData.importExpenses,
+                serviceInvoices: summaryData.serviceInvoices,
+                isLoading: false,
+                error: false
+              };
+            } else {
+              // No data found for this procedure - set default values
+              newFinancialData[reference] = {
+                totalTax: 0,
+                importExpenses: 0,
+                serviceInvoices: 0,
+                isLoading: false,
+                error: true
+              };
+            }
+          });
+          
+          // Update the state with all the data at once
+          setFinancialData(newFinancialData);
+          
+          console.log('Successfully loaded batch financial data');
+        } else {
+          throw new Error('Invalid or empty batch response');
+        }
+      } catch (error) {
+        console.error(`Error fetching batch financial data:`, error);
+        
+        // Skip error handling if the request was aborted (component unmounted)
+        if (signal.aborted) {
+          console.log('Request was aborted, skipping error handling');
+          return;
+        }
+        
+        // Mark all procedures as failed
+        const failedData: Record<string, {
+          totalTax: number;
+          importExpenses: number;
+          serviceInvoices: number;
+          isLoading: boolean;
+          error: boolean;
+        }> = {};
+        
+        Object.keys(initialFinancialData).forEach(reference => {
+          failedData[reference] = {
+            totalTax: 0,
+            importExpenses: 0,
+            serviceInvoices: 0,
+            isLoading: false,
+            error: true
+          };
+        });
+        
+        // Update state with failed status
+        setFinancialData(failedData);
+      }
+    };
+    
+    // Start the batch fetching process
+    fetchAllFinancialData();
+    
+    // Add cleanup function to cancel any pending operations if component unmounts
+    return () => {
+      console.log('Cleaning up batch financial data fetching - aborting any pending requests');
+      abortController.abort();
+    };
+  }, [procedures, isLoading]);
+
+  // Define the specific columns for the Expenses table
+  const columns: ColumnDef<Procedure>[] = [
+    {
+      id: "actions",
+      header: () => <span className="sr-only">Actions</span>,
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div className="flex justify-start">
+              <Button size="icon" variant="ghost" className="shadow-none" aria-label="Actions for procedure">
+                <Ellipsis size={16} strokeWidth={2} aria-hidden="true" />
+              </Button>
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => window.location.href = `/expense-details?reference=${encodeURIComponent(row.original.reference)}`}>
+                <span>Details</span>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            {isAdmin && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => window.location.href = `/expense-entry?reference=${encodeURIComponent(row.original.reference)}`}>
+                    <span>Add or Edit Expenses</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+      size: 60,
+      enableHiding: false,
+    },
+    {
+      header: "Reference",
+      accessorKey: "reference",
+      cell: ({ row }) => <div className="font-medium whitespace-nowrap overflow-hidden text-ellipsis">{row.getValue("reference") || "-"}</div>,
+      size: 120,
+      filterFn: multiColumnFilterFn,
+      enableHiding: false,
+    },
+    {
+      header: "Shipper",
+      accessorKey: "shipper",
+      cell: ({ row }) => {
+        const value = row.getValue("shipper") as string || "-";
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{value}</div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{value}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      },
+      size: 150,
+    },
+    {
+      header: "Invoice #",
+      accessorKey: "invoice_no",
+      cell: ({ row }) => {
+        const value = row.getValue("invoice_no") as string || "-";
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="whitespace-nowrap overflow-hidden text-ellipsis max-w-[100px]">{value}</div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{value}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      },
+      size: 100,
+    },
+    {
+      header: () => <div className="text-center w-full">Invoice Date</div>,
+      accessorKey: "invoice_date",
+      cell: ({ row }) => {
+        const dateString = row.getValue("invoice_date") as string | null;
+        if (!dateString) return <div className="text-center">-</div>;
+        
+        // Parse the UTC date from the ISO string
+        const date = new Date(dateString);
+        
+        // Format directly using UTC components to avoid timezone issues
+        if (isNaN(date.getTime())) return <div className="text-center">-</div>;
+        
+        const day = date.getUTCDate().toString().padStart(2, '0');
+        const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+        const year = date.getUTCFullYear();
+        
+        return <div className="text-center">{`${day}.${month}.${year}`}</div>;
+      },
+      size: 120,
+    },
+    {
+      header: () => <div className="text-center w-full">Amount</div>,
+      accessorKey: "amount",
+      cell: ({ row }) => {
+        const amount = parseFloat(row.getValue("amount") || "0");
+        const currency = row.original.currency || "TRY";
+        const formatted = new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: currency,
+        }).format(amount);
+        return <div className="text-center">{formatted}</div>;
+      },
+      size: 100,
+    },
+    {
+      header: () => <div className="text-center w-full">Piece</div>,
+      accessorKey: "piece",
+      cell: ({ row }) => <div className="text-center whitespace-nowrap overflow-hidden text-ellipsis">{row.getValue("piece") || "-"}</div>,
+      size: 80,
+    },
+    {
+      header: () => <div className="text-center w-full">Import Dec Date</div>,
+      accessorKey: "import_dec_date",
+      cell: ({ row }) => {
+        const dateString = row.getValue("import_dec_date") as string | null;
+        if (!dateString) return <div className="text-center">-</div>;
+        
+        // Parse the UTC date from the ISO string
+        const date = new Date(dateString);
+        
+        // Format directly using UTC components to avoid timezone issues
+        if (isNaN(date.getTime())) return <div className="text-center">-</div>;
+        
+        const day = date.getUTCDate().toString().padStart(2, '0');
+        const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+        const year = date.getUTCFullYear();
+        
+        return <div className="text-center">{`${day}.${month}.${year}`}</div>;
+      },
+      size: 130,
+    },
+    {
+      header: () => <div className="text-center w-full">Total Tax</div>,
+      id: "total_tax",
+      cell: ({ row }) => {
+        const reference = row.original.reference;
+        if (!reference) return <div className="text-center">-</div>;
+        
+        // Get the financial data for this procedure
+        const data = financialData[reference];
+        
+        // For debugging - log references and access to financial data in the render phase
+        console.log(`Rendering "Total Tax" for ${reference}, data exists: ${Boolean(data)}`);
+        
+        // Show loading state if data is being fetched
+        if (!data) {
+          return <div className="text-center text-muted-foreground">Loading...</div>;
+        }
+        
+        // If data is still loading
+        if (data.isLoading) {
+          return (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="text-center text-muted-foreground">
+                    Loading{data.retries ? ` (Retry ${data.retries})` : '...'}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <p>Fetching financial data{data.retries ? `, retry attempt ${data.retries}` : ''}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        }
+        
+        // If there was an error loading data
+        if (data.error) {
+          return (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="text-center text-red-500">Error</div>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <p>Could not load tax data after multiple attempts</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        }
+        
+        // Format the total tax amount with Turkish Lira symbol after the number
+        const formatted = new Intl.NumberFormat("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }).format(data.totalTax);
+        
+        return <div className="text-center font-medium">{formatted} ₺</div>;
+      },
+      size: 120,
+    },
+    {
+      header: () => <div className="text-center w-full">Total Expense</div>,
+      id: "total_expense",
+      cell: ({ row }) => {
+        const reference = row.original.reference;
+        if (!reference) return <div className="text-center">-</div>;
+        
+        // Get the financial data for this procedure
+        const data = financialData[reference];
+        
+        // Show loading state if data is being fetched
+        if (!data) {
+          return <div className="text-center text-muted-foreground">Loading...</div>;
+        }
+        
+        // If data is still loading
+        if (data.isLoading) {
+          return (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="text-center text-muted-foreground">
+                    Loading{data.retries ? ` (Retry ${data.retries})` : '...'}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <p>Fetching financial data{data.retries ? `, retry attempt ${data.retries}` : ''}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        }
+        
+        // If there was an error loading data
+        if (data.error) {
+          return (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="text-center text-red-500">Error</div>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <p>Could not load expense data after multiple attempts</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        }
+        
+        // Format the import expenses amount with Turkish Lira symbol after the number
+        const formatted = new Intl.NumberFormat("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }).format(data.importExpenses);
+        
+        return <div className="text-center font-medium">{formatted} ₺</div>;
+      },
+      size: 120,
+    },
+    {
+      header: () => <div className="text-center w-full">Service Fee</div>,
+      id: "service_fee",
+      cell: ({ row }) => {
+        const reference = row.original.reference;
+        if (!reference) return <div className="text-center">-</div>;
+        
+        // Get the financial data for this procedure
+        const data = financialData[reference];
+        
+        // Show loading state if data is being fetched
+        if (!data) {
+          return <div className="text-center text-muted-foreground">Loading...</div>;
+        }
+        
+        // If data is still loading
+        if (data.isLoading) {
+          return (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="text-center text-muted-foreground">
+                    Loading{data.retries ? ` (Retry ${data.retries})` : '...'}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <p>Fetching financial data{data.retries ? `, retry attempt ${data.retries}` : ''}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        }
+        
+        // If there was an error loading data
+        if (data.error) {
+          return (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="text-center text-red-500">Error</div>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <p>Could not load service fee data after multiple attempts</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        }
+        
+        // Format the service invoices amount with Turkish Lira symbol after the number
+        const formatted = new Intl.NumberFormat("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }).format(data.serviceInvoices);
+        
+        return <div className="text-center font-medium">{formatted} ₺</div>;
+      },
+      size: 120,
+    },
+    {
+      header: () => <div className="text-center w-full">Total Expenses</div>,
+      id: "total_expenses",
+      cell: ({ row }) => {
+        const reference = row.original.reference;
+        if (!reference) return <div className="text-center">-</div>;
+        
+        // Get the financial data for this procedure
+        const data = financialData[reference];
+        
+        // Show loading state if data is being fetched
+        if (!data) {
+          return <div className="text-center text-muted-foreground">Loading...</div>;
+        }
+        
+        // If data is still loading
+        if (data.isLoading) {
+          return (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="text-center text-muted-foreground">
+                    Loading{data.retries ? ` (Retry ${data.retries})` : '...'}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <p>Fetching financial data{data.retries ? `, retry attempt ${data.retries}` : ''}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        }
+        
+        // If there was an error loading data
+        if (data.error) {
+          return (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="text-center text-red-500">Error</div>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <p>Could not load total expenses data after multiple attempts</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        }
+        
+        // Calculate the total expenses as the sum of total tax, import expenses, and service invoices
+        const totalExpenses = data.totalTax + data.importExpenses + data.serviceInvoices;
+        
+        // Format the total expenses amount with Turkish Lira symbol after the number
+        const formatted = new Intl.NumberFormat("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }).format(totalExpenses);
+        
+        return <div className="text-center font-medium">{formatted} ₺</div>;
+      },
+      size: 120,
+    },
+  ];
+
+  const table = useReactTable({
+    data: procedures,
+    columns,
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    getCoreRowModel: getCoreRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
+    onColumnVisibilityChange: setColumnVisibility,
+    onPaginationChange: setPagination,
+    getPaginationRowModel: getPaginationRowModel(),
+    state: {
+      sorting,
+      columnFilters,
+      columnVisibility,
+      pagination,
+    },
+    initialState: {
+      sorting: [{ id: "reference", desc: false }],
+    },
+    meta: {
+      getFilteredUniqueValues: getFacetedUniqueValues(),
+    },
+  });
+
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    table.getColumn("reference")?.setFilterValue(e.target.value);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-4 justify-between p-2 border-b">
+        <div className="flex items-center justify-between max-w-[280px] relative">
+          <Input
+            ref={inputRef}
+            id={`filter-${id}`}
+            placeholder="Filter by reference, shipper..."
+            value={(table.getColumn("reference")?.getFilterValue() as string) ?? ""}
+            onChange={handleFilterChange}
+            className="grow w-full max-w-sm"
+          />
+          {(table.getColumn("reference")?.getFilterValue() as string) && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                table.getColumn("reference")?.setFilterValue("");
+                if (inputRef.current) {
+                  inputRef.current.focus();
+                }
+              }}
+              className="absolute right-0 mr-2"
+            >
+              <CircleX className="h-4 w-4" />
+              <span className="sr-only">Clear filter</span>
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center space-x-2 ml-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8">
+                <ListFilter className="mr-2 h-4 w-4" />
+                <span>Filter</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[200px]">
+              <DropdownMenuItem>
+                <span>Clear all filters</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="ml-auto h-8">
+                <Columns3 className="mr-2 h-4 w-4" />
+                <span>Columns</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[200px]">
+              {table
+                .getAllColumns()
+                .filter(
+                  (column) => column.getCanHide()
+                )
+                .map((column) => {
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      className="capitalize"
+                      checked={column.getIsVisible()}
+                      onCheckedChange={(value) =>
+                        column.toggleVisibility(!!value)
+                      }
+                    >
+                      {column.id.replace(/_/g, " ")}
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader className="bg-muted/30">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  return (
+                    <TableHead 
+                      key={header.id}
+                      className="whitespace-nowrap py-3 font-medium text-center"
+                      style={{ width: `${header.column.getSize()}px` }}
+                    >
+                      {header.isPlaceholder ? null : (
+                        <div
+                          {...{
+                            className: cn(
+                              "flex items-center justify-center",
+                              header.column.getCanSort() ? "cursor-pointer select-none" : ""
+                            ),
+                            onClick: header.column.getToggleSortingHandler(),
+                          }}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.column.getCanSort() && (
+                            <div className="ml-2">
+                              {header.column.getIsSorted() === "asc" ? (
+                                <ChevronUp className="h-4 w-4" aria-hidden="true" />
+                              ) : header.column.getIsSorted() === "desc" ? (
+                                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                              ) : (
+                                <ChevronUp className="h-4 w-4 opacity-0" aria-hidden="true" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </TableHead>
+                  );
+                })}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  Loading...
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => {
+                return (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                  >
+                    {row.getVisibleCells().map((cell) => {
+                      return (
+                        <TableCell 
+                          key={cell.id}
+                          className="text-center"
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                );
+              })
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  No results.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+          <TableCaption>
+            {table.getFilteredRowModel().rows.length > 0 && (
+              <div className="text-muted-foreground text-xs text-left">
+                Showing 1 to {table.getFilteredRowModel().rows.length} of {table.getFilteredRowModel().rows.length} results
+              </div>
+            )}
+          </TableCaption>
+        </Table>
+      </div>
+        
+      <div className="flex items-center justify-between">
+        <div className="flex-1 text-sm text-muted-foreground">
+          <div className="flex gap-1 items-center">
+            <div>Per page</div>
+            <Select
+              value={`${table.getState().pagination.pageSize}`}
+              onValueChange={(value) => {
+                table.setPageSize(Number(value));
+              }}
+            >
+              <SelectTrigger className="w-16 h-8">
+                <SelectValue placeholder={table.getState().pagination.pageSize} />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 25, 50, 100].map((pageSize) => (
+                  <SelectItem key={pageSize} value={`${pageSize}`}>
+                    {pageSize}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        
+        <Pagination className="flex-1 flex justify-center">
+          <PaginationContent>
+            <PaginationItem>
+              <Button
+                className="h-8 w-8 p-0"
+                variant="outline"
+                onClick={() => table.setPageIndex(0)}
+                disabled={!table.getCanPreviousPage()}
+              >
+                <span className="sr-only">Go to first page</span>
+                <ChevronFirst className="h-4 w-4" />
+              </Button>
+            </PaginationItem>
+            <PaginationItem>
+              <Button
+                className="h-8 w-8 p-0"
+                variant="outline"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+              >
+                <span className="sr-only">Go to previous page</span>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </PaginationItem>
+            <PaginationItem className="flex h-8 items-center">
+              <span className="text-sm">
+                Page {table.getState().pagination.pageIndex + 1} of{" "}
+                {table.getPageCount()}
+              </span>
+            </PaginationItem>
+            <PaginationItem>
+              <Button
+                className="h-8 w-8 p-0"
+                variant="outline"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+              >
+                <span className="sr-only">Go to next page</span>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </PaginationItem>
+            <PaginationItem>
+              <Button
+                className="h-8 w-8 p-0"
+                variant="outline"
+                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                disabled={!table.getCanNextPage()}
+              >
+                <span className="sr-only">Go to last page</span>
+                <ChevronLast className="h-4 w-4" />
+              </Button>
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+        
+        <div className="flex-1 text-sm text-muted-foreground justify-end flex">
+          {table.getFilteredRowModel().rows.length} row(s)
+        </div>
+      </div>
+    </div>
+  );
+}

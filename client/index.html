@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <title>CNC - Soho Import Tracker</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Ensure the title stays correct even if other scripts try to change it
+      document.title = 'CNC - Soho Import Tracker';
+      
+      // Monitor for title changes and restore it
+      const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+          if (mutation.type === 'childList' && document.title !== 'CNC - Soho Import Tracker') {
+            document.title = 'CNC - Soho Import Tracker';
+          }
+        });
+      });
+      
+      observer.observe(document.querySelector('title'), {
+        childList: true,
+        subtree: true
+      });
+    </script>
+  </body>
+</html>

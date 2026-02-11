@@ -1,0 +1,686 @@
+import { 
+  Calendar,
+  Home,
+  Inbox,
+  Search,
+  Settings,
+  BarChart2,
+  CreditCard,
+  DollarSign,
+  AlertTriangle,
+  Trash2,
+  PlusCircle,
+  Eye,
+  Database,
+  MoreHorizontal
+} from "lucide-react"
+import { PageLayout } from "@/components/layout/PageLayout"
+import { PaymentsTable } from "@/components/ui/payments-table"
+import AddPaymentModal from "@/components/ui/fixed-add-payment-modal"
+import { useToast } from "@/hooks/use-toast"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useQuery, useMutation } from "@tanstack/react-query"
+import { queryClient, apiRequest } from "@/lib/queryClient"
+import { useState, useEffect } from "react"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
+import { formatCurrency, formatDate } from '@/lib/formatters'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { CreateIncomingPaymentForm } from '@/components/create-incoming-payment-form'
+import { PaymentDistributionModal } from '@/components/payment-distribution-modal'
+import { ViewDistributionModal } from '@/components/view-distribution-modal'
+
+// Menu items
+const items = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: Home,
+  },
+  {
+    title: "Procedures",
+    url: "/procedures",
+    icon: Inbox,
+  },
+  {
+    title: "Expenses",
+    url: "/expenses",
+    icon: Calendar,
+  },
+  {
+    title: "Payments",
+    url: "/payments",
+    icon: CreditCard,
+  },
+  {
+    title: "Reports",
+    url: "/reports",
+    icon: BarChart2,
+  },
+  {
+    title: "Settings",
+    url: "/settings",
+    icon: Settings,
+  },
+]
+
+export default function PaymentsPage() {
+  const { toast } = useToast();
+  const [selectedProcedureRef, setSelectedProcedureRef] = useState<string | null>(null);
+  const [isAddPaymentModalOpen, setIsAddPaymentModalOpen] = useState(false);
+  const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // State for Incoming Payments View
+  const [showCreateIncomingForm, setShowCreateIncomingForm] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<any>(null);
+  const [showDistributeModal, setShowDistributeModal] = useState(false);
+  const [showViewDistributionsModal, setShowViewDistributionsModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState(() => {
+    // Try to load the saved preference from local storage
+    const savedTab = localStorage.getItem('paymentsActiveTab');
+    return savedTab || 'procedure-payments';
+  });
+
+  // Save tab preference to local storage when changed
+  useEffect(() => {
+    localStorage.setItem('paymentsActiveTab', activeTab);
+  }, [activeTab]);
+
+  // Get reference from URL params if any
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const reference = urlParams.get('reference');
+    if (reference) {
+      setSelectedProcedureRef(reference);
+      // Set tab to procedure payments when reference is in the URL
+      setActiveTab('procedure-payments');
+    }
+  }, []);
+
+  // Fetch all procedures for filtering
+  const { data: proceduresData } = useQuery({
+    queryKey: ["/api/procedures"],
+    queryFn: async () => {
+      const response = await fetch("/api/procedures");
+      if (!response.ok) {
+        throw new Error("Failed to fetch procedures");
+      }
+      return response.json();
+    },
+  });
+
+  // Fetch summary data if a procedure is selected
+  const { data: summaryData } = useQuery({
+    queryKey: ["/api/financial-summary", selectedProcedureRef],
+    queryFn: async () => {
+      if (!selectedProcedureRef) return null;
+      
+      const response = await fetch(`/api/financial-summary/${selectedProcedureRef}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch financial summary");
+      }
+      return response.json();
+    },
+    enabled: !!selectedProcedureRef && activeTab === 'procedure-payments', // Only run query if a procedure is selected and in procedure tab
+  });
+
+  // Fetch incoming payments for the incoming payments tab
+  const { data: incomingPaymentsData, isLoading: isLoadingIncoming, isError: isIncomingError, error: incomingError } = useQuery({
+    queryKey: ['/api/incoming-payments'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/incoming-payments');
+      return response;
+    },
+    enabled: activeTab === 'incoming-payments', // Only run when in incoming payments tab
+  });
+
+  // Delete incoming payment mutation
+  const deleteIncomingMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest('DELETE', `/api/incoming-payments/${id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Success',
+        description: 'Payment deleted successfully',
+      });
+      
+      // Invalidate the payments query to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['/api/incoming-payments'] });
+      
+      // Close the confirmation dialog
+      setShowDeleteConfirm(false);
+      setPaymentToDelete(null);
+    },
+    onError: (error) => {
+      console.error('Error deleting payment:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to delete payment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Reset all distributions mutation
+  const resetAllDistributionsMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('DELETE', '/api/all-payment-distributions/reset');
+    },
+    onSuccess: (data) => {
+      toast({
+        title: 'Success',
+        description: `Successfully reset ${data.count} payment distributions.`,
+      });
+      
+      // Invalidate the payments query to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['/api/incoming-payments'] });
+    },
+    onError: (error) => {
+      console.error('Error resetting payment distributions:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to reset payment distributions: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Handle payment deletion (procedure payments)
+  const handleDeletePayment = async (paymentId: number) => {
+    try {
+      const response = await fetch(`/api/payments/${paymentId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete payment');
+      }
+      
+      toast({
+        title: "Payment Deleted",
+        description: "The payment has been successfully removed.",
+      });
+      
+      // Invalidate queries to update data
+      queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+      if (selectedProcedureRef) {
+        queryClient.invalidateQueries({ 
+          queryKey: ['/api/financial-summary', selectedProcedureRef] 
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete payment. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Handle deleting all procedure payments
+  const handleDeleteAllPayments = async () => {
+    try {
+      setIsDeleting(true);
+      
+      // Use all-payments endpoint to avoid route conflict with :id parameter
+      const response = await fetch(`/api/all-payments/reset`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete all payments');
+      }
+      
+      const result = await response.json();
+      
+      toast({
+        title: "All Payments Deleted",
+        description: `Successfully deleted ${result.count} payment${result.count === 1 ? '' : 's'}.`,
+      });
+      
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/financial-summary'] });
+      
+      setIsDeleting(false);
+      setIsDeleteAllConfirmOpen(false);
+    } catch (error) {
+      console.error('Error deleting all payments:', error);
+      
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete all payments. Please try again.",
+        variant: "destructive",
+      });
+      
+      setIsDeleting(false);
+      setIsDeleteAllConfirmOpen(false);
+    }
+  };
+
+  // Incoming payments handlers
+  const handleCreateIncomingSuccess = () => {
+    // Hide the create form
+    setShowCreateIncomingForm(false);
+    
+    // Refresh the payments list
+    queryClient.invalidateQueries({ queryKey: ['/api/incoming-payments'] });
+    
+    toast({
+      title: 'Success',
+      description: 'New incoming payment created successfully',
+    });
+  };
+
+  const handleDistribute = (payment: any) => {
+    setSelectedPayment(payment);
+    setShowDistributeModal(true);
+  };
+
+  const handleViewDistributions = (payment: any) => {
+    setSelectedPayment(payment);
+    setShowViewDistributionsModal(true);
+  };
+
+  const handleDeleteIncomingPayment = (payment: any) => {
+    setPaymentToDelete(payment);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteIncoming = () => {
+    if (paymentToDelete) {
+      deleteIncomingMutation.mutate(paymentToDelete.id);
+    }
+  };
+
+  const handleResetAllDistributions = () => {
+    if (window.confirm('Are you sure you want to reset ALL payment distributions? This will remove all distributions and reset all payments to pending status.')) {
+      resetAllDistributionsMutation.mutate();
+    }
+  };
+
+  const handleDistributionChange = () => {
+    // Refresh the payments list after a distribution change
+    queryClient.invalidateQueries({ queryKey: ['/api/incoming-payments'] });
+  };
+
+  // Distribution status badge component (for incoming payments view)
+  const DistributionStatusBadge = ({ status }: { status: string }) => {
+    let bgColor = '';
+    let textColor = 'text-white';
+    
+    switch(status) {
+      case 'pending_distribution':
+        bgColor = 'bg-yellow-500';
+        break;
+      case 'partially_distributed':
+        bgColor = 'bg-blue-500';
+        break;
+      case 'fully_distributed':
+        bgColor = 'bg-green-500';
+        break;
+      default:
+        bgColor = 'bg-gray-500';
+    }
+    
+    return (
+      <span className={`${bgColor} ${textColor} px-2 py-1 rounded-full text-xs font-medium capitalize`}>
+        {status.replace(/_/g, ' ')}
+      </span>
+    );
+  };
+
+  return (
+    <PageLayout title="Payments" navItems={items}>
+      <div className="space-y-6 p-3 md:p-6">
+        {/* Payment View Toggle */}
+        <Tabs 
+          defaultValue={activeTab} 
+          className="w-full"
+          onValueChange={(value) => setActiveTab(value)}
+        >
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-xl font-bold">Payment Management</h2>
+              <TabsList className="mt-2">
+                <TabsTrigger value="procedure-payments" className="flex items-center">
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Procedure Payments
+                </TabsTrigger>
+                <TabsTrigger value="incoming-payments" className="flex items-center">
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  Incoming Payments
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            
+            {/* Admin Actions - Positioned on right side and changes based on active tab */}
+            {activeTab === 'procedure-payments' ? (
+              <Button 
+                variant="destructive" 
+                size="sm"
+                className="flex items-center gap-2"
+                onClick={() => setIsDeleteAllConfirmOpen(true)}
+                disabled={isDeleting}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete All Payments
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button onClick={() => setShowCreateIncomingForm(true)}>
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  New Payment
+                </Button>
+                {/* Admin actions dropdown for incoming payments */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                      <Database className="h-4 w-4 mr-2" />
+                      Admin Actions
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>System Operations</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-red-600 focus:text-red-600"
+                      onClick={handleResetAllDistributions}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Reset All Distributions
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+          </div>
+
+          <TabsContent value="procedure-payments" className="mt-0">
+            {/* Financial Summary Cards - Only shown in procedure payments tab */}
+            {selectedProcedureRef && summaryData?.summary && (
+              <div className="grid gap-4 md:grid-cols-3 mb-6">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">
+                      Total Expenses
+                    </CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {formatCurrency(summaryData.summary.totalExpenses)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      For procedure: {selectedProcedureRef}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">
+                      Total Payments
+                    </CardTitle>
+                    <CreditCard className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {formatCurrency(summaryData.summary.totalPayments)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      For procedure: {selectedProcedureRef}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">
+                      Remaining Balance
+                    </CardTitle>
+                    <BarChart2 className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {formatCurrency(summaryData.summary.remainingBalance)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      For procedure: {selectedProcedureRef}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Procedure Payments Table */}
+            <ScrollArea className="h-[calc(100vh-20rem)]">
+              <PaymentsTable 
+                onDeletePayment={handleDeletePayment} 
+                procedureReference={selectedProcedureRef}
+                onAddPayment={() => setIsAddPaymentModalOpen(true)}
+              />
+            </ScrollArea>
+          </TabsContent>
+          
+          <TabsContent value="incoming-payments" className="mt-0">
+            {/* Incoming Payments Table */}
+            <ScrollArea className="h-[calc(100vh-15rem)]">
+              {/* Loading state */}
+              {isLoadingIncoming ? (
+                <div className="flex items-center justify-center p-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+                </div>
+              ) : isIncomingError ? (
+                <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-md">
+                  <p>Error loading payments: {incomingError instanceof Error ? incomingError.message : 'Unknown error'}</p>
+                </div>
+              ) : (
+                // Payments table
+                <div className="bg-white rounded-lg shadow overflow-x-auto">
+                  {incomingPaymentsData?.payments?.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                      <p>No incoming payments found. Create your first payment to get started.</p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Payment ID</TableHead>
+                          <TableHead>Date Received</TableHead>
+                          <TableHead>Payer</TableHead>
+                          <TableHead>Total Amount</TableHead>
+                          <TableHead>Distributed</TableHead>
+                          <TableHead>Remaining</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {incomingPaymentsData?.payments?.map((payment: any) => (
+                          <TableRow key={payment.id}>
+                            <TableCell className="font-medium">{payment.paymentId}</TableCell>
+                            <TableCell>{formatDate(new Date(payment.dateReceived))}</TableCell>
+                            <TableCell>{payment.payerInfo}</TableCell>
+                            <TableCell>{formatCurrency(parseFloat(payment.totalAmount), payment.currency)}</TableCell>
+                            <TableCell>{formatCurrency(parseFloat(payment.amountDistributed), payment.currency)}</TableCell>
+                            <TableCell>{formatCurrency(parseFloat(payment.remainingBalance), payment.currency)}</TableCell>
+                            <TableCell>
+                              <DistributionStatusBadge status={payment.distributionStatus} />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  
+                                  {payment.distributionStatus !== 'fully_distributed' && (
+                                    <DropdownMenuItem onClick={() => handleDistribute(payment)}>
+                                      <PlusCircle className="h-4 w-4 mr-2" />
+                                      Distribute Payment
+                                    </DropdownMenuItem>
+                                  )}
+                                  
+                                  <DropdownMenuItem onClick={() => handleViewDistributions(payment)}>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View Distributions
+                                  </DropdownMenuItem>
+                                  
+                                  {payment.distributionStatus === 'pending_distribution' && (
+                                    <DropdownMenuItem 
+                                      onClick={() => handleDeleteIncomingPayment(payment)}
+                                      className="text-red-600 focus:text-red-600"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Delete Payment
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              )}
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+        
+        {/* Common modals for all tabs */}
+        {/* Add Procedure Payment Modal */}
+        <AddPaymentModal
+          isOpen={isAddPaymentModalOpen}
+          onClose={() => setIsAddPaymentModalOpen(false)}
+          onPaymentCreated={() => {
+            setIsAddPaymentModalOpen(false);
+            // Invalidate queries to refresh data
+            queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+            if (selectedProcedureRef) {
+              queryClient.invalidateQueries({ 
+                queryKey: ['/api/financial-summary', selectedProcedureRef] 
+              });
+            }
+          }}
+          initialProcedureReference={selectedProcedureRef || undefined}
+        />
+        
+        {/* Create Incoming Payment Form Modal */}
+        {showCreateIncomingForm && (
+          <CreateIncomingPaymentForm
+            isOpen={showCreateIncomingForm}
+            onClose={() => setShowCreateIncomingForm(false)}
+            onSuccess={handleCreateIncomingSuccess}
+          />
+        )}
+
+        {/* Distribution Modal */}
+        {showDistributeModal && selectedPayment && (
+          <PaymentDistributionModal
+            isOpen={showDistributeModal}
+            onClose={() => setShowDistributeModal(false)}
+            paymentId={selectedPayment.id}
+            paymentData={selectedPayment}
+            onDistributionComplete={handleDistributionChange}
+          />
+        )}
+
+        {/* View Distributions Modal */}
+        {showViewDistributionsModal && selectedPayment && (
+          <ViewDistributionModal
+            isOpen={showViewDistributionsModal}
+            onClose={() => setShowViewDistributionsModal(false)}
+            paymentId={selectedPayment.id}
+            paymentData={selectedPayment}
+            onDistributionChange={handleDistributionChange}
+            viewMode="payment"
+          />
+        )}
+        
+        {/* Confirmation Dialogs */}
+        <ConfirmationDialog
+          isOpen={isDeleteAllConfirmOpen}
+          onClose={() => setIsDeleteAllConfirmOpen(false)}
+          onConfirm={handleDeleteAllPayments}
+          title="Delete All Payments"
+          description="This will permanently remove all procedure payment records from the system. This action cannot be undone and will affect all financial calculations. Are you sure you want to proceed?"
+          confirmText={isDeleting ? "Deleting..." : "Yes, Delete All Payments"}
+          cancelText="Cancel"
+          variant="destructive"
+        />
+        
+        {/* Delete Incoming Payment Confirmation Dialog */}
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the payment with ID: {paymentToDelete?.paymentId}.
+                {paymentToDelete?.distributionStatus !== 'pending_distribution' && (
+                  <p className="text-red-600 mt-2">
+                    Warning: This payment has distributions. You cannot delete it until all distributions are removed.
+                  </p>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={(e) => {
+                  e.preventDefault();
+                  confirmDeleteIncoming();
+                }}
+                className="bg-red-600 hover:bg-red-700"
+                disabled={paymentToDelete?.distributionStatus !== 'pending_distribution'}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </PageLayout>
+  );
+}

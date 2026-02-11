@@ -1,0 +1,55 @@
+{
+  "payment_details": {
+    "rows": [
+      {
+        "payment_id": "PAYMENT-1",
+        "payment_date": "01.01.2025",
+        "amount": "₺10.000,00",
+        "status": "Fully Distributed"
+      },
+      {
+        "payment_id": "PAYMENT-2",
+        "payment_date": "02.01.2025",
+        "amount": "₺20.000,00",
+        "status": "Partially Distributed"
+      }
+    ]
+  },
+  "distribution_details": {
+    "groups": [
+      {
+        "reference": "REF-1",
+        "bl_reference": "BL-123456",
+        "distributions": [
+          {
+            "payment_id": "PAYMENT-1",
+            "payment_date": "01.01.2025",
+            "payment_type": "Advance",
+            "amount": "₺10.000,00"
+          }
+        ],
+        "total_distributed": "₺10.000,00"
+      },
+      {
+        "reference": "REF-2",
+        "bl_reference": "BL-654321",
+        "distributions": [
+          {
+            "payment_id": "PAYMENT-2",
+            "payment_date": "02.01.2025",
+            "payment_type": "Balance",
+            "amount": "₺15.000,00"
+          }
+        ],
+        "total_distributed": "₺15.000,00"
+      }
+    ]
+  },
+  "summary": {
+    "total_payments_received": "₺30.000,00",
+    "total_distributed": "₺25.000,00",
+    "total_pending_distribution": "₺5.000,00",
+    "procedures_with_distributions": 2,
+    "report_date": "13.05.2025 05:40"
+  }
+}

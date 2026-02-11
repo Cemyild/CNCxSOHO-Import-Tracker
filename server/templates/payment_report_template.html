@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Payment Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1, h2, h3 { color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .summary-box { background-color: #f9f9f9; border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; }
+        .summary-item { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .summary-label { font-weight: bold; }
+        .section { margin-bottom: 30px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SOHO TURKEY</h1>
+        <h2>Payment Report</h2>
+        <p>Generated on: {{summary.report_date}}</p>
+    </div>
+
+    <div class="section">
+        <h2>Payment Summary</h2>
+        <div class="summary-box">
+            <div class="summary-item">
+                <span class="summary-label">Total Payments Received:</span>
+                <span>{{summary.total_payments_received}}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Total Distributed:</span>
+                <span>{{summary.total_distributed}}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Total Pending Distribution:</span>
+                <span>{{summary.total_pending_distribution}}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Procedures with Distributions:</span>
+                <span>{{summary.procedures_with_distributions}}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>All Incoming Payments</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Payment ID</th>
+                    <th>Date Received</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Adobe Document Generation For Each Tag -->
+                <!-- {#each payment_details.rows} -->
+                <tr>
+                    <td>{{payment_id}}</td>
+                    <td>{{payment_date}}</td>
+                    <td>{{amount}}</td>
+                    <td>{{status}}</td>
+                </tr>
+                <!-- {/each} -->
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Payment Distributions by Procedure</h2>
+        
+        <!-- Adobe Document Generation For Each Tag -->
+        <!-- {#each distribution_details.groups} -->
+        <div style="margin-bottom: 20px;">
+            <h3>Procedure: {{reference}}</h3>
+            <p><strong>BL/AWB Reference:</strong> {{bl_reference}}</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Payment ID</th>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Nested For Each for distributions -->
+                    <!-- {#each distributions} -->
+                    <tr>
+                        <td>{{payment_id}}</td>
+                        <td>{{payment_date}}</td>
+                        <td>{{payment_type}}</td>
+                        <td>{{amount}}</td>
+                    </tr>
+                    <!-- {/each} -->
+                    <tr style="font-weight: bold; background-color: #e9e9e9;">
+                        <td colspan="3" style="text-align: right;">Total Distributed:</td>
+                        <td>{{total_distributed}}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- {/each} -->
+    </div>
+
+    <div class="footer">
+        <p>This report was automatically generated on {{summary.report_date}}</p>
+        <p>SOHO TURKEY • Payment Management System</p>
+    </div>
+</body>
+</html>

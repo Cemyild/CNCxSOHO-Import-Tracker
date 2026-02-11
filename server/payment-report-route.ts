@@ -1,0 +1,877 @@
+/**
+ * Payment Report Route Handler
+ * Generates PDF reports for payment data using Adobe PDF Services
+ */
+import { Router } from 'express';
+import path from 'path';
+import fs from 'fs';
+import os from 'os';
+import { storage } from './storage';
+import { adobePdfOAuthService } from './adobe-pdf-oauth';
+import { format } from 'date-fns';
+
+// Define types for the payment report data
+interface PaymentRow {
+  payment_id: string;
+  payment_date: string;
+  amount: string;
+  status: string;
+  raw_status: "pending_distribution" | "partially_distributed" | "fully_distributed" | null;
+  raw_amount: number;
+}
+
+interface Distribution {
+  payment_id: string;
+  payment_date: string;
+  amount: string;
+  payment_type: string;
+  raw_amount: number;
+  raw_type: string;
+}
+
+interface DistributionGroup {
+  reference: string;
+  bl_reference: string;
+  distributions: Distribution[];
+  total_distributed: string;
+}
+
+interface ReportSummary {
+  total_payments_received: string;
+  total_distributed: string;
+  total_pending_distribution: string;
+  procedures_with_distributions: number;
+  report_date: string;
+  // Additional fields for template compatibility
+  total_expenses?: string;
+  total_payment?: string;
+  balance_value?: string;
+  remaining_balance?: string;
+  procedures_count?: string;
+}
+
+interface PaymentReportData {
+  paymentRows: PaymentRow[];
+  distributionGroups: DistributionGroup[];
+  summary: ReportSummary;
+}
+
+// Define procedure template format
+interface ProcedureTemplateData {
+  title: string;
+  subtitle: string;
+  summary: ReportSummary;
+  payments: {
+    id: string;
+    date: string;
+    amount: string;
+    status: string;
+  }[];
+  procedures: {
+    reference: string;
+    description: string;
+    awb_number: string;
+    details: {
+      name: string;
+      value: string;
+      date: string;
+      category: string;
+    }[];
+    total: string;
+  }[];
+}
+
+// Create router
+const router = Router();
+
+/**
+ * Get the path to the payment report template
+ * This ensures we always use the dedicated payment report template instead of the procedure template
+ */
+function getPaymentReportTemplatePath(): string {
+  // Use the new simple template that works properly with Adobe PDF Services
+  return path.join(process.cwd(), 'assets', 'templates', 'simple-payment-report.docx');
+}
+
+/**
+ * Generate a template data object for the PDF generation
+ * This ensures consistency between view and download functions
+ */
+function generatePDFTemplateData(reportData: PaymentReportData): ProcedureTemplateData {
+  // Create data in a payment-report focused format
+  const paymentReportTemplate: ProcedureTemplateData = {
+    title: "PAYMENT REPORT",
+    subtitle: `Generated on: ${reportData.summary.report_date}`,
+    summary: {
+      ...reportData.summary,
+      // Rename fields to be payment-focused
+      total_expenses: `Total Payments Received: ${reportData.summary.total_payments_received}`,
+      total_payment: `Total Distributed: ${reportData.summary.total_distributed}`,
+      balance_value: `Pending Distribution: ${reportData.summary.total_pending_distribution}`,
+      remaining_balance: reportData.summary.total_pending_distribution,
+      procedures_count: `Procedures with Distributions: ${reportData.summary.procedures_with_distributions}`
+    },
+    payments: reportData.paymentRows.map(p => {
+      // Find all distributions for this payment
+      const paymentDistributions: any[] = [];
+      reportData.distributionGroups.forEach(group => {
+        group.distributions.forEach((dist: any) => {
+          if (dist.payment_id === p.payment_id) {
+            paymentDistributions.push({
+              procedure_reference: group.reference,
+              invoice_number: group.bl_reference,
+              payment_type: dist.payment_type,
+              amount: dist.amount
+            });
+          }
+        });
+      });
+      
+      return {
+        id: p.payment_id,
+        date: p.payment_date,
+        amount: p.amount,
+        status: p.status,
+        distributions: paymentDistributions
+      };
+    }),
+    // Rename "procedures" section to focus on payment distributions
+    procedures: reportData.distributionGroups.map(g => ({
+      reference: g.reference,
+      description: `Payment Distribution Details`,
+      awb_number: g.bl_reference || "N/A",
+      details: g.distributions.map((d: Distribution) => ({
+        name: `Payment ID: ${d.payment_id}`,
+        value: d.amount,
+        date: d.payment_date,
+        category: `Payment Type: ${d.payment_type}`
+      })),
+      total: `Total Distributed: ${g.total_distributed}`
+    }))
+  };
+  
+  return paymentReportTemplate;
+}
+
+/**
+ * Base64 PDF data response interface
+ */
+interface Base64PDFResponse {
+  data: string;
+  filename: string;
+}
+
+/**
+ * Helper function to format currency amounts
+ */
+function formatCurrency(amount: string | number): string {
+  const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  return new Intl.NumberFormat('tr-TR', {
+    style: 'currency',
+    currency: 'TRY',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(numericAmount);
+}
+
+/**
+ * Formats a date string or Date object to a standardized string format
+ */
+function formatDate(date: string | Date | null): string {
+  if (!date) return '-';
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(dateObj.getTime())) return '-';
+  return format(dateObj, 'dd.MM.yyyy');
+}
+
+/**
+ * Generate payment report data
+ */
+async function generatePaymentReportData() {
+  console.log('[payment-report] Generating payment report data');
+  
+  try {
+    // Get all payments and their distributions
+    console.log('[payment-report] Fetching all incoming payments');
+    const incomingPayments = await storage.getAllIncomingPayments();
+    
+    // Transform the data to be easier to work with in the PDF template
+    const paymentRows = incomingPayments.map(payment => {
+      // Format status for display
+      let statusDisplay = 'Pending';
+      switch(payment.distributionStatus) {
+        case 'fully_distributed':
+          statusDisplay = 'Fully Distributed';
+          break;
+        case 'partially_distributed':
+          statusDisplay = 'Partially Distributed';
+          break;
+        case 'pending_distribution':
+          statusDisplay = 'Pending Distribution';
+          break;
+      }
+      
+      return {
+        payment_id: payment.paymentId,
+        payment_date: formatDate(payment.dateReceived),
+        amount: formatCurrency(payment.totalAmount),
+        status: statusDisplay,
+        raw_status: payment.distributionStatus,
+        raw_amount: parseFloat(payment.totalAmount)
+      };
+    });
+    
+    // Get all distributions to create procedure groups
+    console.log('[payment-report] Fetching all payment distributions');
+    const procedureDistributionMap = new Map();
+    
+    // For each payment, get its distributions
+    for (const payment of incomingPayments) {
+      const distributions = await storage.getPaymentDistributions(payment.id);
+      
+      for (const distribution of distributions) {
+        // Get the procedure details
+        const procedures = await storage.getProcedureByReference(distribution.procedureReference);
+        const procedure = procedures.length > 0 ? procedures[0] : null;
+        
+        // Add to the map
+        if (!procedureDistributionMap.has(distribution.procedureReference)) {
+          procedureDistributionMap.set(distribution.procedureReference, {
+            reference: distribution.procedureReference,
+            bl_reference: procedure?.awb_number || '-',
+            distributions: [],
+            total_distributed: 0
+          });
+        }
+        
+        // Add this distribution to the procedure's list
+        const group = procedureDistributionMap.get(distribution.procedureReference);
+        group.distributions.push({
+          payment_id: payment.paymentId,
+          amount: formatCurrency(distribution.distributedAmount),
+          raw_amount: parseFloat(distribution.distributedAmount),
+          payment_date: formatDate(payment.dateReceived),
+          payment_type: distribution.paymentType === 'advance' ? 'Advance' : 'Balance',
+          raw_type: distribution.paymentType
+        });
+        
+        // Update total
+        group.total_distributed += parseFloat(distribution.distributedAmount);
+      }
+    }
+    
+    // Convert the map to an array of distribution groups
+    const distributionGroups = Array.from(procedureDistributionMap.values()).map(group => ({
+      ...group,
+      total_distributed: formatCurrency(group.total_distributed)
+    }));
+    
+    // Calculate summary data
+    const totalPaymentsReceived = incomingPayments.reduce((sum, payment) => 
+      sum + parseFloat(payment.totalAmount), 0);
+    
+    const totalDistributed = Array.from(procedureDistributionMap.values()).reduce((sum, group) => 
+      sum + group.distributions.reduce((groupSum: number, dist: Distribution) => groupSum + dist.raw_amount, 0), 0);
+    
+    const totalPendingDistribution = totalPaymentsReceived - totalDistributed;
+    
+    const summary = {
+      total_payments_received: formatCurrency(totalPaymentsReceived),
+      total_distributed: formatCurrency(totalDistributed),
+      total_pending_distribution: formatCurrency(totalPendingDistribution),
+      procedures_with_distributions: distributionGroups.length,
+      report_date: format(new Date(), 'dd.MM.yyyy HH:mm')
+    };
+    
+    // Return the complete dataset for the PDF
+    console.log('[payment-report] Payment report data generation completed');
+    return {
+      paymentRows,
+      distributionGroups,
+      summary
+    };
+  } catch (error) {
+    console.error('[payment-report] Error generating payment report data:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generate a Payment Report PDF with detailed logging
+ * This is useful for debugging the PDF generation process
+ */
+router.get('/debug', async (req, res) => {
+  console.log('[payment-report] Request to debug payment report PDF generation received');
+  console.log('[payment-report] Request parameters:', req.query);
+  
+  try {
+    // Check if Adobe PDF services are initialized
+    if (!adobePdfOAuthService.isReady()) {
+      console.error('[payment-report] Adobe PDF Services not initialized');
+      return res.status(500).json({
+        error: 'PDF service not initialized',
+        details: 'The Adobe PDF Services are not properly initialized. Check credentials.'
+      });
+    }
+    
+    console.log('[payment-report] Adobe PDF Services are ready');
+    
+    // Generate the data for the report
+    console.log('[payment-report] Generating report data...');
+    const startDataTime = Date.now();
+    const reportData = await generatePaymentReportData();
+    const endDataTime = Date.now();
+    console.log(`[payment-report] Report data generated in ${endDataTime - startDataTime}ms`);
+    
+    // Use our new simple payment report template
+    const templatePath = getPaymentReportTemplatePath();
+    
+    if (!fs.existsSync(templatePath)) {
+      console.error(`[payment-report] Procedure template not found: ${templatePath}`);
+      return res.status(500).json({
+        error: 'Template file not found',
+        details: 'The procedure report template file was not found'
+      });
+    }
+    
+    console.log(`[payment-report] Using template: ${templatePath}`);
+    
+    // Create data in the format expected by the procedure template
+    console.log('[payment-report] Preparing template data...');
+    const templateData = {
+      title: "PAYMENT REPORT",
+      subtitle: `Generated on: ${reportData.summary.report_date}`,
+      summary: {
+        ...reportData.summary,
+        // Add explicit fields that might be expected by the template
+        total_expenses: reportData.summary.total_payments_received,
+        total_payment: reportData.summary.total_distributed,
+        balance_value: reportData.summary.total_pending_distribution,
+        remaining_balance: reportData.summary.total_pending_distribution,
+        procedures_count: reportData.summary.procedures_with_distributions.toString()
+      },
+      payments: reportData.paymentRows.map(p => {
+        // Find all distributions for this payment
+        const paymentDistributions: Array<{
+          procedure_reference: string;
+          invoice_number: string;
+          payment_type: string;
+          amount: string;
+        }> = [];
+        reportData.distributionGroups.forEach(group => {
+          group.distributions.forEach((dist: Distribution) => {
+            if (dist.payment_id === p.payment_id) {
+              paymentDistributions.push({
+                procedure_reference: group.reference,
+                invoice_number: group.bl_reference,
+                payment_type: dist.payment_type,
+                amount: dist.amount
+              });
+            }
+          });
+        });
+        
+        return {
+          id: p.payment_id,
+          date: p.payment_date,
+          amount: p.amount,
+          status: p.status,
+          distributions: paymentDistributions
+        };
+      }),
+      // Keep the procedures for compatibility
+      procedures: reportData.distributionGroups.map(g => ({
+        reference: g.reference,
+        description: `Payment Distributions for ${g.reference}`,
+        awb_number: g.bl_reference,
+        details: g.distributions.map((d: Distribution) => ({
+          name: d.payment_id,
+          value: d.amount,
+          date: d.payment_date,
+          category: d.payment_type
+        })),
+        total: g.total_distributed
+      }))
+    };
+    
+    console.log('[payment-report] Template data prepared');
+    
+    // Generate the PDF using Adobe PDF Services
+    console.log('[payment-report] Generating PDF using Adobe PDF Services...');
+    const startPdfTime = Date.now();
+    const pdfBuffer = await adobePdfOAuthService.generatePDF({
+      templatePath,
+      data: templateData
+    });
+    const endPdfTime = Date.now();
+    console.log(`[payment-report] PDF generation completed in ${endPdfTime - startPdfTime}ms`);
+    
+    if (!pdfBuffer) {
+      console.error('[payment-report] Failed to generate PDF - returned null or undefined');
+      return res.status(500).json({
+        error: 'PDF generation failed',
+        details: 'Failed to generate the payment report PDF - the service returned null or undefined'
+      });
+    }
+    
+    console.log(`[payment-report] PDF buffer received, size: ${pdfBuffer.length} bytes`);
+    console.log(`[payment-report] PDF buffer type: ${typeof pdfBuffer}, isBuffer: ${Buffer.isBuffer(pdfBuffer)}`);
+    
+    // Generate the filename
+    const now = new Date();
+    const filename = `Payment_Report_${format(now, 'yyyy-MM-dd')}.pdf`;
+    
+    // Check if the file should be viewed inline or downloaded as attachment
+    const inline = req.query.inline === 'true';
+    
+    // Log current response headers
+    console.log('[payment-report] Current response headers:', {
+      'Content-Type': res.getHeader('Content-Type'),
+      'Content-Disposition': res.getHeader('Content-Disposition')
+    });
+    
+    // Clear any existing headers to avoid conflicts
+    res.removeHeader('Content-Disposition');
+    res.removeHeader('Content-Type');
+    res.removeHeader('Content-Length');
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    
+    const contentDisposition = inline 
+      ? 'inline' 
+      : `attachment; filename="${filename}"`;
+    res.setHeader('Content-Disposition', contentDisposition);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    console.log('[payment-report] Response headers after setting:', {
+      'Content-Type': res.getHeader('Content-Type'),
+      'Content-Disposition': res.getHeader('Content-Disposition'),
+      'Content-Length': res.getHeader('Content-Length')
+    });
+    
+    console.log(`[payment-report] Payment report debug: sending ${inline ? 'inline' : 'attachment'} response`);
+    
+    // Send the PDF
+    res.end(pdfBuffer);
+    console.log('[payment-report] Response sent successfully');
+    
+  } catch (error) {
+    console.error('[payment-report] Error in debug endpoint:', error);
+    if (error instanceof Error) {
+      console.error('[payment-report] Error message:', error.message);
+      console.error('[payment-report] Error stack:', error.stack);
+    }
+    
+    res.status(500).json({
+      error: 'Failed to generate payment report',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Generate a Payment Report PDF for downloading (mirrors view functionality)
+ */
+router.get('/download-mirror', async (req, res) => {
+  console.log('[payment-report] Request to generate downloadable payment report PDF received');
+  
+  try {
+    // Check if Adobe PDF services are initialized
+    if (!adobePdfOAuthService.isReady()) {
+      console.error('[payment-report] Adobe PDF Services not initialized');
+      return res.status(500).json({
+        error: 'PDF service not initialized',
+        details: 'The Adobe PDF Services are not properly initialized. Check credentials.'
+      });
+    }
+    
+    // Generate the data for the report
+    const reportData = await generatePaymentReportData();
+    
+    // Always use the procedure template since it's a valid DOCX
+    const templatePath = path.join(process.cwd(), 'assets', 'templates', 'simple-payment-report.docx');
+    
+    if (!fs.existsSync(templatePath)) {
+      console.error(`[payment-report] Procedure template not found: ${templatePath}`);
+      return res.status(500).json({
+        error: 'Template file not found',
+        details: 'The procedure report template file was not found'
+      });
+    }
+    
+    // Use the shared template generation function to ensure consistency
+    const templateData = generatePDFTemplateData(reportData);
+    
+    // Generate the PDF using Adobe PDF Services
+    const pdfBuffer = await adobePdfOAuthService.generatePDF({
+      templatePath,
+      data: templateData
+    });
+    
+    if (!pdfBuffer) {
+      console.error('[payment-report] Failed to generate PDF');
+      return res.status(500).json({
+        error: 'PDF generation failed',
+        details: 'Failed to generate the payment report PDF'
+      });
+    }
+    
+    // Generate the filename
+    const now = new Date();
+    const filename = `Payment_Report_${format(now, 'yyyy-MM-dd')}.pdf`;
+    
+    // Clear any existing headers to avoid conflicts
+    res.removeHeader('Content-Disposition');
+    res.removeHeader('Content-Type');
+    res.removeHeader('Content-Length');
+    
+    // Set response headers for download (this is the only difference from the view functionality)
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    console.log(`[payment-report] Payment report download generated successfully: ${filename}, buffer size: ${pdfBuffer.length} bytes`);
+    
+    // Send the PDF using the same method as the view functionality
+    return res.end(pdfBuffer);
+  } catch (error) {
+    console.error('[payment-report] Error generating downloadable payment report:', error);
+    res.status(500).json({
+      error: 'Failed to generate payment report for download',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Generate a Payment Report PDF
+ */
+router.get('/generate', async (req, res) => {
+  console.log('[payment-report] Request to generate payment report PDF received');
+  
+  try {
+    // Check if Adobe PDF services are initialized
+    if (!adobePdfOAuthService.isReady()) {
+      console.error('[payment-report] Adobe PDF Services not initialized');
+      return res.status(500).json({
+        error: 'PDF service not initialized',
+        details: 'The Adobe PDF Services are not properly initialized. Check credentials.'
+      });
+    }
+    
+    // Generate the data for the report
+    const reportData = await generatePaymentReportData();
+    
+    // Log some data samples for debugging
+    console.log('[payment-report] Data sample:', {
+      payment_sample: reportData.paymentRows.slice(0, 2),
+      distribution_sample: reportData.distributionGroups.slice(0, 1),
+      summary: reportData.summary
+    });
+    
+    console.log('[payment-report] Template data prepared, generating PDF...');
+    
+    // Always use the procedure template since it's a valid DOCX
+    const templatePath = path.join(process.cwd(), 'assets', 'templates', 'simple-payment-report.docx');
+    
+    if (!fs.existsSync(templatePath)) {
+      console.error(`[payment-report] Procedure template not found: ${templatePath}`);
+      return res.status(500).json({
+        error: 'Template file not found',
+        details: 'The procedure report template file was not found'
+      });
+    }
+    
+    console.log(`[payment-report] Using procedure template for payment report: ${templatePath}`);
+    
+    // Create data in the format expected by the procedure template
+    console.log('[payment-report] Adapting payment data to procedure template format');
+    
+    // Use the shared template generation function to ensure consistency
+    const templateData = generatePDFTemplateData(reportData);
+    
+    // Log the entire templateData for debugging
+    console.log('[payment-report] DETAILED TEMPLATE DATA:', JSON.stringify(templateData, null, 2));
+    
+    // Generate the PDF using Adobe PDF Services
+    const pdfBuffer = await adobePdfOAuthService.generatePDF({
+      templatePath,
+      data: templateData
+    });
+    
+    if (!pdfBuffer) {
+      console.error('[payment-report] Failed to generate PDF');
+      return res.status(500).json({
+        error: 'PDF generation failed',
+        details: 'Failed to generate the payment report PDF'
+      });
+    }
+    
+    // Generate the filename
+    const now = new Date();
+    const filename = `Payment_Report_${format(now, 'yyyy-MM-dd')}.pdf`;
+    
+    // Check if the file should be viewed inline or downloaded as attachment
+    // based on the 'inline' query parameter
+    const inline = req.query.inline === 'true';
+    
+    // Clear any existing headers to avoid conflicts
+    res.removeHeader('Content-Disposition');
+    res.removeHeader('Content-Type');
+    res.removeHeader('Content-Length');
+    res.removeHeader('Content-Transfer-Encoding');
+    res.removeHeader('Cache-Control');
+    res.removeHeader('Pragma');
+    res.removeHeader('Expires');
+    
+    // Set response headers with optimal PDF handling approach
+    res.setHeader('Content-Type', 'application/pdf');
+    
+    const contentDisposition = inline 
+      ? 'inline' 
+      : `attachment; filename="${filename}"`;
+    res.setHeader('Content-Disposition', contentDisposition);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    console.log(`[payment-report] Payment report generated successfully: ${filename}, buffer size: ${pdfBuffer.length} bytes, disposition: ${inline ? 'inline' : 'attachment'}`);
+    
+    // Use consistent approach for both viewing and downloading
+    // Write the buffer directly without additional encoding transformations
+    return res.end(pdfBuffer);
+  } catch (error) {
+    console.error('[payment-report] Error generating payment report:', error);
+    res.status(500).json({
+      error: 'Failed to generate payment report',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Generate an HTML version of the payment report
+ * This is useful for testing and debugging the report structure
+ */
+router.get('/html', async (req, res) => {
+  console.log('[payment-report] Request to generate HTML payment report received');
+  
+  try {
+    // Generate the data for the report
+    const reportData = await generatePaymentReportData();
+    
+    // Send HTML directly
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <meta charset="UTF-8">
+          <title>Payment Report</title>
+          <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              h1, h2, h3 { color: #333; }
+              table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background-color: #f2f2f2; }
+              .summary-box { background-color: #f9f9f9; border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; }
+              .summary-item { display: flex; justify-content: space-between; margin-bottom: 8px; }
+              .summary-label { font-weight: bold; }
+              .section { margin-bottom: 30px; }
+              .header { text-align: center; margin-bottom: 30px; }
+              .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+              @media print {
+                  body { margin: 0; }
+                  .no-print { display: none; }
+                  table { page-break-inside: avoid; }
+                  .page-break { page-break-before: always; }
+              }
+          </style>
+      </head>
+      <body>
+          <div class="header">
+              <h1>SOHO TURKEY</h1>
+              <h2>Payment Report</h2>
+              <p>Generated on: ${reportData.summary.report_date}</p>
+          </div>
+
+          <div class="section">
+              <h2>Payment Summary</h2>
+              <div class="summary-box">
+                  <div class="summary-item">
+                      <span class="summary-label">Total Payments Received:</span>
+                      <span>${reportData.summary.total_payments_received}</span>
+                  </div>
+                  <div class="summary-item">
+                      <span class="summary-label">Total Distributed:</span>
+                      <span>${reportData.summary.total_distributed}</span>
+                  </div>
+                  <div class="summary-item">
+                      <span class="summary-label">Total Pending Distribution:</span>
+                      <span>${reportData.summary.total_pending_distribution}</span>
+                  </div>
+                  <div class="summary-item">
+                      <span class="summary-label">Procedures with Distributions:</span>
+                      <span>${reportData.summary.procedures_with_distributions}</span>
+                  </div>
+              </div>
+          </div>
+
+          <div class="section">
+              <h2>All Incoming Payments</h2>
+              <table>
+                  <thead>
+                      <tr>
+                          <th>Payment ID</th>
+                          <th>Date Received</th>
+                          <th>Amount</th>
+                          <th>Status</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      ${reportData.paymentRows.map(payment => `
+                          <tr>
+                              <td>${payment.payment_id}</td>
+                              <td>${payment.payment_date}</td>
+                              <td>${payment.amount}</td>
+                              <td>${payment.status}</td>
+                          </tr>
+                      `).join('')}
+                  </tbody>
+              </table>
+          </div>
+
+          <div class="section">
+              <h2>Payment Distributions by Procedure</h2>
+              
+              ${reportData.distributionGroups.map((group, index) => `
+                  <div style="margin-bottom: 20px;" ${index > 0 ? 'class="page-break"' : ''}>
+                      <h3>Procedure: ${group.reference}</h3>
+                      <p><strong>BL/AWB Reference:</strong> ${group.bl_reference}</p>
+                      
+                      <table>
+                          <thead>
+                              <tr>
+                                  <th>Payment ID</th>
+                                  <th>Date</th>
+                                  <th>Type</th>
+                                  <th>Amount</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                              ${group.distributions.map((dist: Distribution) => `
+                                  <tr>
+                                      <td>${dist.payment_id}</td>
+                                      <td>${dist.payment_date}</td>
+                                      <td>${dist.payment_type}</td>
+                                      <td>${dist.amount}</td>
+                                  </tr>
+                              `).join('')}
+                              <tr style="font-weight: bold; background-color: #e9e9e9;">
+                                  <td colspan="3" style="text-align: right;">Total Distributed:</td>
+                                  <td>${group.total_distributed}</td>
+                              </tr>
+                          </tbody>
+                      </table>
+                  </div>
+              `).join('')}
+          </div>
+
+          <div class="footer">
+              <p>This report was automatically generated on ${reportData.summary.report_date}</p>
+              <p>SOHO TURKEY • Payment Management System</p>
+              <button onclick="window.print()" class="no-print">Print Report</button>
+          </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('[payment-report] Error generating HTML report:', error);
+    res.status(500).send(`
+      <html>
+        <head><title>Error</title></head>
+        <body>
+          <h1>Error Generating Report</h1>
+          <p>${error instanceof Error ? error.message : 'Unknown error occurred'}</p>
+          <a href="javascript:history.back()">Go Back</a>
+        </body>
+      </html>
+    `);
+  }
+});
+
+/**
+ * Generate a Base64-encoded Payment Report PDF
+ * This provides a more reliable way to download PDFs
+ */
+router.get('/base64', async (req, res) => {
+  console.log('[payment-report] Request to generate Base64-encoded payment report received');
+  
+  try {
+    // Check if Adobe PDF services are initialized
+    if (!adobePdfOAuthService.isReady()) {
+      console.error('[payment-report] Adobe PDF Services not initialized');
+      return res.status(500).json({
+        error: 'PDF service not initialized',
+        details: 'The Adobe PDF Services are not properly initialized. Check credentials.'
+      });
+    }
+    
+    // Generate the data for the report
+    const reportData = await generatePaymentReportData();
+    
+    // Always use the procedure template since it's a valid DOCX
+    const templatePath = path.join(process.cwd(), 'assets', 'templates', 'simple-payment-report.docx');
+    
+    if (!fs.existsSync(templatePath)) {
+      console.error(`[payment-report] Procedure template not found: ${templatePath}`);
+      return res.status(500).json({
+        error: 'Template file not found',
+        details: 'The procedure report template file was not found'
+      });
+    }
+    
+    // Create data in the format expected by the template
+    const templateData = generatePDFTemplateData(reportData);
+    
+    // Generate the PDF using Adobe PDF Services
+    const pdfBuffer = await adobePdfOAuthService.generatePDF({
+      templatePath,
+      data: templateData
+    });
+    
+    if (!pdfBuffer) {
+      console.error('[payment-report] Failed to generate PDF');
+      return res.status(500).json({
+        error: 'PDF generation failed',
+        details: 'Failed to generate the payment report PDF'
+      });
+    }
+    
+    // Generate the filename
+    const now = new Date();
+    const filename = `Payment_Report_${format(now, 'yyyy-MM-dd')}.pdf`;
+    
+    // Convert the PDF buffer to Base64
+    const base64Data = pdfBuffer.toString('base64');
+    
+    console.log(`[payment-report] Base64 PDF generated successfully, size: ${base64Data.length} characters`);
+    
+    // Return the Base64 data with filename
+    const response: Base64PDFResponse = {
+      data: base64Data,
+      filename
+    };
+    
+    // Set the proper content type for JSON
+    res.setHeader('Content-Type', 'application/json');
+    return res.json(response);
+    
+  } catch (error) {
+    console.error('[payment-report] Error generating Base64 payment report:', error);
+    res.status(500).json({
+      error: 'Failed to generate Base64 payment report',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+export default router;

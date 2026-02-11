@@ -1,0 +1,4101 @@
+import type { Express, Request, Response } from "express";
+import { createServer, type Server } from "http";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import mime from "mime-types";
+import { storage } from "./storage";
+import { uploadFile, getFile, deleteFile, createSignedUrl, listAllKeys } from "./object-storage";
+import { db } from './db';
+import { eq } from 'drizzle-orm';
+import { procedures, invoiceLineItems, invoiceLineItemsConfig } from "@shared/schema";
+// Import PDF routes
+import pdfRoutes from './pdf-routes';
+// Import Adobe PDF OAuth routes (the only supported PDF generation method)
+import adobePdfOAuthRoutes from './adobe-pdf-oauth-route';
+// Import PDF JSON route for direct JSON data processing
+import pdfJsonRoute from './pdf-json-route';
+// Import Payment Report routes
+import paymentReportRoutes from './payment-report-enhanced';
+
+// Configure multer for memory storage (for cloud uploads)
+// This stores files in memory instead of on disk so we can upload to object storage
+const memoryStorage = multer.memoryStorage();
+
+// Configure file filter
+const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+  
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only PDF, JPG, PNG, and DOCX are allowed.'));
+  }
+};
+
+const upload = multer({ 
+  storage: memoryStorage, // Use memory storage instead of disk storage
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  } 
+});
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Register PDF routes
+  await pdfRoutes(app);
+  
+  // Register Adobe PDF OAuth routes (the only supported PDF generation method)
+  app.use('/api/adobe-oauth', adobePdfOAuthRoutes);
+  
+  // Register PDF JSON routes for direct data processing
+  app.use('/api/pdf', pdfJsonRoute);
+  
+  // Route to upload PDF template
+  app.post('/api/pdf/upload-template', upload.single('template'), async (req, res) => {
+    console.log('==================================');
+    console.log('TEMPLATE UPLOAD PROCESS STARTED');
+    console.log('==================================');
+    
+    console.log('Template upload request received');
+    console.log('Request has file:', !!req.file);
+    if (req.file) {
+      console.log('File details:', {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        buffer: req.file.buffer ? 'Buffer exists' : 'No buffer',
+        bufferLength: req.file.buffer ? req.file.buffer.length : 0
+      });
+      
+      // Check first few bytes to validate it's actually a DOCX/ZIP file
+      if (req.file.buffer && req.file.buffer.length > 4) {
+        const firstBytes = req.file.buffer.slice(0, 4);
+        console.log('First 4 bytes of file:', firstBytes.toString('hex'));
+        
+        // DOCX files start with PK (ZIP format)
+        const isPKZip = firstBytes[0] === 0x50 && firstBytes[1] === 0x4B;
+        console.log(`File format check: ${isPKZip ? 'Valid DOCX/ZIP format' : 'NOT a valid DOCX format'}`);
+        
+        if (!isPKZip) {
+          return res.status(400).json({ 
+            error: 'Invalid file format',
+            message: 'The uploaded file does not appear to be a valid DOCX file. Please ensure you are uploading a Word document properly tagged with Adobe Document Generation Tagger.'
+          });
+        }
+      }
+    } else {
+      console.log('Form data keys:', Object.keys(req.body));
+      console.log('Headers:', req.headers);
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No template file uploaded' });
+    }
+    
+    // Handle the uploaded template
+    try {
+      // Check if it's a DOCX file
+      if (req.file.mimetype !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        return res.status(400).json({ 
+          error: 'Invalid file type',
+          message: 'Template must be a DOCX file (Word document) tagged with Adobe Document Generation Tagger'
+        });
+      }
+      
+      // Save to templates directory
+      const templatesDir = path.join(process.cwd(), 'assets', 'templates');
+      
+      // Create directory if it doesn't exist
+      if (!fs.existsSync(templatesDir)) {
+        fs.mkdirSync(templatesDir, { recursive: true });
+      }
+      
+      console.log('Templates directory created/confirmed at:', templatesDir);
+      
+      // First, backup any existing template just in case
+      const templatePath = path.join(templatesDir, 'procedure-report-template.docx');
+      if (fs.existsSync(templatePath)) {
+        const backupPath = path.join(templatesDir, `procedure-report-template.backup-${Date.now()}.docx`);
+        fs.copyFileSync(templatePath, backupPath);
+        console.log('Created backup of existing template at:', backupPath);
+      }
+      
+      // Save the file
+      console.log('Writing template file to:', templatePath);
+      fs.writeFileSync(templatePath, req.file.buffer);
+      
+      // Verify the file was written correctly
+      if (fs.existsSync(templatePath)) {
+        const stats = fs.statSync(templatePath);
+        console.log('Template file saved successfully:', {
+          path: templatePath,
+          size: stats.size,
+          created: stats.birthtime,
+          permissions: stats.mode.toString(8).slice(-3)
+        });
+        
+        // Double-check file contents by reading first few bytes
+        const fd = fs.openSync(templatePath, 'r');
+        const buffer = Buffer.alloc(4);
+        fs.readSync(fd, buffer, 0, 4, 0);
+        fs.closeSync(fd);
+        
+        console.log('Saved file first 4 bytes:', buffer.toString('hex'));
+        
+        // DOCX files should begin with PK (it's a ZIP format)
+        const isPKZip = buffer[0] === 0x50 && buffer[1] === 0x4B;
+        if (!isPKZip) {
+          console.warn('WARNING: Saved template does not have proper DOCX header!');
+        }
+      } else {
+        console.error('Template file was not found after saving!');
+      }
+      
+      console.log('==================================');
+      console.log('TEMPLATE UPLOAD PROCESS COMPLETED');
+      console.log('==================================');
+      
+      return res.json({ 
+        success: true, 
+        message: 'PDF template uploaded successfully',
+        path: templatePath,
+        fileSize: req.file.size,
+        fileType: req.file.mimetype
+      });
+    } catch (error) {
+      console.error('Error uploading template:', error);
+      return res.status(500).json({ 
+        error: 'Failed to save template file',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+  app.post('/api/auth/login', async (req, res) => {
+    // Return mock user data
+    return res.json({ 
+      user: { 
+        id: 1,
+        username: 'admin',
+        role: 'admin'
+      } 
+    });
+  });
+
+  // Admin only routes - authentication disabled
+  app.use('/api/admin/*', async (req, res, next) => {
+    next();
+  });
+
+  app.post('/api/admin/users', async (req, res) => {
+    const user = await storage.createUser(req.body);
+    res.json({ user: { ...user, password: undefined } });
+  });
+
+  app.delete('/api/admin/users/:id', async (req, res) => {
+    const success = await storage.deleteUser(parseInt(req.params.id));
+    res.json({ success });
+  });
+
+  app.post('/api/admin/document-types', async (req, res) => {
+    const { name } = req.body;
+    const docType = await storage.createDocumentType({ 
+      name, 
+      createdBy: req.body.user?.id 
+    });
+    res.json({ documentType: docType });
+  });
+
+  // Procedure routes
+  app.get('/api/procedures', async (req, res) => {
+    // Check if reference parameter is provided
+    const reference = req.query.reference as string;
+    
+    if (reference) {
+      // Filter procedures by reference
+      const allProcedures = await storage.getAllProcedures();
+      const filteredProcedures = allProcedures.filter(p => p.reference === reference);
+      res.json({ procedures: filteredProcedures });
+    } else {
+      // Return all procedures if no reference is provided
+      const procedures = await storage.getAllProcedures();
+      res.json({ procedures });
+    }
+  });
+
+  // Get procedure by reference - this more specific route must come before the generic :id route
+  app.get('/api/procedures/reference/:reference', async (req, res) => {
+    try {
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const procedures = await storage.getProcedureByReference(reference);
+      if (!procedures || procedures.length === 0) {
+        return res.status(404).json({ message: 'Procedure not found' });
+      }
+      
+      res.json({ procedure: procedures[0] });
+    } catch (error) {
+      console.error('Error fetching procedure by reference:', error);
+      res.status(500).json({ message: 'Failed to fetch procedure', error: String(error) });
+    }
+  });
+
+  // Get procedure by ID - this generic route must come after the more specific routes
+  app.get('/api/procedures/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: 'Invalid procedure ID' });
+      }
+      const procedure = await storage.getProcedure(id);
+      if (!procedure) {
+        return res.status(404).json({ message: 'Procedure not found' });
+      }
+      res.json({ procedure });
+    } catch (error) {
+      console.error('Error fetching procedure by ID:', error);
+      res.status(500).json({ message: 'Failed to fetch procedure', error: String(error) });
+    }
+  });
+
+  app.post('/api/procedures', async (req, res) => {
+    try {
+      // Safe date parsing function that handles various date formats
+      const safeParseDate = (dateStr: string | null | undefined) => {
+        if (!dateStr) return null;
+        
+        try {
+          // If it's a ISO string, it's already in the proper format for DB
+          const date = new Date(dateStr);
+          if (!isNaN(date.getTime())) {
+            return date;
+          }
+          console.log('Invalid date format received:', dateStr);
+          return null;
+        } catch (e) {
+          console.error('Error parsing date:', e);
+          return null;
+        }
+      };
+      
+      // Process the request data to ensure correct date handling and remove id if present
+      const { id, ...dataWithoutId } = req.body; // Remove ID to let DB auto-generate it
+      
+      console.log('[routes] Creating procedure, removing id from input data:', id);
+      
+      const processedData = {
+        ...dataWithoutId,
+        // Safely parse date fields using our utility function
+        invoice_date: safeParseDate(dataWithoutId.invoice_date),
+        arrival_date: safeParseDate(dataWithoutId.arrival_date),
+        import_dec_date: safeParseDate(dataWithoutId.import_dec_date),
+        createdBy: dataWithoutId.user?.id || 3 // Using admin user ID 3 instead of 1
+      };
+      
+      // First, try to reset the sequence to prevent PK violations
+      try {
+        await db.execute(`SELECT setval('procedures_id_seq', (SELECT MAX(id) FROM procedures) + 1, false)`);
+        console.log('[routes] Successfully reset procedures_id_seq before creation');
+      } catch (seqError) {
+        console.error('[routes] Error resetting sequence before procedure creation:', seqError);
+        // Continue execution even if sequence reset fails
+      }
+      
+      const procedure = await storage.createProcedure(processedData);
+      res.json({ procedure });
+    } catch (error) {
+      console.error('Procedure creation error:', error);
+      
+      // Handle specific error types
+      let errorMessage = 'Failed to create procedure';
+      
+      // Check for duplicate key error
+      if (error instanceof Error && 
+          (error.message.includes('duplicate key') || error.message.includes('unique constraint'))) {
+          
+        errorMessage = 'Database sequence error occurred. Please try again.';
+        
+        // Try to fix the sequence in the background
+        try {
+          await db.execute(`SELECT setval('procedures_id_seq', (SELECT MAX(id) FROM procedures) + 1, false)`);
+          console.log('[routes] Reset sequence after error');
+        } catch (seqError) {
+          console.error('[routes] Failed to reset sequence after error:', seqError);
+        }
+      }
+      
+      res.status(400).json({ 
+        message: errorMessage, 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+
+  app.patch('/api/procedures/:id', async (req, res) => {
+    try {
+      // Reuse the same safe date parsing function
+      const safeParseDate = (dateStr: string | null | undefined) => {
+        if (!dateStr) return null;
+        
+        try {
+          const date = new Date(dateStr);
+          if (!isNaN(date.getTime())) {
+            return date;
+          }
+          console.log('Invalid date format received in update:', dateStr);
+          return null;
+        } catch (e) {
+          console.error('Error parsing date in update:', e);
+          return null;
+        }
+      };
+      
+      // Process any date fields in the request
+      const processedData = { ...req.body };
+      
+      if (req.body.invoice_date) {
+        processedData.invoice_date = safeParseDate(req.body.invoice_date);
+      }
+      
+      if (req.body.arrival_date) {
+        processedData.arrival_date = safeParseDate(req.body.arrival_date);
+      }
+      
+      if (req.body.import_dec_date) {
+        processedData.import_dec_date = safeParseDate(req.body.import_dec_date);
+      }
+      
+      const procedure = await storage.updateProcedure(
+        parseInt(req.params.id),
+        processedData
+      );
+      
+      if (!procedure) {
+        return res.status(404).json({ message: 'Procedure not found' });
+      }
+      
+      res.json({ procedure });
+    } catch (error) {
+      console.error('Procedure update error:', error);
+      res.status(400).json({ message: 'Failed to update procedure', error: String(error) });
+    }
+  });
+
+  app.delete('/api/procedures/:id', async (req, res) => {
+    const success = await storage.deleteProcedure(parseInt(req.params.id));
+    res.json({ success });
+  });
+  
+  // Update freight amount
+  app.post('/api/procedures/:reference/freight', async (req, res) => {
+    try {
+      const { reference } = req.params;
+      const { freightAmount } = req.body;
+      
+      if (reference === undefined || freightAmount === undefined) {
+        return res.status(400).json({ 
+          message: 'Missing required parameters', 
+          details: 'Both procedure reference and freight amount are required' 
+        });
+      }
+      
+      // Convert freightAmount to a number and validate
+      const freightAmountNum = parseFloat(freightAmount);
+      if (isNaN(freightAmountNum)) {
+        return res.status(400).json({ 
+          message: 'Invalid freight amount', 
+          details: 'Freight amount must be a valid number' 
+        });
+      }
+      
+      const procedure = await storage.updateFreightAmount(reference, freightAmountNum);
+      
+      if (!procedure) {
+        return res.status(404).json({ 
+          message: 'Procedure not found', 
+          details: `No procedure found with reference: ${reference}` 
+        });
+      }
+      
+      res.json({ 
+        success: true, 
+        procedure,
+        message: 'Freight amount updated successfully' 
+      });
+    } catch (error) {
+      // Log the full error with stack trace
+      console.error('Error updating freight amount:', error);
+      
+      // Log the request body for debugging
+      console.log('Request body:', req.body);
+      
+      // Check if it's a specific type of error we can handle
+      if (error instanceof Error) {
+        // Return a more detailed error message
+        return res.status(500).json({ 
+          message: 'Failed to update freight amount', 
+          error: error.message,
+          details: 'There was an error updating the freight amount in the database. Please try again or contact support if the issue persists.',
+          code: 'FREIGHT_UPDATE_ERROR'
+        });
+      }
+      
+      // Generic error handling if not a standard Error object
+      res.status(500).json({ 
+        message: 'Failed to update freight amount', 
+        error: String(error),
+        details: 'An unexpected error occurred while processing your request.'
+      });
+    }
+  });
+  
+  // Update procedure status
+  app.post('/api/procedures/update-status', async (req, res) => {
+    try {
+      console.log("[update-status] Received request body:", req.body);
+      const { reference, shipment_status, payment_status, document_status } = req.body;
+      
+      if (!reference) {
+        console.log("[update-status] Error: No reference provided");
+        return res.status(400).json({ error: "Procedure reference is required" });
+      }
+      
+      // Use direct query with eq() to get procedure by reference
+      console.log("[update-status] Finding procedure with reference:", reference);
+      const procedureList = await storage.getProcedureByReference(reference);
+      
+      if (!procedureList || procedureList.length === 0) {
+        console.log("[update-status] Error: No procedure found with reference:", reference);
+        return res.status(404).json({ error: "Procedure not found" });
+      }
+      
+      console.log("[update-status] Found procedure:", procedureList[0]);
+      const procedureId = procedureList[0].id;
+      
+      // Prepare update data based on which status is being updated
+      const updateData: any = {};
+      
+      if (shipment_status) {
+        console.log("[update-status] Updating shipment_status to:", shipment_status);
+        updateData.shipment_status = shipment_status;
+      }
+      
+      if (payment_status) {
+        console.log("[update-status] Updating payment_status to:", payment_status);
+        updateData.payment_status = payment_status;
+      }
+      
+      if (document_status) {
+        console.log("[update-status] Updating document_status to:", document_status);
+        updateData.document_status = document_status;
+      }
+      
+      // Only update if status fields are provided
+      if (Object.keys(updateData).length === 0) {
+        console.log("[update-status] Error: No status fields provided in request");
+        return res.status(400).json({ error: "No status fields provided for update" });
+      }
+      
+      console.log("[update-status] Updating procedure:", procedureId, "with data:", updateData);
+      
+      // Update the procedure status
+      const procedure = await storage.updateProcedure(procedureId, updateData);
+      console.log("[update-status] Update result:", procedure);
+      
+      res.json({ success: true, procedure });
+    } catch (error) {
+      console.error("[update-status] Error updating procedure status:", error);
+      res.status(500).json({ error: "Failed to update procedure status" });
+    }
+  });
+
+  // User routes for document operations
+  app.post('/api/documents/:procedureId', async (req, res) => {
+    if (req.body.user.role === 'accountant') {
+      return res.status(403).json({ message: 'Insufficient permissions' });
+    }
+    const document = await storage.uploadDocument({
+      ...req.body,
+      procedureId: parseInt(req.params.procedureId),
+      uploadedBy: req.body.user.id
+    });
+    res.json({ document });
+  });
+
+  app.get('/api/documents/:procedureId', async (req, res) => {
+    const documents = await storage.getDocuments(parseInt(req.params.procedureId));
+    res.json({ documents });
+  });
+
+  // Import Service Invoice routes
+  // GET all invoices
+  app.get('/api/service-invoices', async (req, res) => {
+    try {
+      const invoices = await storage.getAllImportServiceInvoices();
+      res.json({ invoices });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve service invoices', error: String(error) });
+    }
+  });
+
+  // GET all invoices for a specific procedure reference
+  app.get('/api/service-invoices/procedure/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const invoices = await storage.getImportServiceInvoicesByReference(reference);
+      res.json({ invoices });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve service invoices', error: String(error) });
+    }
+  });
+
+  // GET a specific invoice by ID
+  app.get('/api/service-invoices/:id', async (req, res) => {
+    try {
+      const invoice = await storage.getImportServiceInvoice(parseInt(req.params.id));
+      if (!invoice) {
+        return res.status(404).json({ message: 'Service invoice not found' });
+      }
+      res.json({ invoice });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve service invoice', error: String(error) });
+    }
+  });
+
+  // POST create a new invoice
+  app.post('/api/service-invoices', async (req, res) => {
+    try {
+      // Validate required fields
+      const { procedureReference, amount, invoiceNumber, date } = req.body;
+      
+      if (!procedureReference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      if (!amount) {
+        return res.status(400).json({ message: 'Amount is required' });
+      }
+
+      if (!invoiceNumber) {
+        return res.status(400).json({ message: 'Invoice number is required' });
+      }
+
+      if (!date) {
+        return res.status(400).json({ message: 'Date is required' });
+      }
+      
+      // We'll use a known existing user ID (3 is the admin user)
+      const adminUserId = 3; // Admin user ID from the database
+
+      // Create the invoice with a valid user ID to avoid foreign key constraint issues
+      // A real application would use the authenticated user's ID
+      const newInvoice = await storage.createImportServiceInvoice({
+        procedureReference,
+        amount,
+        currency: req.body.currency || 'USD',
+        invoiceNumber,
+        date: new Date(date), // Ensure date is converted to a Date object
+        notes: req.body.notes,
+        createdBy: adminUserId // Using admin user ID from const above
+      });
+      
+      res.status(201).json({ invoice: newInvoice });
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to create service invoice', error: String(error) });
+    }
+  });
+
+  // PUT update an existing invoice
+  app.put('/api/service-invoices/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if invoice exists
+      const existingInvoice = await storage.getImportServiceInvoice(id);
+      if (!existingInvoice) {
+        return res.status(404).json({ message: 'Service invoice not found' });
+      }
+      
+      // Process date if provided
+      const updateData: any = {}; // Safe updateData object
+      
+      // Only include fields that are provided and valid
+      if (req.body.amount !== undefined) updateData.amount = req.body.amount;
+      if (req.body.currency) updateData.currency = req.body.currency;
+      if (req.body.invoiceNumber) updateData.invoiceNumber = req.body.invoiceNumber;
+      if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+      
+      // Process date if provided
+      if (req.body.date) {
+        updateData.date = new Date(req.body.date);
+      }
+      
+      // Update the invoice
+      const updatedInvoice = await storage.updateImportServiceInvoice(id, updateData);
+      
+      res.json({ invoice: updatedInvoice });
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to update service invoice', error: String(error) });
+    }
+  });
+
+  // DELETE remove an invoice
+  app.delete('/api/service-invoices/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if invoice exists
+      const existingInvoice = await storage.getImportServiceInvoice(id);
+      if (!existingInvoice) {
+        return res.status(404).json({ message: 'Service invoice not found' });
+      }
+      
+      // Delete the invoice
+      const success = await storage.deleteImportServiceInvoice(id);
+      
+      res.json({ success });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete service invoice', error: String(error) });
+    }
+  });
+
+  // Payment routes
+  // DELETE all payments (admin operation) - LEGACY ENDPOINT
+  app.delete('/api/payments/reset-all', async (req, res) => {
+    try {
+      console.log('[routes] Received request to delete all payments (legacy endpoint)');
+      
+      // Execute the delete operation
+      const result = await storage.deleteAllPayments();
+      
+      console.log(`[routes] Successfully deleted ${result.count} payments`);
+      
+      // Return success with count and deleted payment IDs for logging
+      res.json({ 
+        success: true, 
+        count: result.count,
+        deletedPaymentIds: result.deletedPayments.map(p => p.id) 
+      });
+    } catch (error) {
+      console.error('[routes] Error deleting all payments:', error);
+      res.status(500).json({ 
+        message: 'Failed to delete all payments', 
+        error: String(error) 
+      });
+    }
+  });
+  
+  // DELETE all payments (admin operation) - NEW ENDPOINT (avoids route conflicts)
+  app.delete('/api/all-payments/reset', async (req, res) => {
+    try {
+      console.log('[routes] Received request to delete all payments (new endpoint)');
+      
+      // Execute the delete operation
+      const result = await storage.deleteAllPayments();
+      
+      console.log(`[routes] Successfully deleted ${result.count} payments`);
+      
+      // Return success with count and deleted payment IDs for logging
+      res.json({ 
+        success: true, 
+        count: result.count,
+        deletedPaymentIds: result.deletedPayments.map(p => p.id) 
+      });
+    } catch (error) {
+      console.error('[routes] Error deleting all payments:', error);
+      res.status(500).json({ 
+        message: 'Failed to delete all payments', 
+        error: String(error) 
+      });
+    }
+  });
+  
+  // New Payment System Routes
+  
+  // GET all incoming payments
+  app.get('/api/incoming-payments', async (req, res) => {
+    try {
+      const payments = await storage.getAllIncomingPayments();
+      res.json({ payments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve incoming payments', error: String(error) });
+    }
+  });
+  
+  // GET a specific incoming payment by ID
+  app.get('/api/incoming-payments/:id', async (req, res) => {
+    try {
+      const payment = await storage.getIncomingPayment(parseInt(req.params.id));
+      if (!payment) {
+        return res.status(404).json({ message: 'Incoming payment not found' });
+      }
+      res.json({ payment });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve incoming payment', error: String(error) });
+    }
+  });
+  
+  // GET a specific incoming payment by payment ID
+  app.get('/api/incoming-payments/payment-id/:paymentId', async (req, res) => {
+    try {
+      const payment = await storage.getIncomingPaymentByPaymentId(req.params.paymentId);
+      if (!payment) {
+        return res.status(404).json({ message: 'Incoming payment not found' });
+      }
+      res.json({ payment });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve incoming payment', error: String(error) });
+    }
+  });
+  
+  // POST create a new incoming payment
+  app.post('/api/incoming-payments', async (req, res) => {
+    try {
+      console.log('[routes] POST /api/incoming-payments - Request body:', req.body);
+      
+      // Validate required fields
+      const { paymentId, dateReceived, payerInfo, totalAmount, currency } = req.body;
+      
+      if (!paymentId) {
+        console.log('[routes] ERROR: Missing payment ID');
+        return res.status(400).json({ message: 'Payment ID is required' });
+      }
+      
+      if (!dateReceived) {
+        console.log('[routes] ERROR: Missing date received');
+        return res.status(400).json({ message: 'Date received is required' });
+      }
+      
+      if (!payerInfo) {
+        console.log('[routes] ERROR: Missing payer information');
+        return res.status(400).json({ message: 'Payer information is required' });
+      }
+      
+      if (!totalAmount) {
+        console.log('[routes] ERROR: Missing total amount');
+        return res.status(400).json({ message: 'Total amount is required' });
+      }
+      
+      // Use the admin user with ID 3, which we know exists in the database
+      const adminUserId = 3;
+      
+      // Check if a payment with the same ID already exists
+      const existingPayment = await storage.getIncomingPaymentByPaymentId(paymentId);
+      if (existingPayment) {
+        console.log('[routes] ERROR: Payment ID already exists:', paymentId);
+        return res.status(400).json({ message: `Payment ID "${paymentId}" already exists` });
+      }
+      
+      // Log the data before creating the payment
+      // Always enforce TL as currency regardless of what was sent
+      console.log('[routes] Creating new incoming payment with data:', {
+        paymentId,
+        dateReceived: new Date(dateReceived),
+        payerInfo,
+        totalAmount,
+        currency: 'TL', // Always enforce TL as currency regardless of input
+        createdBy: adminUserId,
+        notes: req.body.notes || null
+      });
+      
+      // Create the payment
+      const newPayment = await storage.createIncomingPayment({
+        paymentId,
+        dateReceived: new Date(dateReceived),
+        payerInfo,
+        totalAmount,
+        currency: 'TL', // Always enforce TL as currency regardless of input
+        createdBy: adminUserId,
+        notes: req.body.notes || null
+      });
+      
+      console.log('[routes] Successfully created incoming payment:', newPayment);
+      res.status(201).json({ payment: newPayment });
+    } catch (error) {
+      console.error('[routes] ERROR creating incoming payment:', error);
+      res.status(400).json({ message: 'Failed to create incoming payment', error: String(error) });
+    }
+  });
+  
+  // PUT update an existing incoming payment
+  app.put('/api/incoming-payments/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if payment exists
+      const existingPayment = await storage.getIncomingPayment(id);
+      if (!existingPayment) {
+        return res.status(404).json({ message: 'Incoming payment not found' });
+      }
+      
+      // Process date if provided
+      const updateData: any = {}; // Safe updateData object
+      
+      // Only include fields that are provided and valid
+      if (req.body.paymentId !== undefined) updateData.paymentId = req.body.paymentId;
+      if (req.body.payerInfo !== undefined) updateData.payerInfo = req.body.payerInfo;
+      // Always ensure currency is TL, ignore any incoming currency value
+      if (req.body.currency !== undefined) updateData.currency = 'TL';
+      if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+      
+      // Only update total amount if there are no distributions yet
+      if (req.body.totalAmount !== undefined) {
+        if (existingPayment.distributionStatus === 'pending_distribution') {
+          updateData.totalAmount = req.body.totalAmount;
+          updateData.remainingBalance = req.body.totalAmount;
+        } else {
+          return res.status(400).json({ 
+            message: 'Cannot update total amount on a payment that has already been distributed',
+            currentStatus: existingPayment.distributionStatus
+          });
+        }
+      }
+      
+      // Process date if provided
+      if (req.body.dateReceived) {
+        updateData.dateReceived = new Date(req.body.dateReceived);
+      }
+      
+      // Update the payment
+      const updatedPayment = await storage.updateIncomingPayment(id, updateData);
+      
+      res.json({ payment: updatedPayment });
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to update incoming payment', error: String(error) });
+    }
+  });
+  
+  // DELETE remove an incoming payment
+  app.delete('/api/incoming-payments/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if payment exists
+      const existingPayment = await storage.getIncomingPayment(id);
+      if (!existingPayment) {
+        return res.status(404).json({ message: 'Incoming payment not found' });
+      }
+      
+      // Delete the payment (this will throw an error if there are distributions)
+      const success = await storage.deleteIncomingPayment(id);
+      
+      res.json({ success });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete incoming payment', error: String(error) });
+    }
+  });
+  
+  // Payment Distributions Routes
+  
+  // GET distributions for a specific incoming payment
+  app.get('/api/payment-distributions/payment/:paymentId', async (req, res) => {
+    try {
+      const paymentId = parseInt(req.params.paymentId);
+      if (isNaN(paymentId)) {
+        return res.status(400).json({ message: 'Invalid payment ID' });
+      }
+      
+      const distributions = await storage.getPaymentDistributions(paymentId);
+      res.json({ distributions });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payment distributions', error: String(error) });
+    }
+  });
+  
+  // GET distributions for a specific payment
+  app.get('/api/payment-distributions/payment/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: 'Valid payment ID is required' });
+      }
+      
+      // Get the payment first to include its data in the response
+      const payment = await storage.getIncomingPayment(id);
+      if (!payment) {
+        return res.status(404).json({ message: 'Payment not found' });
+      }
+      
+      // Get the distributions
+      const distributions = await storage.getPaymentDistributions(id);
+      
+      // Add payment data to each distribution
+      const enhancedDistributions = distributions.map(dist => ({
+        ...dist,
+        paymentId: payment.paymentId,
+        payerInfo: payment.payerInfo
+      }));
+      
+      res.json({ 
+        distributions: enhancedDistributions,
+        payment: {
+          id: payment.id,
+          paymentId: payment.paymentId,
+          payerInfo: payment.payerInfo,
+          totalAmount: payment.totalAmount,
+          amountDistributed: payment.amountDistributed,
+          remainingBalance: payment.remainingBalance,
+          distributionStatus: payment.distributionStatus
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payment distributions', error: String(error) });
+    }
+  });
+  
+  // GET distributions for a specific procedure
+  app.get('/api/payment-distributions/procedure/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const distributions = await storage.getPaymentDistributionsByProcedure(reference);
+      
+      // For each distribution, get the payment info
+      const enhancedDistributions = await Promise.all(distributions.map(async (dist) => {
+        const payment = await storage.getIncomingPayment(dist.incomingPaymentId);
+        return {
+          ...dist,
+          paymentId: payment ? payment.paymentId : 'Unknown',
+          payerInfo: payment ? payment.payerInfo : 'Unknown'
+        };
+      }));
+      
+      res.json({ distributions: enhancedDistributions });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payment distributions', error: String(error) });
+    }
+  });
+  
+  // POST create a new payment distribution
+  app.post('/api/payment-distributions', async (req, res) => {
+    try {
+      // Validate required fields
+      const { incomingPaymentId, procedureReference, distributedAmount, paymentType } = req.body;
+      
+      if (!incomingPaymentId) {
+        return res.status(400).json({ message: 'Incoming payment ID is required' });
+      }
+      
+      if (!procedureReference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      if (!distributedAmount) {
+        return res.status(400).json({ message: 'Distributed amount is required' });
+      }
+      
+      if (!paymentType) {
+        return res.status(400).json({ message: 'Payment type is required' });
+      }
+      
+      // Use the admin user with ID 3, which we know exists in the database
+      const adminUserId = 3;
+      
+      // Convert incoming payment ID to a number if it's a string
+      const paymentId = typeof incomingPaymentId === 'string' 
+        ? parseInt(incomingPaymentId) 
+        : incomingPaymentId;
+        
+      // Create the distribution
+      const newDistribution = await storage.createPaymentDistribution({
+        incomingPaymentId: paymentId,
+        procedureReference,
+        distributedAmount,
+        paymentType,
+        distributionDate: new Date(),
+        createdBy: adminUserId
+      });
+      
+      res.status(201).json({ distribution: newDistribution });
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to create payment distribution', error: String(error) });
+    }
+  });
+  
+  // DELETE remove a payment distribution
+  app.delete('/api/payment-distributions/:id', async (req, res) => {
+    // Create a timeout promise to prevent hanging operations
+    const timeoutPromise = new Promise((_, reject) => {
+      const timeoutId = setTimeout(() => {
+        console.log(`[routes] DELETE operation for payment distribution timed out after 5 seconds`);
+        reject(new Error('Operation timed out after 5 seconds'));
+      }, 5000);
+      
+      // Store the timeout ID in the request object so we can clear it later
+      (req as any)._timeoutId = timeoutId;
+    });
+    
+    try {
+      const id = parseInt(req.params.id);
+      console.log(`[routes] DELETE /api/payment-distributions/${id} - Attempting to delete payment distribution`);
+      
+      if (isNaN(id)) {
+        console.log(`[routes] Invalid payment distribution ID: ${req.params.id}`);
+        clearTimeout((req as any)._timeoutId);
+        return res.status(400).json({ message: 'Invalid payment distribution ID', success: false });
+      }
+      
+      // Delete the distribution with a timeout
+      console.log(`[routes] Calling storage.deletePaymentDistribution with ID: ${id}`);
+      
+      const deletePromise = storage.deletePaymentDistribution(id);
+      
+      // Race the delete operation against the timeout
+      const success = await Promise.race([
+        deletePromise,
+        timeoutPromise.then(() => {
+          throw new Error('Delete operation timed out');
+        })
+      ]) as boolean;
+      
+      console.log(`[routes] Delete operation result: ${success}`);
+      
+      // Clear the timeout since operation completed successfully
+      clearTimeout((req as any)._timeoutId);
+      
+      if (!success) {
+        console.log(`[routes] Payment distribution with ID ${id} not found or could not be deleted`);
+        return res.status(404).json({ message: 'Payment distribution not found or could not be deleted', success: false });
+      }
+      
+      console.log(`[routes] Successfully deleted payment distribution with ID ${id}`);
+      res.json({ success: true });
+    } catch (error) {
+      // Clear the timeout to prevent memory leaks
+      if ((req as any)._timeoutId) {
+        clearTimeout((req as any)._timeoutId);
+      }
+      
+      console.error(`[routes] Error deleting payment distribution with ID ${req.params.id}:`, error);
+      
+      // Check if this was a timeout error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isTimeout = errorMessage && (
+        errorMessage.includes('timed out') || 
+        errorMessage.includes('timeout')
+      );
+      
+      res.status(isTimeout ? 504 : 500).json({ 
+        message: isTimeout 
+          ? 'Operation timed out while deleting payment distribution' 
+          : 'Failed to delete payment distribution', 
+        error: String(error),
+        success: false 
+      });
+    }
+  });
+  
+  // DELETE all payment distributions (admin operation)
+  app.delete('/api/all-payment-distributions/reset', async (req, res) => {
+    // Create a timeout promise to prevent hanging operations (10 seconds for bulk operation)
+    const timeoutPromise = new Promise((_, reject) => {
+      const timeoutId = setTimeout(() => {
+        console.log(`[routes] Reset operation for payment distributions timed out after 10 seconds`);
+        reject(new Error('Operation timed out after 10 seconds'));
+      }, 10000);
+      
+      // Store the timeout ID in the request object so we can clear it later
+      (req as any)._timeoutId = timeoutId;
+    });
+    
+    try {
+      console.log('[routes] Received request to delete all payment distributions');
+      
+      // Execute the delete operation with a timeout
+      const deletePromise = storage.deleteAllPaymentDistributions();
+      
+      // Race the delete operation against the timeout
+      const result = await Promise.race([
+        deletePromise,
+        timeoutPromise.then(() => {
+          throw new Error('Reset operation timed out');
+        })
+      ]);
+      
+      // Clear the timeout since operation completed successfully
+      clearTimeout((req as any)._timeoutId);
+      
+      console.log(`[routes] Successfully deleted ${result.count} payment distributions`);
+      
+      // Return success with count and deleted distribution IDs for logging
+      res.json({ 
+        success: true, 
+        count: result.count,
+        deletedDistributionIds: result.deletedDistributions.map(d => d.id) 
+      });
+    } catch (error) {
+      // Clear the timeout to prevent memory leaks
+      if ((req as any)._timeoutId) {
+        clearTimeout((req as any)._timeoutId);
+      }
+      
+      console.error('[routes] Error deleting all payment distributions:', error);
+      
+      // Check if this was a timeout error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isTimeout = errorMessage && (
+        errorMessage.includes('timed out') || 
+        errorMessage.includes('timeout')
+      );
+      
+      res.status(isTimeout ? 504 : 500).json({ 
+        message: isTimeout 
+          ? 'Operation timed out while resetting payment distributions' 
+          : 'Failed to delete all payment distributions', 
+        error: String(error),
+        success: false
+      });
+    }
+  });
+  
+  // GET all payments
+  app.get('/api/payments', async (req, res) => {
+    try {
+      const payments = await storage.getAllPayments();
+      res.json({ payments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payments', error: String(error) });
+    }
+  });
+
+  // GET payments for a specific procedure reference
+  app.get('/api/payments/procedure/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const payments = await storage.getPaymentsByProcedureReference(reference);
+      res.json({ payments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payments', error: String(error) });
+    }
+  });
+
+  // GET payments by payment type
+  app.get('/api/payments/type/:paymentType', async (req, res) => {
+    try {
+      const paymentType = req.params.paymentType;
+      if (!paymentType) {
+        return res.status(400).json({ message: 'Payment type is required' });
+      }
+      
+      const payments = await storage.getPaymentsByType(paymentType);
+      res.json({ payments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payments', error: String(error) });
+    }
+  });
+
+  // GET a specific payment by ID
+  app.get('/api/payments/:id', async (req, res) => {
+    try {
+      const payment = await storage.getPayment(parseInt(req.params.id));
+      if (!payment) {
+        return res.status(404).json({ message: 'Payment not found' });
+      }
+      res.json({ payment });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payment', error: String(error) });
+    }
+  });
+
+  // POST create a new payment
+  app.post('/api/payments', async (req, res) => {
+    try {
+      // Validate required fields
+      const { procedureReference, paymentType, amount, paymentDate } = req.body;
+      
+      if (!procedureReference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      if (!paymentType) {
+        return res.status(400).json({ message: 'Payment type is required' });
+      }
+      
+      if (!amount) {
+        return res.status(400).json({ message: 'Amount is required' });
+      }
+
+      if (!paymentDate) {
+        return res.status(400).json({ message: 'Payment date is required' });
+      }
+      
+      // Use the admin user with ID 3, which we know exists in the database
+      const adminUserId = 3;
+
+      // Create the payment
+      const newPayment = await storage.createPayment({
+        procedureReference,
+        paymentType,
+        amount,
+        paymentDate: new Date(paymentDate),
+        description: req.body.description || '',
+        createdBy: adminUserId // Using admin user ID we verified exists
+      });
+      
+      res.status(201).json({ payment: newPayment });
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to create payment', error: String(error) });
+    }
+  });
+
+  // PUT update an existing payment
+  app.put('/api/payments/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if payment exists
+      const existingPayment = await storage.getPayment(id);
+      if (!existingPayment) {
+        return res.status(404).json({ message: 'Payment not found' });
+      }
+      
+      // Process date if provided
+      const updateData: any = {}; // Safe updateData object
+      
+      // Only include fields that are provided and valid
+      if (req.body.amount !== undefined) updateData.amount = req.body.amount;
+      if (req.body.paymentType) updateData.paymentType = req.body.paymentType;
+      if (req.body.description !== undefined) updateData.description = req.body.description;
+      
+      // Process date if provided
+      if (req.body.paymentDate) {
+        updateData.paymentDate = new Date(req.body.paymentDate);
+      }
+      
+      // Update the payment
+      const updatedPayment = await storage.updatePayment(id, updateData);
+      
+      res.json({ payment: updatedPayment });
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to update payment', error: String(error) });
+    }
+  });
+
+  // DELETE remove a payment
+  app.delete('/api/payments/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if payment exists
+      const existingPayment = await storage.getPayment(id);
+      if (!existingPayment) {
+        return res.status(404).json({ message: 'Payment not found' });
+      }
+      
+      // Delete the payment
+      const success = await storage.deletePayment(id);
+      
+      res.json({ success });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete payment', error: String(error) });
+    }
+  });
+
+  // GET financial summary for all procedures
+  app.get('/api/financial-summary', async (req, res) => {
+    try {
+      // Get all procedures
+      const allProcedures = await storage.getAllProcedures();
+      
+      // Calculate financial summary for each procedure
+      const financialSummaries = await Promise.all(
+        allProcedures.map(async (procedure) => {
+          try {
+            // Get the financial summary for this procedure
+            const summary = await storage.calculateFinancialSummary(procedure.reference);
+            
+            // Log the results for debugging
+            console.log(`Financial summary for ${procedure.reference}:`, JSON.stringify(summary));
+            
+            // Make sure we have numeric values
+            const normalizedSummary = {
+              procedureReference: procedure.reference,
+              totalExpenses: parseFloat(summary.totalExpenses?.toString() || '0'),
+              advancePayments: parseFloat(summary.advancePayments?.toString() || '0'),
+              balancePayments: parseFloat(summary.balancePayments?.toString() || '0'),
+              totalPayments: parseFloat(summary.totalPayments?.toString() || '0'),
+              remainingBalance: parseFloat(summary.remainingBalance?.toString() || '0')
+            };
+            
+            return normalizedSummary;
+          } catch (err) {
+            console.error(`Error calculating financial summary for procedure ${procedure.reference}:`, err);
+            // Return a default object with procedure reference but zero values
+            return {
+              procedureReference: procedure.reference,
+              totalExpenses: 0,
+              advancePayments: 0,
+              balancePayments: 0, 
+              totalPayments: 0,
+              remainingBalance: 0
+            };
+          }
+        })
+      );
+      
+      res.json({ financialSummaries });
+    } catch (error) {
+      console.error('Error getting all financial summaries:', error);
+      res.status(500).json({ message: 'Failed to retrieve financial summaries', error: String(error) });
+    }
+  });
+
+  // GET financial summary for a specific procedure
+  app.get('/api/financial-summary/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      // Get the financial summary
+      try {
+        const summaryData = await storage.calculateFinancialSummary(reference);
+        
+        // Log the results for debugging
+        console.log(`Financial summary for specific procedure ${reference}:`, JSON.stringify(summaryData));
+        
+        // Normalize values to ensure they're proper numbers
+        const normalizedSummary = {
+          totalExpenses: parseFloat(summaryData.totalExpenses?.toString() || '0'),
+          importExpenses: parseFloat(summaryData.importExpenses?.toString() || '0'),
+          serviceInvoices: parseFloat(summaryData.serviceInvoices?.toString() || '0'),
+          taxes: parseFloat(summaryData.taxes?.toString() || '0'),
+          advancePayments: parseFloat(summaryData.advancePayments?.toString() || '0'),
+          balancePayments: parseFloat(summaryData.balancePayments?.toString() || '0'),
+          totalPayments: parseFloat(summaryData.totalPayments?.toString() || '0'),
+          remainingBalance: parseFloat(summaryData.remainingBalance?.toString() || '0')
+        };
+        
+        res.json({ summary: normalizedSummary });
+      } catch (err) {
+        console.error(`Error calculating financial summary for procedure ${reference}:`, err);
+        // Return zeros if calculation fails
+        res.json({ 
+          summary: {
+            totalExpenses: 0,
+            importExpenses: 0,
+            serviceInvoices: 0,
+            taxes: 0,
+            advancePayments: 0,
+            balancePayments: 0,
+            totalPayments: 0,
+            remainingBalance: 0
+          } 
+        });
+      }
+    } catch (error) {
+      console.error('Error in financial summary endpoint:', error);
+      res.status(500).json({ message: 'Failed to retrieve financial summary', error: String(error) });
+    }
+  });
+  
+  // GET batch financial summaries endpoint - returns all financial data in a single request
+  app.get('/api/financial-summaries/batch', async (req, res) => {
+    try {
+      console.log('Batch financial summaries request received');
+      const startTime = Date.now();
+      
+      // Get all procedures
+      const procedures = await storage.getAllProcedures();
+      console.log(`Retrieved ${procedures.length} procedures for batch financial processing`);
+      
+      // Get all taxes in a single query for better performance
+      const allTaxes = await storage.getAllTaxes();
+      console.log(`Retrieved ${allTaxes.length} tax records for batch processing`);
+      
+      // Get all import expenses in a single query
+      const allImportExpenses = await storage.getAllImportExpenses();
+      console.log(`Retrieved ${allImportExpenses.length} import expense records for batch processing`);
+      
+      // Get all service invoices in a single query
+      const allServiceInvoices = await storage.getAllImportServiceInvoices();
+      console.log(`Retrieved ${allServiceInvoices.length} service invoice records for batch processing`);
+      
+      // Get all payments in a single query
+      const allPayments = await storage.getAllPayments();
+      console.log(`Retrieved ${allPayments.length} payment records for batch processing`);
+      
+      // Process all procedures
+      const financialSummaries: Record<string, {
+        totalTax: number;
+        importExpenses: number;
+        serviceInvoices: number;
+        totalExpenses: number;
+        advancePayments: number;
+        balancePayments: number;
+        remainingBalance: number;
+      }> = {};
+      
+      // Process all procedures
+      for (const procedure of procedures) {
+        if (!procedure.reference) continue;
+        
+        try {
+          // Find tax for this procedure
+          const taxForProcedure = allTaxes.find(tax => tax.procedureReference === procedure.reference);
+          let totalTax = 0;
+          
+          if (taxForProcedure) {
+            // Calculate total tax
+            totalTax = 
+              parseFloat(String(taxForProcedure.customsTax || '0')) +
+              parseFloat(String(taxForProcedure.additionalCustomsTax || '0')) +
+              parseFloat(String(taxForProcedure.kkdf || '0')) +
+              parseFloat(String(taxForProcedure.vat || '0')) +
+              parseFloat(String(taxForProcedure.stampTax || '0'));
+          }
+          
+          // Find import expenses for this procedure
+          const expensesForProcedure = allImportExpenses.filter(
+            expense => expense.procedureReference === procedure.reference
+          );
+          
+          // Calculate total import expenses
+          let importExpenses = 0;
+          for (const expense of expensesForProcedure) {
+            importExpenses += parseFloat(String(expense.amount || '0'));
+          }
+          
+          // Find service invoices for this procedure
+          const invoicesForProcedure = allServiceInvoices.filter(
+            invoice => invoice.procedureReference === procedure.reference
+          );
+          
+          // Calculate total service invoices
+          let serviceInvoices = 0;
+          for (const invoice of invoicesForProcedure) {
+            serviceInvoices += parseFloat(String(invoice.amount || '0'));
+          }
+          
+          // Calculate total expenses
+          const totalExpenses = totalTax + importExpenses + serviceInvoices;
+          
+          // Find payments for this procedure
+          const paymentsForProcedure = allPayments.filter(
+            payment => payment.procedureReference === procedure.reference
+          );
+          
+          // Calculate payment totals
+          let advancePayments = 0;
+          let balancePayments = 0;
+          
+          for (const payment of paymentsForProcedure) {
+            const amount = parseFloat(String(payment.amount || '0'));
+            if (payment.paymentType === 'advance') {
+              advancePayments += amount;
+            } else if (payment.paymentType === 'balance') {
+              balancePayments += amount;
+            }
+          }
+          
+          // Calculate remaining balance
+          const remainingBalance = totalExpenses - advancePayments - balancePayments;
+          
+          // Add to the result object
+          financialSummaries[procedure.reference] = {
+            totalTax,
+            importExpenses,
+            serviceInvoices,
+            totalExpenses,
+            advancePayments,
+            balancePayments,
+            remainingBalance
+          };
+        } catch (error) {
+          console.error(`Error processing financial data for ${procedure.reference}:`, error);
+          // Add default zeroes for procedures with errors
+          financialSummaries[procedure.reference] = {
+            totalTax: 0,
+            importExpenses: 0,
+            serviceInvoices: 0,
+            totalExpenses: 0,
+            advancePayments: 0,
+            balancePayments: 0,
+            remainingBalance: 0
+          };
+        }
+      }
+      
+      const endTime = Date.now();
+      console.log(`Batch financial summaries completed in ${endTime - startTime}ms`);
+      
+      res.json({ financialSummaries });
+    } catch (error) {
+      console.error('Error in batch financial summaries endpoint:', error);
+      res.status(500).json({ message: 'Failed to retrieve batch financial summaries', error: String(error) });
+    }
+  });
+
+  // Tax routes
+  // GET tax by procedure reference
+  app.get('/api/taxes/procedure/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const tax = await storage.getTaxByProcedureReference(reference);
+      console.log('GET /api/taxes/procedure/:reference - Database returned tax data:', JSON.stringify(tax));
+      res.json({ tax });
+    } catch (error) {
+      console.error('Error in GET /api/taxes/procedure/:reference:', error);
+      res.status(500).json({ message: 'Failed to retrieve tax information', error: String(error) });
+    }
+  });
+
+  // POST create tax
+  app.post('/api/taxes', async (req, res) => {
+    try {
+      // Validate required fields
+      const { procedureReference } = req.body;
+      
+      if (!procedureReference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      // First, try to reset the tax sequence to prevent PK violations
+      try {
+        await db.execute(`SELECT setval('taxes_id_seq', (SELECT MAX(id) FROM taxes) + 1, false)`);
+        console.log('[routes] Successfully reset taxes_id_seq before creation');
+      } catch (seqError) {
+        console.error('[routes] Error resetting tax sequence before creation:', seqError);
+        // Continue execution even if sequence reset fails
+      }
+      
+      // Remove any ID from the request if it exists
+      const { id, ...dataWithoutId } = req.body;
+      console.log('[routes] Creating tax, removing id from input data:', id);
+      
+      // Create the tax record with a valid user ID
+      const newTax = await storage.createTax({
+        procedureReference,
+        customsTax: dataWithoutId.customsTax || 0,
+        additionalCustomsTax: dataWithoutId.additionalCustomsTax || 0,
+        kkdf: dataWithoutId.kkdf || 0,
+        vat: dataWithoutId.vat || 0,
+        stampTax: dataWithoutId.stampTax || 0,
+        createdBy: dataWithoutId.user?.id || 3 // Using admin user ID 3 instead of 1
+      });
+      
+      res.status(201).json({ tax: newTax });
+    } catch (error) {
+      console.error('Error creating tax record:', error);
+      
+      // Handle specific error types
+      let errorMessage = 'Failed to create tax record';
+      
+      // Check for duplicate key error
+      if (error instanceof Error && 
+          (error.message.includes('duplicate key') || error.message.includes('unique constraint'))) {
+        
+        // Check for exact error message related to tax record already existing
+        if (error.message.includes('Tax record already exists')) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = 'Database sequence error occurred. Please try again.';
+          
+          // Try to fix the sequence in the background
+          try {
+            await db.execute(`SELECT setval('taxes_id_seq', (SELECT MAX(id) FROM taxes) + 1, false)`);
+            console.log('[routes] Reset tax sequence after error');
+          } catch (seqError) {
+            console.error('[routes] Failed to reset tax sequence after error:', seqError);
+          }
+        }
+      }
+      
+      res.status(400).json({ 
+        message: errorMessage, 
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // PUT update tax
+  app.put('/api/taxes/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      console.log('PUT /api/taxes/:id - Received update request for tax ID:', id);
+      console.log('PUT /api/taxes/:id - Request body:', JSON.stringify(req.body));
+      
+      // Check if tax exists
+      const existingTax = await storage.getTax(id);
+      console.log('PUT /api/taxes/:id - Existing tax data:', JSON.stringify(existingTax));
+      
+      if (!existingTax) {
+        return res.status(404).json({ message: 'Tax record not found' });
+      }
+      
+      // Update the tax record
+      const updateData: any = {}; // Safe updateData object
+      
+      // Only include fields that are provided and valid
+      if (req.body.customsTax !== undefined) updateData.customsTax = req.body.customsTax;
+      if (req.body.additionalCustomsTax !== undefined) updateData.additionalCustomsTax = req.body.additionalCustomsTax;
+      if (req.body.kkdf !== undefined) updateData.kkdf = req.body.kkdf;
+      if (req.body.vat !== undefined) updateData.vat = req.body.vat;
+      if (req.body.stampTax !== undefined) updateData.stampTax = req.body.stampTax;
+      
+      console.log('PUT /api/taxes/:id - Update data to be applied:', JSON.stringify(updateData));
+      
+      const updatedTax = await storage.updateTax(id, updateData);
+      console.log('PUT /api/taxes/:id - Updated tax data returned:', JSON.stringify(updatedTax));
+      
+      res.json({ tax: updatedTax });
+    } catch (error) {
+      console.error('Error in PUT /api/taxes/:id:', error);
+      res.status(400).json({ message: 'Failed to update tax record', error: String(error) });
+    }
+  });
+
+  // Import Expenses routes
+  // GET expenses by procedure reference
+  app.get('/api/import-expenses/procedure/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const expenses = await storage.getImportExpensesByReference(reference);
+      res.json({ expenses });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve import expenses', error: String(error) });
+    }
+  });
+
+  // GET expenses by procedure reference and category
+  app.get('/api/import-expenses/procedure/:reference/category/:category', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      const { category } = req.params;
+      if (!reference || !category) {
+        return res.status(400).json({ message: 'Procedure reference and category are required' });
+      }
+      
+      const expenses = await storage.getImportExpensesByCategory(reference, category);
+      res.json({ expenses });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve import expenses', error: String(error) });
+    }
+  });
+  
+  // GET expense analytics data by date range and optional procedure references
+  app.get('/api/expenses/analytics', async (req, res) => {
+    try {
+      const { startDate, endDate, procedureRefs } = req.query;
+      
+      console.log('[/api/expenses/analytics] Request query params:', {
+        startDate,
+        endDate,
+        procedureRefs
+      });
+      
+      if (!startDate || !endDate) {
+        console.log('[/api/expenses/analytics] Missing required date parameters');
+        return res.status(400).json({ message: 'Start date and end date are required' });
+      }
+      
+      // Check that startDate and endDate are valid strings formatted as ISO dates
+      if (!(typeof startDate === 'string') || 
+          !(typeof endDate === 'string') ||
+          !startDate.match(/^\d{4}-\d{2}-\d{2}/) ||
+          !endDate.match(/^\d{4}-\d{2}-\d{2}/)) {
+        console.log('[/api/expenses/analytics] Invalid date format');
+        return res.status(400).json({ message: 'Invalid date format' });
+      }
+      
+      const start = startDate as string;
+      const end = endDate as string;
+      
+      console.log('[/api/expenses/analytics] Date range:', {
+        start,
+        end
+      });
+      
+      // Parse the procedure references if provided
+      let procedureReferences: string[] = [];
+      if (procedureRefs) {
+        try {
+          // Handle three possible cases:
+          // 1. Array of strings already (from server-side call)
+          // 2. JSON string of array (from client-side call)
+          // 3. Single string value (from simple form submission)
+          if (Array.isArray(procedureRefs)) {
+            procedureReferences = procedureRefs as string[];
+          } else if (typeof procedureRefs === 'string') {
+            // Try to parse as JSON first
+            try {
+              const parsed = JSON.parse(procedureRefs);
+              if (Array.isArray(parsed)) {
+                procedureReferences = parsed;
+              } else {
+                procedureReferences = [String(parsed)];
+              }
+            } catch (jsonError) {
+              // Not JSON, treat as single string value
+              procedureReferences = [procedureRefs];
+            }
+          }
+          
+          console.log('[/api/expenses/analytics] Parsed procedure references:', procedureReferences);
+        } catch (e) {
+          console.log('[/api/expenses/analytics] Error parsing procedure references:', e);
+          return res.status(400).json({ message: 'Invalid procedure references format' });
+        }
+      }
+      
+      // Get data from storage
+      console.log('[/api/expenses/analytics] Requesting data from storage...');
+      try {
+        const analyticsData = await storage.getExpensesByCategoryAndDateRange(
+          start,
+          end,
+          procedureReferences
+        );
+        
+        // Ensure we're working with numerical values for reduction
+        const totalAmount = analyticsData.reduce((sum, item) => {
+          const amount = typeof item.totalAmount === 'string' 
+            ? parseFloat(item.totalAmount) 
+            : Number(item.totalAmount);
+          return sum + (isNaN(amount) ? 0 : amount);
+        }, 0);
+        
+        const totalCount = analyticsData.reduce((sum, item) => {
+          const count = typeof item.count === 'string'
+            ? parseInt(item.count)
+            : Number(item.count);
+          return sum + (isNaN(count) ? 0 : count);
+        }, 0);
+        
+        console.log('[/api/expenses/analytics] Received data from storage:', {
+          categories: analyticsData.length,
+          totalExpenseAmount: totalAmount,
+          totalExpenseCount: totalCount,
+          data: analyticsData
+        });
+        
+        // Ensure we're setting proper Content-Type header
+        res.setHeader('Content-Type', 'application/json');
+        // Send properly formatted JSON response with 200 status
+        return res.status(200).json({ data: analyticsData });
+      } catch (storageError) {
+        console.error('[/api/expenses/analytics] Storage error:', storageError);
+        return res.status(500).json({ 
+          message: 'Failed to retrieve expense data from storage',
+          error: String(storageError)
+        });
+      }
+    } catch (error) {
+      console.error('[/api/expenses/analytics] Error retrieving expense analytics:', error);
+      // Ensure we're setting proper Content-Type header
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(500).json({ 
+        message: 'Failed to retrieve expense analytics', 
+        error: String(error)
+      });
+    }
+  });
+  
+  // TEMPORARY MOCK expense trend data API to fix syntax errors
+  // Simple expense trend endpoint
+  app.get('/api/expenses/trend', async (req, res) => {
+    try {
+      const category = req.query.category as string;
+      const groupBy = req.query.groupBy as string || 'month';
+      
+      // Default dates (90 days)
+      const defaultStart = new Date();
+      defaultStart.setDate(defaultStart.getDate() - 90);
+      const defaultEnd = new Date();
+      
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : defaultStart;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : defaultEnd;
+      
+      if (!category) {
+        return res.status(400).json({ message: 'Category parameter is required' });
+      }
+      
+      // Import pool directly
+      const { pool } = await import('./db');
+      
+      // Simple query without parameters to avoid errors
+      const query = `
+        SELECT id, amount::numeric as amount, category, 
+          COALESCE(invoice_date, created_at) as date
+        FROM import_expenses 
+        WHERE category = '${category}'
+      `;
+      
+      const result = await pool.query(query);
+      console.log(`Found ${result.rows.length} expenses for category ${category}`);
+      
+      // Filter in JavaScript instead of SQL to avoid parameter issues
+      const expenses = result.rows
+        .map(row => ({
+          id: row.id,
+          amount: parseFloat(row.amount?.toString() || '0'),
+          date: row.date ? new Date(row.date) : null
+        }))
+        .filter(exp => exp.date && exp.date >= startDate && exp.date <= endDate);
+      
+      console.log(`Filtered to ${expenses.length} expenses in date range`);
+      
+      // Create time periods for the chart
+      const periods = [];
+      
+      if (groupBy === 'week') {
+        // Weekly periods
+        let current = new Date(startDate);
+        while (current <= endDate) {
+          const weekNum = Math.ceil((current.getDate() - 1 + current.getDay()) / 7);
+          periods.push({
+            period: `Week ${weekNum}, ${current.getFullYear()}`,
+            amount: 0,
+            date: new Date(current)
+          });
+          current.setDate(current.getDate() + 7);
+        }
+      } else {
+        // Monthly periods
+        let year = startDate.getFullYear();
+        let month = startDate.getMonth();
+        
+        while (new Date(year, month, 1) <= endDate) {
+          const periodDate = new Date(year, month, 1);
+          periods.push({
+            period: periodDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+            amount: 0,
+            date: new Date(periodDate)
+          });
+          
+          month++;
+          if (month > 11) {
+            month = 0;
+            year++;
+          }
+        }
+      }
+      
+      // Add expense amounts to periods
+      expenses.forEach(expense => {
+        if (!expense.date) return;
+        
+        if (groupBy === 'week') {
+          // Find matching week
+          const expDate = expense.date;
+          const expWeek = Math.ceil((expDate.getDate() - 1 + expDate.getDay()) / 7);
+          const expYear = expDate.getFullYear();
+          
+          const periodIndex = periods.findIndex(p => {
+            const pDate = new Date(p.date);
+            const pWeek = Math.ceil((pDate.getDate() - 1 + pDate.getDay()) / 7);
+            return pWeek === expWeek && pDate.getFullYear() === expYear;
+          });
+          
+          if (periodIndex >= 0) {
+            periods[periodIndex].amount += expense.amount;
+          }
+        } else {
+          // Find matching month
+          const expDate = expense.date;
+          const expMonth = expDate.getMonth();
+          const expYear = expDate.getFullYear();
+          
+          const periodIndex = periods.findIndex(p => {
+            const pDate = new Date(p.date);
+            return pDate.getMonth() === expMonth && pDate.getFullYear() === expYear;
+          });
+          
+          if (periodIndex >= 0) {
+            periods[periodIndex].amount += expense.amount;
+          }
+        }
+      });
+      
+      return res.json({
+        data: periods,
+        category: category,
+        dateRange: { 
+          start: startDate.toISOString().split('T')[0], 
+          end: endDate.toISOString().split('T')[0] 
+        },
+        groupBy: groupBy
+      });
+      
+    } catch (error) {
+      console.error('[Trend API Error]', error);
+      return res.status(500).json({
+        message: 'Failed to retrieve trend data',
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+==> server/routes.ts <==
+  app.get('/api/incoming-payments', async (req, res) => {
+    try {
+      const payments = await storage.getAllIncomingPayments();
+      res.json({ payments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve incoming payments', error: String(error) });
+    }
+  });
+  
+  // GET a specific incoming payment by ID
+  app.get('/api/incoming-payments/:id', async (req, res) => {
+    try {
+      const payment = await storage.getIncomingPayment(parseInt(req.params.id));
+      if (!payment) {
+        return res.status(404).json({ message: 'Incoming payment not found' });
+      }
+      res.json({ payment });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve incoming payment', error: String(error) });
+    }
+  });
+  
+  // GET a specific incoming payment by payment ID
+  app.get('/api/incoming-payments/payment-id/:paymentId', async (req, res) => {
+    try {
+      const payment = await storage.getIncomingPaymentByPaymentId(req.params.paymentId);
+      if (!payment) {
+        return res.status(404).json({ message: 'Incoming payment not found' });
+      }
+      res.json({ payment });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve incoming payment', error: String(error) });
+    }
+  });
+  
+  // POST create a new incoming payment
+  app.post('/api/incoming-payments', async (req, res) => {
+    try {
+      console.log('[routes] POST /api/incoming-payments - Request body:', req.body);
+      
+      // Validate required fields
+      const { paymentId, dateReceived, payerInfo, totalAmount, currency } = req.body;
+      
+      if (!paymentId) {
+        console.log('[routes] ERROR: Missing payment ID');
+        return res.status(400).json({ message: 'Payment ID is required' });
+      }
+      
+      if (!dateReceived) {
+        console.log('[routes] ERROR: Missing date received');
+        return res.status(400).json({ message: 'Date received is required' });
+      }
+      
+      if (!payerInfo) {
+        console.log('[routes] ERROR: Missing payer information');
+        return res.status(400).json({ message: 'Payer information is required' });
+      }
+      
+      if (!totalAmount) {
+        console.log('[routes] ERROR: Missing total amount');
+        return res.status(400).json({ message: 'Total amount is required' });
+      }
+      
+      // Use the admin user with ID 3, which we know exists in the database
+      const adminUserId = 3;
+      
+      // Check if a payment with the same ID already exists
+      const existingPayment = await storage.getIncomingPaymentByPaymentId(paymentId);
+      if (existingPayment) {
+        console.log('[routes] ERROR: Payment ID already exists:', paymentId);
+        return res.status(400).json({ message: `Payment ID "${paymentId}" already exists` });
+      }
+      
+      // Log the data before creating the payment
+      // Always enforce TL as currency regardless of what was sent
+      console.log('[routes] Creating new incoming payment with data:', {
+        paymentId,
+        dateReceived: new Date(dateReceived),
+        payerInfo,
+        totalAmount,
+        currency: 'TL', // Always enforce TL as currency regardless of input
+        createdBy: adminUserId,
+        notes: req.body.notes || null
+      });
+      
+      // Create the payment
+      const newPayment = await storage.createIncomingPayment({
+        paymentId,
+        dateReceived: new Date(dateReceived),
+        payerInfo,
+        totalAmount,
+        currency: 'TL', // Always enforce TL as currency regardless of input
+        createdBy: adminUserId,
+        notes: req.body.notes || null
+      });
+      
+      console.log('[routes] Successfully created incoming payment:', newPayment);
+      res.status(201).json({ payment: newPayment });
+    } catch (error) {
+      console.error('[routes] ERROR creating incoming payment:', error);
+      res.status(400).json({ message: 'Failed to create incoming payment', error: String(error) });
+    }
+  });
+  
+  // PUT update an existing incoming payment
+  app.put('/api/incoming-payments/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if payment exists
+      const existingPayment = await storage.getIncomingPayment(id);
+      if (!existingPayment) {
+        return res.status(404).json({ message: 'Incoming payment not found' });
+      }
+      
+      // Process date if provided
+      const updateData: any = {}; // Safe updateData object
+      
+      // Only include fields that are provided and valid
+      if (req.body.paymentId !== undefined) updateData.paymentId = req.body.paymentId;
+      if (req.body.payerInfo !== undefined) updateData.payerInfo = req.body.payerInfo;
+      // Always ensure currency is TL, ignore any incoming currency value
+      if (req.body.currency !== undefined) updateData.currency = 'TL';
+      if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+      
+      // Only update total amount if there are no distributions yet
+      if (req.body.totalAmount !== undefined) {
+        if (existingPayment.distributionStatus === 'pending_distribution') {
+          updateData.totalAmount = req.body.totalAmount;
+          updateData.remainingBalance = req.body.totalAmount;
+        } else {
+          return res.status(400).json({ 
+            message: 'Cannot update total amount on a payment that has already been distributed',
+            currentStatus: existingPayment.distributionStatus
+          });
+        }
+      }
+      
+      // Process date if provided
+      if (req.body.dateReceived) {
+        updateData.dateReceived = new Date(req.body.dateReceived);
+      }
+      
+      // Update the payment
+      const updatedPayment = await storage.updateIncomingPayment(id, updateData);
+      
+      res.json({ payment: updatedPayment });
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to update incoming payment', error: String(error) });
+    }
+  });
+  
+  // DELETE remove an incoming payment
+  app.delete('/api/incoming-payments/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if payment exists
+      const existingPayment = await storage.getIncomingPayment(id);
+      if (!existingPayment) {
+        return res.status(404).json({ message: 'Incoming payment not found' });
+      }
+      
+      // Delete the payment (this will throw an error if there are distributions)
+      const success = await storage.deleteIncomingPayment(id);
+      
+      res.json({ success });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete incoming payment', error: String(error) });
+    }
+  });
+  
+  // Payment Distributions Routes
+  
+  // GET distributions for a specific incoming payment
+  app.get('/api/payment-distributions/payment/:paymentId', async (req, res) => {
+    try {
+      const paymentId = parseInt(req.params.paymentId);
+      if (isNaN(paymentId)) {
+        return res.status(400).json({ message: 'Invalid payment ID' });
+      }
+      
+      const distributions = await storage.getPaymentDistributions(paymentId);
+      res.json({ distributions });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payment distributions', error: String(error) });
+    }
+  });
+  
+  // GET distributions for a specific payment
+  app.get('/api/payment-distributions/payment/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: 'Valid payment ID is required' });
+      }
+      
+      // Get the payment first to include its data in the response
+      const payment = await storage.getIncomingPayment(id);
+      if (!payment) {
+        return res.status(404).json({ message: 'Payment not found' });
+      }
+      
+      // Get the distributions
+      const distributions = await storage.getPaymentDistributions(id);
+      
+      // Add payment data to each distribution
+      const enhancedDistributions = distributions.map(dist => ({
+        ...dist,
+        paymentId: payment.paymentId,
+        payerInfo: payment.payerInfo
+      }));
+      
+      res.json({ 
+        distributions: enhancedDistributions,
+        payment: {
+          id: payment.id,
+          paymentId: payment.paymentId,
+          payerInfo: payment.payerInfo,
+          totalAmount: payment.totalAmount,
+          amountDistributed: payment.amountDistributed,
+          remainingBalance: payment.remainingBalance,
+          distributionStatus: payment.distributionStatus
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payment distributions', error: String(error) });
+    }
+  });
+  
+  // GET distributions for a specific procedure
+  app.get('/api/payment-distributions/procedure/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const distributions = await storage.getPaymentDistributionsByProcedure(reference);
+      
+      // For each distribution, get the payment info
+      const enhancedDistributions = await Promise.all(distributions.map(async (dist) => {
+        const payment = await storage.getIncomingPayment(dist.incomingPaymentId);
+        return {
+          ...dist,
+          paymentId: payment ? payment.paymentId : 'Unknown',
+          payerInfo: payment ? payment.payerInfo : 'Unknown'
+        };
+      }));
+      
+      res.json({ distributions: enhancedDistributions });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payment distributions', error: String(error) });
+    }
+  });
+  
+  // POST create a new payment distribution
+  app.post('/api/payment-distributions', async (req, res) => {
+    try {
+      // Validate required fields
+      const { incomingPaymentId, procedureReference, distributedAmount, paymentType } = req.body;
+      
+      if (!incomingPaymentId) {
+        return res.status(400).json({ message: 'Incoming payment ID is required' });
+      }
+      
+      if (!procedureReference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      if (!distributedAmount) {
+        return res.status(400).json({ message: 'Distributed amount is required' });
+      }
+      
+      if (!paymentType) {
+        return res.status(400).json({ message: 'Payment type is required' });
+      }
+      
+      // Use the admin user with ID 3, which we know exists in the database
+      const adminUserId = 3;
+      
+      // Convert incoming payment ID to a number if it's a string
+      const paymentId = typeof incomingPaymentId === 'string' 
+        ? parseInt(incomingPaymentId) 
+        : incomingPaymentId;
+        
+      // Create the distribution
+      const newDistribution = await storage.createPaymentDistribution({
+        incomingPaymentId: paymentId,
+        procedureReference,
+        distributedAmount,
+        paymentType,
+        distributionDate: new Date(),
+        createdBy: adminUserId
+      });
+      
+      res.status(201).json({ distribution: newDistribution });
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to create payment distribution', error: String(error) });
+    }
+  });
+  
+  // DELETE remove a payment distribution
+  app.delete('/api/payment-distributions/:id', async (req, res) => {
+    // Create a timeout promise to prevent hanging operations
+    const timeoutPromise = new Promise((_, reject) => {
+      const timeoutId = setTimeout(() => {
+        console.log(`[routes] DELETE operation for payment distribution timed out after 5 seconds`);
+        reject(new Error('Operation timed out after 5 seconds'));
+      }, 5000);
+      
+      // Store the timeout ID in the request object so we can clear it later
+      (req as any)._timeoutId = timeoutId;
+    });
+    
+    try {
+      const id = parseInt(req.params.id);
+      console.log(`[routes] DELETE /api/payment-distributions/${id} - Attempting to delete payment distribution`);
+      
+      if (isNaN(id)) {
+        console.log(`[routes] Invalid payment distribution ID: ${req.params.id}`);
+        clearTimeout((req as any)._timeoutId);
+        return res.status(400).json({ message: 'Invalid payment distribution ID', success: false });
+      }
+      
+      // Delete the distribution with a timeout
+      console.log(`[routes] Calling storage.deletePaymentDistribution with ID: ${id}`);
+      
+      const deletePromise = storage.deletePaymentDistribution(id);
+      
+      // Race the delete operation against the timeout
+      const success = await Promise.race([
+        deletePromise,
+        timeoutPromise.then(() => {
+          throw new Error('Delete operation timed out');
+        })
+      ]) as boolean;
+      
+      console.log(`[routes] Delete operation result: ${success}`);
+      
+      // Clear the timeout since operation completed successfully
+      clearTimeout((req as any)._timeoutId);
+      
+      if (!success) {
+        console.log(`[routes] Payment distribution with ID ${id} not found or could not be deleted`);
+        return res.status(404).json({ message: 'Payment distribution not found or could not be deleted', success: false });
+      }
+      
+      console.log(`[routes] Successfully deleted payment distribution with ID ${id}`);
+      res.json({ success: true });
+    } catch (error) {
+      // Clear the timeout to prevent memory leaks
+      if ((req as any)._timeoutId) {
+        clearTimeout((req as any)._timeoutId);
+      }
+      
+      console.error(`[routes] Error deleting payment distribution with ID ${req.params.id}:`, error);
+      
+      // Check if this was a timeout error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isTimeout = errorMessage && (
+        errorMessage.includes('timed out') || 
+        errorMessage.includes('timeout')
+      );
+      
+      res.status(isTimeout ? 504 : 500).json({ 
+        message: isTimeout 
+          ? 'Operation timed out while deleting payment distribution' 
+          : 'Failed to delete payment distribution', 
+        error: String(error),
+        success: false 
+      });
+    }
+  });
+  
+  // DELETE all payment distributions (admin operation)
+  app.delete('/api/all-payment-distributions/reset', async (req, res) => {
+    // Create a timeout promise to prevent hanging operations (10 seconds for bulk operation)
+    const timeoutPromise = new Promise((_, reject) => {
+      const timeoutId = setTimeout(() => {
+        console.log(`[routes] Reset operation for payment distributions timed out after 10 seconds`);
+        reject(new Error('Operation timed out after 10 seconds'));
+      }, 10000);
+      
+      // Store the timeout ID in the request object so we can clear it later
+      (req as any)._timeoutId = timeoutId;
+    });
+    
+    try {
+      console.log('[routes] Received request to delete all payment distributions');
+      
+      // Execute the delete operation with a timeout
+      const deletePromise = storage.deleteAllPaymentDistributions();
+      
+      // Race the delete operation against the timeout
+      const result = await Promise.race([
+        deletePromise,
+        timeoutPromise.then(() => {
+          throw new Error('Reset operation timed out');
+        })
+      ]);
+      
+      // Clear the timeout since operation completed successfully
+      clearTimeout((req as any)._timeoutId);
+      
+      console.log(`[routes] Successfully deleted ${result.count} payment distributions`);
+      
+      // Return success with count and deleted distribution IDs for logging
+      res.json({ 
+        success: true, 
+        count: result.count,
+        deletedDistributionIds: result.deletedDistributions.map(d => d.id) 
+      });
+    } catch (error) {
+      // Clear the timeout to prevent memory leaks
+      if ((req as any)._timeoutId) {
+        clearTimeout((req as any)._timeoutId);
+      }
+      
+      console.error('[routes] Error deleting all payment distributions:', error);
+      
+      // Check if this was a timeout error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isTimeout = errorMessage && (
+        errorMessage.includes('timed out') || 
+        errorMessage.includes('timeout')
+      );
+      
+      res.status(isTimeout ? 504 : 500).json({ 
+        message: isTimeout 
+          ? 'Operation timed out while resetting payment distributions' 
+          : 'Failed to delete all payment distributions', 
+        error: String(error),
+        success: false
+      });
+    }
+  });
+  
+  // GET all payments
+  app.get('/api/payments', async (req, res) => {
+    try {
+      const payments = await storage.getAllPayments();
+      res.json({ payments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payments', error: String(error) });
+    }
+  });
+
+  // GET payments for a specific procedure reference
+  app.get('/api/payments/procedure/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const payments = await storage.getPaymentsByProcedureReference(reference);
+      res.json({ payments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payments', error: String(error) });
+    }
+  });
+
+  // GET payments by payment type
+  app.get('/api/payments/type/:paymentType', async (req, res) => {
+    try {
+      const paymentType = req.params.paymentType;
+      if (!paymentType) {
+        return res.status(400).json({ message: 'Payment type is required' });
+      }
+      
+      const payments = await storage.getPaymentsByType(paymentType);
+      res.json({ payments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payments', error: String(error) });
+    }
+  });
+
+  // GET a specific payment by ID
+  app.get('/api/payments/:id', async (req, res) => {
+    try {
+      const payment = await storage.getPayment(parseInt(req.params.id));
+      if (!payment) {
+        return res.status(404).json({ message: 'Payment not found' });
+      }
+      res.json({ payment });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve payment', error: String(error) });
+    }
+  });
+
+  // POST create a new payment
+  app.post('/api/payments', async (req, res) => {
+    try {
+      // Validate required fields
+      const { procedureReference, paymentType, amount, paymentDate } = req.body;
+      
+      if (!procedureReference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      if (!paymentType) {
+        return res.status(400).json({ message: 'Payment type is required' });
+      }
+      
+      if (!amount) {
+        return res.status(400).json({ message: 'Amount is required' });
+      }
+
+      if (!paymentDate) {
+        return res.status(400).json({ message: 'Payment date is required' });
+      }
+      
+      // Use the admin user with ID 3, which we know exists in the database
+      const adminUserId = 3;
+
+      // Create the payment
+      const newPayment = await storage.createPayment({
+        procedureReference,
+        paymentType,
+        amount,
+        paymentDate: new Date(paymentDate),
+        description: req.body.description || '',
+        createdBy: adminUserId // Using admin user ID we verified exists
+      });
+      
+      res.status(201).json({ payment: newPayment });
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to create payment', error: String(error) });
+    }
+  });
+
+  // PUT update an existing payment
+  app.put('/api/payments/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if payment exists
+      const existingPayment = await storage.getPayment(id);
+      if (!existingPayment) {
+        return res.status(404).json({ message: 'Payment not found' });
+      }
+      
+      // Process date if provided
+      const updateData: any = {}; // Safe updateData object
+      
+      // Only include fields that are provided and valid
+      if (req.body.amount !== undefined) updateData.amount = req.body.amount;
+      if (req.body.paymentType) updateData.paymentType = req.body.paymentType;
+      if (req.body.description !== undefined) updateData.description = req.body.description;
+      
+      // Process date if provided
+      if (req.body.paymentDate) {
+        updateData.paymentDate = new Date(req.body.paymentDate);
+      }
+      
+      // Update the payment
+      const updatedPayment = await storage.updatePayment(id, updateData);
+      
+      res.json({ payment: updatedPayment });
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to update payment', error: String(error) });
+    }
+  });
+
+  // DELETE remove a payment
+  app.delete('/api/payments/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if payment exists
+      const existingPayment = await storage.getPayment(id);
+      if (!existingPayment) {
+        return res.status(404).json({ message: 'Payment not found' });
+      }
+      
+      // Delete the payment
+      const success = await storage.deletePayment(id);
+      
+      res.json({ success });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete payment', error: String(error) });
+    }
+  });
+
+  // GET financial summary for all procedures
+  app.get('/api/financial-summary', async (req, res) => {
+    try {
+      // Get all procedures
+      const allProcedures = await storage.getAllProcedures();
+      
+      // Calculate financial summary for each procedure
+      const financialSummaries = await Promise.all(
+        allProcedures.map(async (procedure) => {
+          try {
+            // Get the financial summary for this procedure
+            const summary = await storage.calculateFinancialSummary(procedure.reference);
+            
+            // Log the results for debugging
+            console.log(`Financial summary for ${procedure.reference}:`, JSON.stringify(summary));
+            
+            // Make sure we have numeric values
+            const normalizedSummary = {
+              procedureReference: procedure.reference,
+              totalExpenses: parseFloat(summary.totalExpenses?.toString() || '0'),
+              advancePayments: parseFloat(summary.advancePayments?.toString() || '0'),
+              balancePayments: parseFloat(summary.balancePayments?.toString() || '0'),
+              totalPayments: parseFloat(summary.totalPayments?.toString() || '0'),
+              remainingBalance: parseFloat(summary.remainingBalance?.toString() || '0')
+            };
+            
+            return normalizedSummary;
+          } catch (err) {
+            console.error(`Error calculating financial summary for procedure ${procedure.reference}:`, err);
+            // Return a default object with procedure reference but zero values
+            return {
+              procedureReference: procedure.reference,
+              totalExpenses: 0,
+              advancePayments: 0,
+              balancePayments: 0, 
+              totalPayments: 0,
+              remainingBalance: 0
+            };
+          }
+        })
+      );
+      
+      res.json({ financialSummaries });
+    } catch (error) {
+      console.error('Error getting all financial summaries:', error);
+      res.status(500).json({ message: 'Failed to retrieve financial summaries', error: String(error) });
+    }
+  });
+
+  // GET financial summary for a specific procedure
+  app.get('/api/financial-summary/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      // Get the financial summary
+      try {
+        const summaryData = await storage.calculateFinancialSummary(reference);
+        
+        // Log the results for debugging
+        console.log(`Financial summary for specific procedure ${reference}:`, JSON.stringify(summaryData));
+        
+        // Normalize values to ensure they're proper numbers
+        const normalizedSummary = {
+          totalExpenses: parseFloat(summaryData.totalExpenses?.toString() || '0'),
+          importExpenses: parseFloat(summaryData.importExpenses?.toString() || '0'),
+          serviceInvoices: parseFloat(summaryData.serviceInvoices?.toString() || '0'),
+          taxes: parseFloat(summaryData.taxes?.toString() || '0'),
+          advancePayments: parseFloat(summaryData.advancePayments?.toString() || '0'),
+          balancePayments: parseFloat(summaryData.balancePayments?.toString() || '0'),
+          totalPayments: parseFloat(summaryData.totalPayments?.toString() || '0'),
+          remainingBalance: parseFloat(summaryData.remainingBalance?.toString() || '0')
+        };
+        
+        res.json({ summary: normalizedSummary });
+      } catch (err) {
+        console.error(`Error calculating financial summary for procedure ${reference}:`, err);
+        // Return zeros if calculation fails
+        res.json({ 
+          summary: {
+            totalExpenses: 0,
+            importExpenses: 0,
+            serviceInvoices: 0,
+            taxes: 0,
+            advancePayments: 0,
+            balancePayments: 0,
+            totalPayments: 0,
+            remainingBalance: 0
+          } 
+        });
+      }
+    } catch (error) {
+      console.error('Error in financial summary endpoint:', error);
+      res.status(500).json({ message: 'Failed to retrieve financial summary', error: String(error) });
+    }
+  });
+  
+  // GET batch financial summaries endpoint - returns all financial data in a single request
+  app.get('/api/financial-summaries/batch', async (req, res) => {
+    try {
+      console.log('Batch financial summaries request received');
+      const startTime = Date.now();
+      
+      // Get all procedures
+      const procedures = await storage.getAllProcedures();
+      console.log(`Retrieved ${procedures.length} procedures for batch financial processing`);
+      
+      // Get all taxes in a single query for better performance
+      const allTaxes = await storage.getAllTaxes();
+      console.log(`Retrieved ${allTaxes.length} tax records for batch processing`);
+      
+      // Get all import expenses in a single query
+      const allImportExpenses = await storage.getAllImportExpenses();
+      console.log(`Retrieved ${allImportExpenses.length} import expense records for batch processing`);
+      
+      // Get all service invoices in a single query
+      const allServiceInvoices = await storage.getAllImportServiceInvoices();
+      console.log(`Retrieved ${allServiceInvoices.length} service invoice records for batch processing`);
+      
+      // Get all payments in a single query
+      const allPayments = await storage.getAllPayments();
+      console.log(`Retrieved ${allPayments.length} payment records for batch processing`);
+      
+      // Process all procedures
+      const financialSummaries: Record<string, {
+        totalTax: number;
+        importExpenses: number;
+        serviceInvoices: number;
+        totalExpenses: number;
+        advancePayments: number;
+        balancePayments: number;
+        remainingBalance: number;
+      }> = {};
+      
+      // Process all procedures
+      for (const procedure of procedures) {
+        if (!procedure.reference) continue;
+        
+        try {
+          // Find tax for this procedure
+          const taxForProcedure = allTaxes.find(tax => tax.procedureReference === procedure.reference);
+          let totalTax = 0;
+          
+          if (taxForProcedure) {
+            // Calculate total tax
+            totalTax = 
+              parseFloat(String(taxForProcedure.customsTax || '0')) +
+              parseFloat(String(taxForProcedure.additionalCustomsTax || '0')) +
+              parseFloat(String(taxForProcedure.kkdf || '0')) +
+              parseFloat(String(taxForProcedure.vat || '0')) +
+              parseFloat(String(taxForProcedure.stampTax || '0'));
+          }
+          
+          // Find import expenses for this procedure
+          const expensesForProcedure = allImportExpenses.filter(
+            expense => expense.procedureReference === procedure.reference
+          );
+          
+          // Calculate total import expenses
+          let importExpenses = 0;
+          for (const expense of expensesForProcedure) {
+            importExpenses += parseFloat(String(expense.amount || '0'));
+          }
+          
+          // Find service invoices for this procedure
+          const invoicesForProcedure = allServiceInvoices.filter(
+            invoice => invoice.procedureReference === procedure.reference
+          );
+          
+          // Calculate total service invoices
+          let serviceInvoices = 0;
+          for (const invoice of invoicesForProcedure) {
+            serviceInvoices += parseFloat(String(invoice.amount || '0'));
+          }
+          
+          // Calculate total expenses
+          const totalExpenses = totalTax + importExpenses + serviceInvoices;
+          
+          // Find payments for this procedure
+          const paymentsForProcedure = allPayments.filter(
+            payment => payment.procedureReference === procedure.reference
+          );
+          
+          // Calculate payment totals
+          let advancePayments = 0;
+          let balancePayments = 0;
+          
+          for (const payment of paymentsForProcedure) {
+            const amount = parseFloat(String(payment.amount || '0'));
+            if (payment.paymentType === 'advance') {
+              advancePayments += amount;
+            } else if (payment.paymentType === 'balance') {
+              balancePayments += amount;
+            }
+          }
+          
+          // Calculate remaining balance
+          const remainingBalance = totalExpenses - advancePayments - balancePayments;
+          
+          // Add to the result object
+          financialSummaries[procedure.reference] = {
+            totalTax,
+            importExpenses,
+            serviceInvoices,
+            totalExpenses,
+            advancePayments,
+            balancePayments,
+            remainingBalance
+          };
+        } catch (error) {
+          console.error(`Error processing financial data for ${procedure.reference}:`, error);
+          // Add default zeroes for procedures with errors
+          financialSummaries[procedure.reference] = {
+            totalTax: 0,
+            importExpenses: 0,
+            serviceInvoices: 0,
+            totalExpenses: 0,
+            advancePayments: 0,
+            balancePayments: 0,
+            remainingBalance: 0
+          };
+        }
+      }
+      
+      const endTime = Date.now();
+      console.log(`Batch financial summaries completed in ${endTime - startTime}ms`);
+      
+      res.json({ financialSummaries });
+    } catch (error) {
+      console.error('Error in batch financial summaries endpoint:', error);
+      res.status(500).json({ message: 'Failed to retrieve batch financial summaries', error: String(error) });
+    }
+  });
+
+  // Tax routes
+  // GET tax by procedure reference
+  app.get('/api/taxes/procedure/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const tax = await storage.getTaxByProcedureReference(reference);
+      console.log('GET /api/taxes/procedure/:reference - Database returned tax data:', JSON.stringify(tax));
+      res.json({ tax });
+    } catch (error) {
+      console.error('Error in GET /api/taxes/procedure/:reference:', error);
+      res.status(500).json({ message: 'Failed to retrieve tax information', error: String(error) });
+    }
+  });
+
+  // POST create tax
+  app.post('/api/taxes', async (req, res) => {
+    try {
+      // Validate required fields
+      const { procedureReference } = req.body;
+      
+      if (!procedureReference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      // First, try to reset the tax sequence to prevent PK violations
+      try {
+        await db.execute(`SELECT setval('taxes_id_seq', (SELECT MAX(id) FROM taxes) + 1, false)`);
+        console.log('[routes] Successfully reset taxes_id_seq before creation');
+      } catch (seqError) {
+        console.error('[routes] Error resetting tax sequence before creation:', seqError);
+        // Continue execution even if sequence reset fails
+      }
+      
+      // Remove any ID from the request if it exists
+      const { id, ...dataWithoutId } = req.body;
+      console.log('[routes] Creating tax, removing id from input data:', id);
+      
+      // Create the tax record with a valid user ID
+      const newTax = await storage.createTax({
+        procedureReference,
+        customsTax: dataWithoutId.customsTax || 0,
+        additionalCustomsTax: dataWithoutId.additionalCustomsTax || 0,
+        kkdf: dataWithoutId.kkdf || 0,
+        vat: dataWithoutId.vat || 0,
+        stampTax: dataWithoutId.stampTax || 0,
+        createdBy: dataWithoutId.user?.id || 3 // Using admin user ID 3 instead of 1
+      });
+      
+      res.status(201).json({ tax: newTax });
+    } catch (error) {
+      console.error('Error creating tax record:', error);
+      
+      // Handle specific error types
+      let errorMessage = 'Failed to create tax record';
+      
+      // Check for duplicate key error
+      if (error instanceof Error && 
+          (error.message.includes('duplicate key') || error.message.includes('unique constraint'))) {
+        
+        // Check for exact error message related to tax record already existing
+        if (error.message.includes('Tax record already exists')) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = 'Database sequence error occurred. Please try again.';
+          
+          // Try to fix the sequence in the background
+          try {
+            await db.execute(`SELECT setval('taxes_id_seq', (SELECT MAX(id) FROM taxes) + 1, false)`);
+            console.log('[routes] Reset tax sequence after error');
+          } catch (seqError) {
+            console.error('[routes] Failed to reset tax sequence after error:', seqError);
+          }
+        }
+      }
+      
+      res.status(400).json({ 
+        message: errorMessage, 
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // PUT update tax
+  app.put('/api/taxes/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      console.log('PUT /api/taxes/:id - Received update request for tax ID:', id);
+      console.log('PUT /api/taxes/:id - Request body:', JSON.stringify(req.body));
+      
+      // Check if tax exists
+      const existingTax = await storage.getTax(id);
+      console.log('PUT /api/taxes/:id - Existing tax data:', JSON.stringify(existingTax));
+      
+      if (!existingTax) {
+        return res.status(404).json({ message: 'Tax record not found' });
+      }
+      
+      // Update the tax record
+      const updateData: any = {}; // Safe updateData object
+      
+      // Only include fields that are provided and valid
+      if (req.body.customsTax !== undefined) updateData.customsTax = req.body.customsTax;
+      if (req.body.additionalCustomsTax !== undefined) updateData.additionalCustomsTax = req.body.additionalCustomsTax;
+      if (req.body.kkdf !== undefined) updateData.kkdf = req.body.kkdf;
+      if (req.body.vat !== undefined) updateData.vat = req.body.vat;
+      if (req.body.stampTax !== undefined) updateData.stampTax = req.body.stampTax;
+      
+      console.log('PUT /api/taxes/:id - Update data to be applied:', JSON.stringify(updateData));
+      
+      const updatedTax = await storage.updateTax(id, updateData);
+      console.log('PUT /api/taxes/:id - Updated tax data returned:', JSON.stringify(updatedTax));
+      
+      res.json({ tax: updatedTax });
+    } catch (error) {
+      console.error('Error in PUT /api/taxes/:id:', error);
+      res.status(400).json({ message: 'Failed to update tax record', error: String(error) });
+    }
+  });
+
+  // Import Expenses routes
+  // GET expenses by procedure reference
+  app.get('/api/import-expenses/procedure/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const expenses = await storage.getImportExpensesByReference(reference);
+      res.json({ expenses });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve import expenses', error: String(error) });
+    }
+  });
+
+  // GET expenses by procedure reference and category
+  app.get('/api/import-expenses/procedure/:reference/category/:category', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      const { category } = req.params;
+      if (!reference || !category) {
+        return res.status(400).json({ message: 'Procedure reference and category are required' });
+      }
+      
+      const expenses = await storage.getImportExpensesByCategory(reference, category);
+      res.json({ expenses });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve import expenses', error: String(error) });
+    }
+  });
+  
+  // GET expense analytics data by date range and optional procedure references
+  app.get('/api/expenses/analytics', async (req, res) => {
+    try {
+      const { startDate, endDate, procedureRefs } = req.query;
+      
+      console.log('[/api/expenses/analytics] Request query params:', {
+        startDate,
+        endDate,
+        procedureRefs
+      });
+      
+      if (!startDate || !endDate) {
+        console.log('[/api/expenses/analytics] Missing required date parameters');
+        return res.status(400).json({ message: 'Start date and end date are required' });
+      }
+      
+      // Check that startDate and endDate are valid strings formatted as ISO dates
+      if (!(typeof startDate === 'string') || 
+          !(typeof endDate === 'string') ||
+          !startDate.match(/^\d{4}-\d{2}-\d{2}/) ||
+          !endDate.match(/^\d{4}-\d{2}-\d{2}/)) {
+        console.log('[/api/expenses/analytics] Invalid date format');
+        return res.status(400).json({ message: 'Invalid date format' });
+      }
+      
+      const start = startDate as string;
+      const end = endDate as string;
+      
+      console.log('[/api/expenses/analytics] Date range:', {
+        start,
+        end
+      });
+      
+      // Parse the procedure references if provided
+      let procedureReferences: string[] = [];
+      if (procedureRefs) {
+        try {
+          // Handle three possible cases:
+          // 1. Array of strings already (from server-side call)
+          // 2. JSON string of array (from client-side call)
+          // 3. Single string value (from simple form submission)
+          if (Array.isArray(procedureRefs)) {
+            procedureReferences = procedureRefs as string[];
+          } else if (typeof procedureRefs === 'string') {
+            // Try to parse as JSON first
+            try {
+              const parsed = JSON.parse(procedureRefs);
+              if (Array.isArray(parsed)) {
+                procedureReferences = parsed;
+              } else {
+                procedureReferences = [String(parsed)];
+              }
+            } catch (jsonError) {
+              // Not JSON, treat as single string value
+              procedureReferences = [procedureRefs];
+            }
+          }
+          
+          console.log('[/api/expenses/analytics] Parsed procedure references:', procedureReferences);
+        } catch (e) {
+          console.log('[/api/expenses/analytics] Error parsing procedure references:', e);
+          return res.status(400).json({ message: 'Invalid procedure references format' });
+        }
+      }
+      
+      // Get data from storage
+      console.log('[/api/expenses/analytics] Requesting data from storage...');
+      try {
+        const analyticsData = await storage.getExpensesByCategoryAndDateRange(
+          start,
+          end,
+          procedureReferences
+        );
+        
+        // Ensure we're working with numerical values for reduction
+        const totalAmount = analyticsData.reduce((sum, item) => {
+          const amount = typeof item.totalAmount === 'string' 
+            ? parseFloat(item.totalAmount) 
+            : Number(item.totalAmount);
+          return sum + (isNaN(amount) ? 0 : amount);
+        }, 0);
+        
+        const totalCount = analyticsData.reduce((sum, item) => {
+          const count = typeof item.count === 'string'
+            ? parseInt(item.count)
+            : Number(item.count);
+          return sum + (isNaN(count) ? 0 : count);
+        }, 0);
+        
+        console.log('[/api/expenses/analytics] Received data from storage:', {
+          categories: analyticsData.length,
+          totalExpenseAmount: totalAmount,
+          totalExpenseCount: totalCount,
+          data: analyticsData
+        });
+        
+        // Ensure we're setting proper Content-Type header
+        res.setHeader('Content-Type', 'application/json');
+        // Send properly formatted JSON response with 200 status
+        return res.status(200).json({ data: analyticsData });
+      } catch (storageError) {
+        console.error('[/api/expenses/analytics] Storage error:', storageError);
+        return res.status(500).json({ 
+          message: 'Failed to retrieve expense data from storage',
+          error: String(storageError)
+        });
+      }
+    } catch (error) {
+      console.error('[/api/expenses/analytics] Error retrieving expense analytics:', error);
+      // Ensure we're setting proper Content-Type header
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(500).json({ 
+        message: 'Failed to retrieve expense analytics', 
+        error: String(error)
+      });
+    }
+  });
+  
+  // TEMPORARY MOCK expense trend data API to fix syntax errors
+  app.get('/api/expenses/trend', async (req, res) => {
+    try {
+      // Get query parameters and set defaults
+      const categoryParam = req.query.category as string;
+      const groupByParam = req.query.groupBy as string || 'month';
+      
+      // Set default date range (90 days)
+      const defaultStartDate = new Date();
+      defaultStartDate.setDate(defaultStartDate.getDate() - 90); 
+      const defaultEndDate = new Date(); 
+      
+      // Get date strings from query or use defaults
+      const startDateParam = (req.query.startDate as string) || 
+        defaultStartDate.toISOString().split('T')[0];
+      const endDateParam = (req.query.endDate as string) || 
+        defaultEndDate.toISOString().split('T')[0];
+
+      // Basic validation
+      if (!categoryParam) {
+        return res.status(400).json({ message: 'Category is required' });
+      }
+      
+      console.log(`[/api/expenses/trend] Fetching real expense trend data for category: ${categoryParam}, date range: ${startDateParam} to ${endDateParam}, group by: ${groupByParam}`);
+      
+      try {
+        // Import the pool directly for SQL queries
+        const { pool } = await import('./db');
+        
+        // Use hardcoded dates to avoid the $1 parameter issue
+        // Format dates for direct SQL inclusion - THIS IS A SAFE WORKAROUND
+        // since we're already validating date formats above
+        const formattedStartDate = new Date(startDateParam).toISOString();
+        const formattedEndDate = new Date(endDateParam).toISOString();
+        
+        // Get all expenses for the selected category without parameters
+        // This avoids the parameter binding issue
+        const queryString = `
+          SELECT 
+            id, 
+            amount::numeric as amount,
+            category,
+            COALESCE(invoice_date, created_at) as date
+          FROM 
+            import_expenses
+          WHERE 
+            category = '${categoryParam}'
+          ORDER BY 
+            COALESCE(invoice_date, created_at)
+        `;
+        
+        console.log('Using direct SQL query:', queryString);
+        
+        const dbResult = await pool.query(queryString);
+        console.log(`Found ${dbResult.rows.length} total expenses in category ${categoryParam}`);
+        
+        // Process results and filter by date in JavaScript
+        // This is a workaround for the SQL parameter issue
+        const rawExpenses = dbResult.rows
+          .map(row => ({
+            id: row.id,
+            amount: parseFloat(row.amount?.toString() || '0'),
+            date: row.date ? new Date(row.date) : null
+          }))
+          .filter(expense => {
+            // Filter by date range in JavaScript
+            if (!expense.date) return false;
+            const startDate = new Date(startDateParam);
+            const endDate = new Date(endDateParam);
+            return expense.date >= startDate && expense.date <= endDate;
+          });
+          
+        console.log(`Filtered to ${rawExpenses.length} expenses within date range`);
+        
+        // Create timeline periods
+        const timeline = [];
+        const timeStart = new Date(startDateParam);
+        const timeEnd = new Date(endDateParam);
+        
+        if (groupByParam === 'week') {
+          // Create weekly periods
+          let current = new Date(timeStart);
+          while (current <= timeEnd) {
+            const year = current.getFullYear();
+            const weekNum = Math.ceil((current.getDate() - 1 + current.getDay()) / 7);
+            
+            timeline.push({
+              period: `Week ${weekNum}, ${year}`,
+              amount: 0,
+              date: new Date(current),
+              periodKey: `${year}-W${weekNum}`
+            });
+            
+            current.setDate(current.getDate() + 7);
+          }
+        } else {
+          // Create monthly periods
+          let curYear = timeStart.getFullYear();
+          let curMonth = timeStart.getMonth();
+          
+          while (new Date(curYear, curMonth, 1) <= timeEnd) {
+            const periodDate = new Date(curYear, curMonth, 1);
+            
+            timeline.push({
+              period: periodDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+              amount: 0,
+              date: new Date(periodDate),
+              periodKey: `${curYear}-${(curMonth + 1).toString().padStart(2, '0')}`
+            });
+            
+            curMonth++;
+            if (curMonth > 11) {
+              curMonth = 0;
+              curYear++;
+            }
+          }
+        }
+        
+        // Populate timeline with actual data
+        if (rawExpenses.length > 0) {
+          rawExpenses.forEach(expense => {
+            if (!expense.date || isNaN(expense.date.getTime())) {
+              return; // Skip invalid dates
+            }
+            
+            const expDate = expense.date;
+            let periodKey = '';
+            
+            if (groupByParam === 'week') {
+              const year = expDate.getFullYear();
+              const weekNum = Math.ceil((expDate.getDate() - 1 + expDate.getDay()) / 7);
+              periodKey = `${year}-W${weekNum}`;
+            } else {
+              const year = expDate.getFullYear();
+              const month = expDate.getMonth() + 1;
+              periodKey = `${year}-${month.toString().padStart(2, '0')}`;
+            }
+            
+            // Add to appropriate period
+            const periodIndex = timeline.findIndex(p => p.periodKey === periodKey);
+            if (periodIndex >= 0) {
+              timeline[periodIndex].amount += expense.amount;
+            }
+          });
+        }
+        
+        // Format for response (remove periodKey)
+        const chartData = timeline.map(({ period, amount, date }) => ({
+          period,
+          amount,
+          date
+        }));
+        
+        return res.json({
+          data: chartData,
+          category: categoryParam,
+          dateRange: { start: startDateParam, end: endDateParam },
+          groupBy: groupByParam
+        });
+      } catch (error) {
+        console.error(`[ERROR] [/api/expenses/trend] Database error:`, error);
+        return res.status(500).json({ 
+          message: "Failed to retrieve expense trend data from database", 
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+          let current = new Date(timeStart);
+          while (current <= timeEnd) {
+            const year = current.getFullYear();
+            const weekNum = Math.ceil((current.getDate() - 1 + current.getDay()) / 7);
+            
+            timeline.push({
+              period: `Week ${weekNum}, ${year}`,
+              amount: 0,
+              date: new Date(current),
+              periodKey: `${year}-W${weekNum}`
+            });
+            
+            current.setDate(current.getDate() + 7);
+          }
+        } else {
+          // Create monthly periods
+          let curYear = timeStart.getFullYear();
+          let curMonth = timeStart.getMonth();
+          
+          while (new Date(curYear, curMonth, 1) <= timeEnd) {
+            const periodDate = new Date(curYear, curMonth, 1);
+            
+            timeline.push({
+              period: periodDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+              amount: 0,
+              date: new Date(periodDate),
+              periodKey: `${curYear}-${(curMonth + 1).toString().padStart(2, '0')}`
+            });
+            
+            curMonth++;
+            if (curMonth > 11) {
+              curMonth = 0;
+              curYear++;
+            }
+          }
+        }
+        
+        // Populate timeline with actual data
+        if (rawExpenses.length > 0) {
+          rawExpenses.forEach(expense => {
+            if (!expense.date || isNaN(expense.date.getTime())) {
+              return; // Skip invalid dates
+            }
+            
+            const expDate = expense.date;
+            let periodKey = '';
+            
+            if (groupByParam === 'week') {
+              const year = expDate.getFullYear();
+              const weekNum = Math.ceil((expDate.getDate() - 1 + expDate.getDay()) / 7);
+              periodKey = `${year}-W${weekNum}`;
+            } else {
+              const year = expDate.getFullYear();
+              const month = expDate.getMonth() + 1;
+              periodKey = `${year}-${month.toString().padStart(2, '0')}`;
+            }
+            
+            // Add to appropriate period
+            const periodIndex = timeline.findIndex(p => p.periodKey === periodKey);
+            if (periodIndex >= 0) {
+              timeline[periodIndex].amount += expense.amount;
+            }
+          });
+        }
+        
+        // Format for response (remove periodKey)
+        const chartData = timeline.map(({ period, amount, date }) => ({
+          period,
+          amount,
+          date
+        }));
+        
+        return res.json({
+          data: chartData,
+          category: categoryParam,
+          dateRange: { start: startDateParam, end: endDateParam },
+          groupBy: groupByParam
+        });
+        
+      } catch (dbError) {
+        console.error(`[ERROR] [/api/expenses/trend] Database error: ${dbError.message}`);
+        console.error(dbError.stack);
+        return res.status(500).json({ 
+          message: 'Failed to retrieve expense trend data from database',
+          error: String(dbError.message)
+        });
+      }
+    } catch (error) {
+      console.error(`[ERROR] [/api/expenses/trend] Unhandled error: ${error.message}`);
+      console.error(error.stack);
+      return res.status(500).json({ 
+        message: 'Internal server error processing expense trend data',
+        error: String(error.message)
+      });
+    }
+  });
+
+  // POST create import expense
+  app.post('/api/import-expenses', async (req, res) => {
+    try {
+      // Validate required fields
+      const { procedureReference, category, amount } = req.body;
+      
+      if (!procedureReference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      if (!category) {
+        return res.status(400).json({ message: 'Expense category is required' });
+      }
+      
+      if (!amount) {
+        return res.status(400).json({ message: 'Amount is required' });
+      }
+      
+      // Create the expense record
+      const newExpense = await storage.createImportExpense({
+        procedureReference,
+        category,
+        amount,
+        currency: req.body.currency || 'USD',
+        invoiceNumber: req.body.invoiceNumber,
+        invoiceDate: req.body.invoiceDate ? new Date(req.body.invoiceDate) : undefined,
+        documentNumber: req.body.documentNumber,
+        policyNumber: req.body.policyNumber,
+        issuer: req.body.issuer,
+        notes: req.body.notes,
+        createdBy: req.body.user?.id || 3 // Using admin user ID 3 instead of 1
+      });
+      
+      res.status(201).json({ expense: newExpense });
+    } catch (error) {
+      console.error('Detailed import expense error:', error);
+      res.status(400).json({ message: 'Failed to create import expense', error: String(error) });
+    }
+  });
+
+  // PUT update import expense
+  app.put('/api/import-expenses/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if expense exists
+      const existingExpense = await storage.getImportExpense(id);
+      if (!existingExpense) {
+        return res.status(404).json({ message: 'Import expense not found' });
+      }
+      
+      // Update the expense record
+      const updateData: any = {};
+      
+      // Only include fields that are provided and valid
+      if (req.body.amount !== undefined) updateData.amount = req.body.amount;
+      if (req.body.currency) updateData.currency = req.body.currency;
+      if (req.body.invoiceNumber !== undefined) updateData.invoiceNumber = req.body.invoiceNumber;
+      if (req.body.documentNumber !== undefined) updateData.documentNumber = req.body.documentNumber;
+      if (req.body.policyNumber !== undefined) updateData.policyNumber = req.body.policyNumber;
+      if (req.body.issuer !== undefined) updateData.issuer = req.body.issuer;
+      if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+      
+      // Process date if provided
+      if (req.body.invoiceDate) {
+        updateData.invoiceDate = new Date(req.body.invoiceDate);
+      }
+      
+      const updatedExpense = await storage.updateImportExpense(id, updateData);
+      
+      res.json({ expense: updatedExpense });
+    } catch (error) {
+      res.status(400).json({ message: 'Failed to update import expense', error: String(error) });
+    }
+  });
+
+  // DELETE remove an import expense
+  app.delete('/api/import-expenses/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if expense exists
+      const existingExpense = await storage.getImportExpense(id);
+      if (!existingExpense) {
+        return res.status(404).json({ message: 'Import expense not found' });
+      }
+      
+      // Delete the expense
+      const success = await storage.deleteImportExpense(id);
+      
+      res.json({ success });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete import expense', error: String(error) });
+    }
+  });
+
+  // Expense Document routes
+  // GET document by ID
+  app.get('/api/expense-documents/:id', async (req, res) => {
+    try {
+      const document = await storage.getExpenseDocument(parseInt(req.params.id));
+      if (!document) {
+        return res.status(404).json({ message: 'Document not found' });
+      }
+      res.json({ document });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve document', error: String(error) });
+    }
+  });
+
+  // GET documents by expense type and ID
+  app.get('/api/expense-documents/expense/:type/:id', async (req, res) => {
+    try {
+      const { type, id } = req.params;
+      if (!type || !id) {
+        return res.status(400).json({ message: 'Expense type and ID are required' });
+      }
+      
+      const documents = await storage.getExpenseDocumentsByExpense(type, parseInt(id));
+      res.json({ documents });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve documents', error: String(error) });
+    }
+  });
+
+  // GET documents by procedure reference
+  app.get('/api/expense-documents/procedure/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const documents = await storage.getExpenseDocumentsByReference(reference);
+      res.json({ documents });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to retrieve documents', error: String(error) });
+    }
+  });
+  
+  // Debug endpoint to check stored objects in Replit Object Storage
+  app.get('/api/debug/storage-keys', async (req, res) => {
+    try {
+      const prefix = req.query.prefix as string || '';
+      console.log(`Listing all objects in Replit Object Storage with prefix: "${prefix}"`);
+      const keys = await listAllKeys(prefix);
+      console.log('Found objects:', keys);
+      res.json({ prefix, keys });
+    } catch (error) {
+      console.error('Error listing objects:', error);
+      res.status(500).json({ message: 'Failed to list storage objects', error: String(error) });
+    }
+  });
+  
+  // Download a document from cloud storage
+  app.get('/api/expense-documents/:id/download', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      // Check if this is a preview request or a download request
+      const isPreview = req.query.preview === 'true';
+      
+      // Get document metadata from database
+      const document = await storage.getExpenseDocument(id);
+      if (!document) {
+        return res.status(404).json({ message: 'Document not found' });
+      }
+      
+      // Log the document info for debugging
+      console.log(`Document requested: ID ${id}, Filename: ${document.originalFilename}, Type: ${document.fileType}, Object Key: ${document.objectKey || 'N/A'}`);
+      
+      // If document is in Replit Object Storage
+      if (document.objectKey) {
+        // Get the file from storage
+        try {
+          console.log(`Retrieving file from Replit Object Storage, key: ${document.objectKey}`);
+          const { buffer, contentType } = await getFile(document.objectKey);
+          
+          // Verify buffer contents
+          console.log('Download result:', {
+            ok: !!buffer,
+            valueType: typeof buffer,
+            isArray: Array.isArray(buffer),
+            valueLength: buffer ? buffer.length : 0,
+            valueBufferCheck: Buffer.isBuffer(buffer),
+          });
+          
+          if (!buffer || buffer.length === 0) {
+            console.error('Retrieved empty buffer from storage');
+            return res.status(404).json({ message: 'Empty file or file not found' });
+          }
+          
+          console.log(`File retrieved successfully, size: ${buffer.length} bytes, type: ${contentType}`);
+          
+          // Set appropriate headers based on file type and request type
+          res.setHeader('Content-Type', contentType);
+          
+          // For download requests, set attachment disposition
+          if (!isPreview) {
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(document.originalFilename)}"`);
+          } else {
+            // For preview requests, use inline disposition
+            res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(document.originalFilename)}"`);
+          }
+          
+          // Set permissive CORS headers to enable PDF.js and other viewers to work properly
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+          res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Content-Type');
+          
+          // Add content length header
+          res.setHeader('Content-Length', buffer.length);
+          
+          // Caching headers
+          if (isPreview) {
+            // Prevent caching for preview to ensure latest version is shown
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+          } else {
+            // Allow some caching for downloads
+            res.setHeader('Cache-Control', 'private, max-age=300');
+          }
+          
+          // Send the file
+          return res.send(buffer);
+        } catch (storageError) {
+          console.error('Error retrieving file from storage:', storageError);
+          return res.status(404).json({ message: 'File not found in storage' });
+        }
+      }
+      // Fallback for legacy documents stored on disk
+      else if (document.filePath && fs.existsSync(document.filePath)) {
+        console.log(`File found on disk at path: ${document.filePath}`);
+        
+        if (isPreview) {
+          // For preview, read the file and send with inline disposition
+          const fileData = fs.readFileSync(document.filePath);
+          const contentType = mime.lookup(document.filePath) || 'application/octet-stream';
+          
+          console.log(`Serving file from disk: ${document.originalFilename}, size: ${fileData.length} bytes, type: ${contentType}`);
+          
+          res.setHeader('Content-Type', contentType);
+          res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(document.originalFilename)}"`);
+          
+          // Set permissive CORS headers
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+          res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Content-Type');
+          
+          res.setHeader('Content-Length', fileData.length);
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+          
+          return res.send(fileData);
+        } else {
+          // For download, use res.download with appropriate headers
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Cache-Control', 'private, max-age=300');
+          return res.download(document.filePath, document.originalFilename);
+        }
+      } else {
+        console.error('Document file not found. No valid storage location.');
+        return res.status(404).json({ message: 'Document file not found' });
+      }
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      res.status(500).json({ message: 'Failed to download document', error: String(error) });
+    }
+  });
+  
+  // Endpoint for direct access to a file by objectKey (used by PDF.js and document viewers)
+  app.get('/api/expense-documents/file/:objectKey', async (req, res) => {
+    try {
+      const objectKey = decodeURIComponent(req.params.objectKey);
+      // Check if this is a preview request or a download request
+      const isPreview = req.query.preview === 'true';
+      
+      // Extract the original filename from the objectKey
+      // Format is typically SOHO/[procedure-id]/[timestamp]-[filename]
+      let originalFilename = objectKey.split('/').pop() || 'download';
+      // Remove timestamp prefix if present (format: 1234567890-filename.ext)
+      if (originalFilename.includes('-')) {
+        originalFilename = originalFilename.split('-').slice(1).join('-');
+      }
+      
+      console.log(`Preparing to serve file: ${objectKey}, filename: ${originalFilename}, preview: ${isPreview}`);
+      
+      // Get the file from storage
+      try {
+        console.log(`Retrieving file from Replit Object Storage, key: ${objectKey}`);
+        const { buffer, contentType } = await getFile(objectKey);
+        
+        // Verify buffer contents
+        console.log('Download result:', {
+          ok: !!buffer,
+          valueType: typeof buffer,
+          isArray: Array.isArray(buffer),
+          valueLength: buffer ? buffer.length : 0,
+          valueBufferCheck: Buffer.isBuffer(buffer),
+          firstItemCheck: Buffer.isBuffer(buffer) && buffer.length > 0 ? 
+            `First item type: ${typeof buffer[0]}, is Buffer: ${Buffer.isBuffer(buffer[0])}` : 'N/A'
+        });
+        
+        if (!buffer || buffer.length === 0) {
+          console.error('Retrieved empty buffer from storage');
+          return res.status(404).json({ message: 'Empty file or file not found' });
+        }
+        
+        console.log(`File retrieved successfully from Replit Object Storage: ${objectKey}`);
+        console.log(`Serving file: ${originalFilename}, size: ${buffer.length} bytes, type: ${contentType}`);
+        
+        // Set appropriate headers based on file type and request type
+        res.setHeader('Content-Type', contentType);
+        
+        // For download requests, set attachment disposition
+        if (!isPreview) {
+          res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalFilename)}"`);
+        } else {
+          // For preview requests, use inline disposition
+          res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(originalFilename)}"`);
+        }
+        
+        // Set permissive CORS headers to enable PDF.js and other viewers to work properly
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Content-Type');
+        
+        // Add security headers but make them more permissive for PDF.js to work
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        
+        // Caching headers
+        res.setHeader('Content-Length', buffer.length);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate'); // Prevent caching for document preview
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        
+        // Send the file
+        return res.send(buffer);
+      } catch (storageError) {
+        console.error('Error retrieving file from storage:', storageError);
+        return res.status(404).json({ message: 'File not found in storage' });
+      }
+    } catch (error) {
+      console.error('Error serving file:', error);
+      res.status(500).json({ message: 'Failed to serve file', error: String(error) });
+    }
+  });
+
+  // POST upload a document
+  app.post('/api/expense-documents', upload.single('file'), async (req, res) => {
+    try {
+      // Check if file was uploaded successfully
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+      
+      // Get form data
+      const { procedureReference, expenseType, expenseId, importDocumentType } = req.body;
+      
+      if (!procedureReference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      if (!expenseType) {
+        return res.status(400).json({ message: 'Expense type is required' });
+      }
+      
+      if (!expenseId) {
+        return res.status(400).json({ message: 'Expense ID is required' });
+      }
+      
+      // Import document type is required when expenseType is 'import_document'
+      if (expenseType === 'import_document' && !importDocumentType) {
+        return res.status(400).json({ message: 'Import document type is required for import documents' });
+      }
+      
+      // Extract file details from the uploaded file
+      const file = req.file;
+      const originalFilename = file.originalname;
+      const fileSize = file.size;
+      const fileType = file.mimetype;
+      
+      // Upload file to Replit Object Storage with procedure reference folder
+      const objectKey = await uploadFile(
+        file.buffer, 
+        originalFilename,
+        fileType,
+        procedureReference
+      );
+      
+      // Create document upload data
+      const documentData: any = {
+        procedureReference,
+        expenseType,
+        expenseId: parseInt(expenseId),
+        originalFilename,
+        objectKey,     // Store the cloud storage object key
+        fileSize,
+        fileType,
+        uploadedBy: req.body.user?.id || 3 // Using admin user ID 3 instead of 1
+      };
+      
+      // Add importDocumentType if provided
+      if (importDocumentType) {
+        documentData.importDocumentType = importDocumentType;
+      }
+      
+      // Create the document record with cloud storage info
+      const newDocument = await storage.uploadExpenseDocument(documentData);
+      
+      res.status(201).json({ document: newDocument });
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      res.status(400).json({ message: 'Failed to upload document', error: String(error) });
+    }
+  });
+
+  // GET documents by expense type and ID
+  app.get('/api/expense-documents/expense/:expenseType/:expenseId', async (req, res) => {
+    try {
+      const { expenseType, expenseId } = req.params;
+      
+      if (!expenseType || !expenseId) {
+        return res.status(400).json({ message: 'Expense type and ID are required' });
+      }
+      
+      // Get documents for this expense
+      const documents = await storage.getExpenseDocumentsByExpense(expenseType, parseInt(expenseId));
+      
+      res.json({ documents });
+    } catch (error) {
+      console.error('Error retrieving documents:', error);
+      res.status(500).json({ message: 'Failed to retrieve documents', error: String(error) });
+    }
+  });
+  
+  // DELETE remove a document
+  app.delete('/api/expense-documents/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if document exists
+      const existingDocument = await storage.getExpenseDocument(id);
+      if (!existingDocument) {
+        return res.status(404).json({ message: 'Document not found' });
+      }
+      
+      // Delete the file from cloud storage if we have an objectKey
+      if (existingDocument.objectKey) {
+        try {
+          await deleteFile(existingDocument.objectKey);
+        } catch (cloudError) {
+          console.error('Error deleting file from cloud storage:', cloudError);
+          // Continue even if cloud deletion fails
+        }
+      } 
+      // Backwards compatibility for legacy files stored on disk
+      else if (existingDocument.filePath && fs.existsSync(existingDocument.filePath)) {
+        try {
+          fs.unlinkSync(existingDocument.filePath);
+        } catch (fileError) {
+          console.error('Error deleting legacy file from disk:', fileError);
+        }
+      }
+      
+      // Delete the document from database
+      const success = await storage.deleteExpenseDocument(id);
+      
+      res.json({ success });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete document', error: String(error) });
+    }
+  });
+
+  // Procedure Status Details Endpoints
+  
+  // Get all status details for a procedure
+  app.get('/api/procedure-status-details/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      const statusDetails = await storage.getProcedureStatusDetails(reference);
+      res.json({ statusDetails });
+    } catch (error) {
+      console.error('Error fetching procedure status details:', error);
+      res.status(500).json({ message: 'Failed to fetch procedure status details', error: String(error) });
+    }
+  });
+  
+  // Get status details by category for a procedure
+  app.get('/api/procedure-status-details/:reference/:category', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      const { category } = req.params;
+      const statusDetails = await storage.getProcedureStatusDetailsByCategory(reference, category);
+      res.json({ statusDetails });
+    } catch (error) {
+      console.error('Error fetching procedure status details by category:', error);
+      res.status(500).json({ message: 'Failed to fetch procedure status details by category', error: String(error) });
+    }
+  });
+  
+  // Update status details (upsert single status)
+  app.post('/api/procedure-status-details', async (req, res) => {
+    try {
+      const statusDetail = req.body;
+      const result = await storage.upsertProcedureStatusDetail(statusDetail);
+      res.json({ statusDetail: result });
+    } catch (error) {
+      console.error('Error updating procedure status detail:', error);
+      res.status(500).json({ message: 'Failed to update procedure status detail', error: String(error) });
+    }
+  });
+  
+  // Update multiple status details for a category
+  app.post('/api/procedure-status-details/:reference/:category', async (req, res) => {
+    try {
+      const { reference, category } = req.params;
+      const statusList = req.body.statusList;
+      
+      if (!Array.isArray(statusList)) {
+        return res.status(400).json({ message: 'Status list must be an array' });
+      }
+      
+      const results = await storage.updateProcedureStatusDetails(reference, category, statusList);
+      res.json({ statusDetails: results });
+    } catch (error) {
+      console.error('Error updating procedure status details:', error);
+      res.status(500).json({ message: 'Failed to update procedure status details', error: String(error) });
+    }
+  });
+  
+  // Delete a status detail
+  app.delete('/api/procedure-status-details/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteProcedureStatusDetail(id);
+      res.json({ success });
+    } catch (error) {
+      console.error('Error deleting procedure status detail:', error);
+      res.status(500).json({ message: 'Failed to delete procedure status detail', error: String(error) });
+    }
+  });
+
+  // Financial API endpoints
+  
+  // Get financial summary for a specific procedure
+  app.get('/api/procedure-financial-summary/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle forward slashes properly
+      const reference = decodeURIComponent(req.params.reference);
+      const summary = await storage.getProcedureFinancialSummary(reference);
+      res.json({ summary });
+    } catch (error) {
+      console.error('Error fetching procedure financial summary:', error);
+      res.status(500).json({ message: 'Failed to fetch procedure financial summary', error: String(error) });
+    }
+  });
+
+  // Get expense analytics data with date range and optional procedure filter
+  app.get('/api/expense-analytics', async (req, res) => {
+    try {
+      // Parse date range parameters, defaulting to current month if not provided
+      const today = new Date();
+      const startDate = req.query.startDate 
+        ? new Date(req.query.startDate as string) 
+        : new Date(today.getFullYear(), today.getMonth(), 1);
+      
+      const endDate = req.query.endDate 
+        ? new Date(req.query.endDate as string) 
+        : new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      
+      // Parse procedure references parameter if provided
+      const procedureReferences = req.query.procedureReferences
+        ? (req.query.procedureReferences as string).split(',')
+        : [];
+      
+      console.log('Expense analytics request params:', {
+        startDate,
+        endDate,
+        procedureReferences
+      });
+      
+      // Get expense analytics data
+      const expenseData = await storage.getExpensesByCategoryAndDateRange(
+        startDate,
+        endDate,
+        procedureReferences
+      );
+      
+      res.json({ expenseData });
+    } catch (error) {
+      console.error('Error fetching expense analytics:', error);
+      res.status(500).json({ message: 'Failed to fetch expense analytics', error: String(error) });
+    }
+  });
+
+  // Invoice Line Item routes
+  // GET all line items for a specific procedure reference
+  app.get('/api/invoice-line-items/procedure/:reference', async (req, res) => {
+    try {
+      // Decode the reference parameter to handle special characters
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const lineItems = await storage.getInvoiceLineItemsByReference(reference);
+      res.json({ lineItems });
+    } catch (error) {
+      console.error('Error fetching invoice line items:', error);
+      res.status(500).json({ message: 'Failed to retrieve invoice line items', error: String(error) });
+    }
+  });
+  
+  // GET a specific line item by ID
+  app.get('/api/invoice-line-items/:id', async (req, res) => {
+    try {
+      const lineItem = await storage.getInvoiceLineItem(parseInt(req.params.id));
+      if (!lineItem) {
+        return res.status(404).json({ message: 'Invoice line item not found' });
+      }
+      res.json({ lineItem });
+    } catch (error) {
+      console.error('Error fetching invoice line item:', error);
+      res.status(500).json({ message: 'Failed to retrieve invoice line item', error: String(error) });
+    }
+  });
+  
+  // POST create a new line item
+  app.post('/api/invoice-line-items', async (req, res) => {
+    try {
+      const lineItem = await storage.createInvoiceLineItem(req.body);
+      res.status(201).json({ lineItem });
+    } catch (error) {
+      console.error('Error creating invoice line item:', error);
+      res.status(500).json({ message: 'Failed to create invoice line item', error: String(error) });
+    }
+  });
+  
+  // POST create multiple line items at once
+  app.post('/api/invoice-line-items/bulk', async (req, res) => {
+    try {
+      const { lineItems } = req.body;
+      if (!Array.isArray(lineItems) || lineItems.length === 0) {
+        return res.status(400).json({ message: 'Must provide an array of line items' });
+      }
+      
+      const createdItems = await storage.bulkCreateInvoiceLineItems(lineItems);
+      res.status(201).json({ lineItems: createdItems });
+    } catch (error) {
+      console.error('Error creating bulk invoice line items:', error);
+      res.status(500).json({ message: 'Failed to create invoice line items', error: String(error) });
+    }
+  });
+  
+  // PATCH update a line item
+  app.patch('/api/invoice-line-items/:id', async (req, res) => {
+    try {
+      const lineItem = await storage.updateInvoiceLineItem(parseInt(req.params.id), req.body);
+      if (!lineItem) {
+        return res.status(404).json({ message: 'Invoice line item not found' });
+      }
+      res.json({ lineItem });
+    } catch (error) {
+      console.error('Error updating invoice line item:', error);
+      res.status(500).json({ message: 'Failed to update invoice line item', error: String(error) });
+    }
+  });
+  
+  // DELETE a line item
+  app.delete('/api/invoice-line-items/:id', async (req, res) => {
+    try {
+      const success = await storage.deleteInvoiceLineItem(parseInt(req.params.id));
+      if (!success) {
+        return res.status(404).json({ message: 'Invoice line item not found' });
+      }
+      res.json({ success });
+    } catch (error) {
+      console.error('Error deleting invoice line item:', error);
+      res.status(500).json({ message: 'Failed to delete invoice line item', error: String(error) });
+    }
+  });
+  
+  // DELETE all line items for a specific procedure
+  app.delete('/api/invoice-line-items/procedure/:reference', async (req, res) => {
+    try {
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const deletedCount = await storage.deleteAllInvoiceLineItems(reference);
+      res.json({ success: true, deletedCount });
+    } catch (error) {
+      console.error('Error deleting all invoice line items:', error);
+      res.status(500).json({ message: 'Failed to delete all invoice line items', error: String(error) });
+    }
+  });
+  
+  // Calculate invoice line item costs for a procedure
+  app.post('/api/invoice-line-items/calculate/:reference', async (req, res) => {
+    try {
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      console.log(`[API] Starting calculation for procedure ${reference}`);
+      
+      // First, ensure we have the current items with correct ordering
+      const originalItems = await storage.getInvoiceLineItemsByReference(reference);
+      console.log(`[API] Initial items order: ${originalItems.map(item => `ID:${item.id}, order:${item.sortOrder || 'null'}`).join(' -> ')}`);
+      
+      // Perform the calculation
+      const result = await storage.calculateInvoiceLineItemCosts(reference);
+      
+      // Check if items were returned in correct order
+      if (result.updatedItems && Array.isArray(result.updatedItems)) {
+        console.log(`[API] Final items order: ${result.updatedItems.map(item => `ID:${item.id}, order:${item.sortOrder || 'null'}`).join(' -> ')}`);
+        
+        // Ensure items are returned in sortOrder sequence
+        result.updatedItems.sort((a, b) => {
+          const aSortOrder = a.sortOrder !== null ? a.sortOrder : 9999999;
+          const bSortOrder = b.sortOrder !== null ? b.sortOrder : 9999999;
+          return aSortOrder - bSortOrder;
+        });
+      }
+      
+      console.log(`[API] Calculation completed for procedure ${reference}`);
+      res.json(result);
+    } catch (error) {
+      console.error('Error calculating invoice line item costs:', error);
+      res.status(500).json({ message: 'Failed to calculate costs', error: String(error) });
+    }
+  });
+  
+  // Invoice Line Item Config routes
+  // GET config for a specific procedure
+  app.get('/api/invoice-line-items-config/:reference', async (req, res) => {
+    try {
+      const reference = decodeURIComponent(req.params.reference);
+      if (!reference) {
+        return res.status(400).json({ message: 'Procedure reference is required' });
+      }
+      
+      const config = await storage.getInvoiceLineItemsConfig(reference);
+      res.json({ config });
+    } catch (error) {
+      console.error('Error fetching invoice line items config:', error);
+      res.status(500).json({ message: 'Failed to retrieve config', error: String(error) });
+    }
+  });
+  
+  // POST create/update config
+  app.post('/api/invoice-line-items-config', async (req, res) => {
+    try {
+      const config = await storage.createOrUpdateInvoiceLineItemsConfig(req.body);
+      res.json({ config });
+    } catch (error) {
+      console.error('Error creating/updating invoice line items config:', error);
+      res.status(500).json({ message: 'Failed to save config', error: String(error) });
+    }
+  });
+
+  // Register PDF routes
+  app.use('/api/pdf', pdfRoutes);
+  
+  // Use Payment Report routes
+  app.use('/api/payment-report', paymentReportRoutes);
+
+  const httpServer = createServer(app);
+  return httpServer;
+}

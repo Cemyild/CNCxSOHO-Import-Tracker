@@ -1,0 +1,16 @@
+.local/
+.claude/
+.config/
+_bmad/
+_bmad-output/
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+.env
+uploads/
+storage_backup.zip
+*.zip
+*.log

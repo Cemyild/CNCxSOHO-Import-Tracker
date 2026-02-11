@@ -1,0 +1,40 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+      - cem
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            # 1. Navigate to the project directory
+            cd /root/CNCxSOHO-Import-Tracker
+
+            # 2. Checkout the branch that triggered this workflow
+            # ${{ github.ref_name }} will be 'main' or 'cem'
+            git checkout ${{ github.ref_name }}
+
+            # 3. Pull the latest changes for this branch
+            git pull origin ${{ github.ref_name }}
+
+            # 4. Install new dependencies
+            npm install
+
+            # 5. Rebuild the application
+            npm run build
+
+            # 6. Restart the application
+            # We use 'pm2 restart all' assuming you have started the app with pm2.
+            # If not, you might need to start it first manually on the VPS.
+            pm2 restart all || pm2 start dist/index.js --name "soho-app"
