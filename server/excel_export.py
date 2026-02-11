@@ -23,8 +23,10 @@ def set_cell_value(ws, cell_ref, value):
     except AttributeError:
         pass
     
+import os
 def export_excel(data):
-    template_path = '/home/runner/workspace/server/excel_export_template_1.xlsx'
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.join(script_dir, 'excel_export_template_1.xlsx')
     
     wb_data_only = openpyxl.load_workbook(template_path, data_only=True)
     ws_data = wb_data_only.active

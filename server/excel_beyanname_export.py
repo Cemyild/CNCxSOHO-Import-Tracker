@@ -32,6 +32,7 @@ DEFAULT_COUNTRY_CODE_MAPPING = {
     'HK': '740',
 }
 
+import os
 def export_beyanname_excel(data):
     """
     Export tax calculation data to BEYANNAME Excel template.
@@ -39,7 +40,8 @@ def export_beyanname_excel(data):
     - Row 1: Headers with column descriptions
     - Row 2+: Product data
     """
-    template_path = '/home/runner/workspace/server/EXCEL_BEYANNAME_AKTARIM.xlsx'
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.join(script_dir, 'EXCEL_BEYANNAME_AKTARIM.xlsx')
     
     # Load template
     wb = openpyxl.load_workbook(template_path)
