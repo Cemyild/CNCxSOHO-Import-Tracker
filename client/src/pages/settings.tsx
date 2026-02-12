@@ -49,7 +49,9 @@ import {
   Upload,
   Key,
   Package,
-  Hash
+  Hash,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { UploadTemplateForm } from "@/components/ui/upload-template-form";
@@ -180,6 +182,20 @@ export function SettingsPage() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState("profile");
+  
+  // Sorting state for products
+  const [sortColumn, setSortColumn] = useState<string>('style');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
 
   // Get current user info
   const { data: currentUser, isLoading: isUserLoading } = useQuery({
@@ -790,9 +806,31 @@ export function SettingsPage() {
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Style</TableHead>
+                                <TableHead>
+                                  <Button 
+                                    variant="ghost" 
+                                    onClick={() => handleSort('style')}
+                                    className="hover:bg-transparent px-0 font-bold"
+                                  >
+                                    Style
+                                    {sortColumn === 'style' && (
+                                      sortDirection === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </TableHead>
                                 <TableHead>HS Code (US)</TableHead>
-                                <TableHead>TR HS Code</TableHead>
+                                <TableHead>
+                                  <Button 
+                                    variant="ghost" 
+                                    onClick={() => handleSort('tr_hs_code')}
+                                    className="hover:bg-transparent px-0 font-bold"
+                                  >
+                                    TR HS Code
+                                    {sortColumn === 'tr_hs_code' && (
+                                      sortDirection === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </TableHead>
                                 <TableHead>Description</TableHead>
                                 <TableHead>Ex Reg Form</TableHead>
                                 <TableHead>AZO Test</TableHead>
@@ -802,19 +840,11 @@ export function SettingsPage() {
                             </TableHeader>
                             <TableBody>
                               {productsData?.products?.sort((a: Product, b: Product) => {
-                                // Sort by style roughly (handling nulls)
-                                const styleA = a.style || '';
-                                const styleB = b.style || '';
-                                const styleComparison = styleA.localeCompare(styleB);
+                                const aValue = (a[sortColumn as keyof Product] as string) || '';
+                                const bValue = (b[sortColumn as keyof Product] as string) || '';
+                                const comparison = aValue.localeCompare(bValue);
                                 
-                                if (styleComparison !== 0) {
-                                  return styleComparison;
-                                }
-                                
-                                // Internal sort by TR HS Code if styles are equal
-                                const trHsCodeA = a.tr_hs_code || '';
-                                const trHsCodeB = b.tr_hs_code || '';
-                                return trHsCodeA.localeCompare(trHsCodeB);
+                                return sortDirection === 'asc' ? comparison : -comparison;
                               }).map((product: Product) => {
                                 // Find matching HS Code data
                                 const hsCodeData = hsCodesData?.hsCodes?.find((h: HsCode) => h.tr_hs_code === product.tr_hs_code);
