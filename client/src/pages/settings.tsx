@@ -794,16 +794,58 @@ export function SettingsPage() {
                                 <TableHead>HS Code (US)</TableHead>
                                 <TableHead>TR HS Code</TableHead>
                                 <TableHead>Description</TableHead>
+                                <TableHead>Ex Reg Form</TableHead>
+                                <TableHead>AZO Test</TableHead>
+                                <TableHead>Special Customs</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {productsData?.products?.map((product: Product) => (
+                              {productsData?.products?.sort((a: Product, b: Product) => {
+                                // Sort by style roughly (handling nulls)
+                                const styleA = a.style || '';
+                                const styleB = b.style || '';
+                                const styleComparison = styleA.localeCompare(styleB);
+                                
+                                if (styleComparison !== 0) {
+                                  return styleComparison;
+                                }
+                                
+                                // Internal sort by TR HS Code if styles are equal
+                                const trHsCodeA = a.tr_hs_code || '';
+                                const trHsCodeB = b.tr_hs_code || '';
+                                return trHsCodeA.localeCompare(trHsCodeB);
+                              }).map((product: Product) => {
+                                // Find matching HS Code data
+                                const hsCodeData = hsCodesData?.hsCodes?.find((h: HsCode) => h.tr_hs_code === product.tr_hs_code);
+                                
+                                return (
                                 <TableRow key={product.id} data-testid={`row-product-${product.id}`}>
                                   <TableCell className="font-medium">{product.style || '—'}</TableCell>
                                   <TableCell>{product.hts_code || '—'}</TableCell>
                                   <TableCell>{product.tr_hs_code || '—'}</TableCell>
                                   <TableCell className="max-w-xs truncate">{product.item_description || '—'}</TableCell>
+                                  <TableCell>
+                                    {hsCodeData ? (
+                                      <Badge variant={hsCodeData.ex_registry_form ? 'default' : 'secondary'}>
+                                        {hsCodeData.ex_registry_form ? 'Yes' : 'No'}
+                                      </Badge>
+                                    ) : '—'}
+                                  </TableCell>
+                                  <TableCell>
+                                    {hsCodeData ? (
+                                      <Badge variant={hsCodeData.azo_dye_test ? 'default' : 'secondary'}>
+                                        {hsCodeData.azo_dye_test ? 'Yes' : 'No'}
+                                      </Badge>
+                                    ) : '—'}
+                                  </TableCell>
+                                  <TableCell>
+                                    {hsCodeData ? (
+                                      <Badge variant={hsCodeData.special_custom ? 'default' : 'secondary'}>
+                                        {hsCodeData.special_custom ? 'Yes' : 'No'}
+                                      </Badge>
+                                    ) : '—'}
+                                  </TableCell>
                                   <TableCell className="text-right">
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
@@ -824,10 +866,10 @@ export function SettingsPage() {
                                     </DropdownMenu>
                                   </TableCell>
                                 </TableRow>
-                              ))}
+                              )})}
                               {(!productsData?.products || productsData.products.length === 0) && (
                                 <TableRow>
-                                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No products found. Click "Add Product" to create one.</TableCell>
+                                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No products found. Click "Add Product" to create one.</TableCell>
                                 </TableRow>
                               )}
                             </TableBody>

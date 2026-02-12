@@ -61,20 +61,19 @@ async function migrate() {
     }
 
     async function uploadFile(client: S3Client, filePath: string, key: string) {
-        // Skip check if we want to overwrite, or check existence to save time
         try {
             // Check if exists
-            // await client.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key }));
-            // console.log(`⏭️  Skipping (already exists): ${key}`);
-            // return;
+            await client.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+            console.log(`⏭️  Skipping (already exists): ${key}`);
+            return;
         } catch (e) {
             // Not found, proceed to upload
         }
 
-        const fileContent = fs.readFileSync(filePath);
-        const mimeType = mime.lookup(filePath) || 'application/octet-stream';
-
         try {
+            const fileContent = fs.readFileSync(filePath);
+            const mimeType = mime.lookup(filePath) || 'application/octet-stream';
+
             const cmd = new PutObjectCommand({
                 Bucket: S3_BUCKET,
                 Key: key,
@@ -84,7 +83,7 @@ async function migrate() {
             await client.send(cmd);
             console.log(`✅ Uploaded: ${key}`);
         } catch (error) {
-            console.error(`❌ Failed to upload ${key}:`, error);
+            console.error(`❌ Failed to process/upload ${key}:`, error);
         }
     }
 
