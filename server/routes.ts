@@ -25,6 +25,7 @@ import {
   importExpenses,
   importServiceInvoices,
   paymentDistributions,
+  taxCalculations,
 } from "@shared/schema";
 import { calculateAllItems, checkMissingAtrRates } from "./tax-calculation-service";
 import { jsPDF } from "jspdf";
@@ -1070,6 +1071,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: String(error),
         details: "An unexpected error occurred while processing your request.",
       });
+    }
+  });
+
+  // Get tax calculation products for a procedure
+  app.get("/api/procedures/:reference/products", async (req, res) => {
+    try {
+      const reference = decodeURIComponent(req.params.reference);
+      const procedureResults = await storage.getProcedureByReference(reference);
+      if (!procedureResults || procedureResults.length === 0) {
+        return res.status(404).json({ message: "Procedure not found" });
+      }
+      const procedure = procedureResults[0];
+
+      // Find the tax calculation linked to this procedure
+      const taxCalcs = await db.select().from(taxCalculations).where(eq(taxCalculations.procedure_id, procedure.id));
+      if (!taxCalcs || taxCalcs.length === 0) {
+        return res.json({ products: [] });
+      }
+      const calculation = taxCalcs[0];
+
+      // Get the items for this calculation
+      const items = await storage.getTaxCalculationItems(calculation.id);
+      const products = items.map(item => ({
+        style: item.style,
+        cost: item.cost,
+        unit_count: item.unit_count,
+        tr_hs_code: item.tr_hs_code,
+      }));
+
+      res.json({ products });
+    } catch (error) {
+      console.error("Error fetching procedure products:", error);
+      res.status(500).json({ message: "Failed to fetch products", error: String(error) });
     }
   });
 

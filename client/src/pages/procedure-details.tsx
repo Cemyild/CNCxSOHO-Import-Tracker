@@ -289,6 +289,9 @@ export default function ProcedureDetailsPage() {
 
   // Document preview functionality has been removed as per client requirements
 
+  // Products from tax calculation
+  const [taxProducts, setTaxProducts] = useState<{ style: string; cost: string; unit_count: number; tr_hs_code: string | null }[]>([]);
+
   // View distributions modal state
   const [isViewDistributionsOpen, setIsViewDistributionsOpen] = useState(false);
   
@@ -304,6 +307,16 @@ export default function ProcedureDetailsPage() {
     }
 
     fetchProcedureData(reference);
+  }, [reference]);
+
+  // Fetch tax calculation products for this procedure
+  useEffect(() => {
+    if (!reference) return;
+    const encodedReference = encodeURIComponent(reference);
+    fetch(`/api/procedures/${encodedReference}/products`)
+      .then(res => res.ok ? res.json() : { products: [] })
+      .then(data => setTaxProducts(data.products || []))
+      .catch(() => setTaxProducts([]));
   }, [reference]);
 
   // Calculate financial summary
@@ -1835,9 +1848,42 @@ export default function ProcedureDetailsPage() {
           </CardContent>
         </Card>
 
+        {/* Products Section */}
+        {taxProducts.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Products</CardTitle>
+              <CardDescription>
+                Products included in this procedure's tax calculation
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Style No</TableHead>
+                    <TableHead className="text-right">Cost (USD)</TableHead>
+                    <TableHead className="text-right">Unit</TableHead>
+                    <TableHead>TR HS Code</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {taxProducts.map((product, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{product.style}</TableCell>
+                      <TableCell className="text-right">{product.cost}</TableCell>
+                      <TableCell className="text-right">{product.unit_count}</TableCell>
+                      <TableCell>{product.tr_hs_code || "-"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
 
       </div>
-      
+
       {/* View Payment Distributions Modal */}
       {procedure && (
         <ViewDistributionModal
