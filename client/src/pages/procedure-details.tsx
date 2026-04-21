@@ -1864,6 +1864,7 @@ export default function ProcedureDetailsPage() {
                     <TableHead>Style No</TableHead>
                     <TableHead className="text-right">Cost (USD)</TableHead>
                     <TableHead className="text-right">Unit</TableHead>
+                    <TableHead className="text-right">Total Value (USD)</TableHead>
                     <TableHead>TR HS Code</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1873,6 +1874,9 @@ export default function ProcedureDetailsPage() {
                       <TableCell className="font-medium">{product.style}</TableCell>
                       <TableCell className="text-right">{product.cost}</TableCell>
                       <TableCell className="text-right">{product.unit_count}</TableCell>
+                      <TableCell className="text-right">
+                        {(parseFloat(product.cost) * product.unit_count).toFixed(2)}
+                      </TableCell>
                       <TableCell>{product.tr_hs_code || "-"}</TableCell>
                     </TableRow>
                   ))}
