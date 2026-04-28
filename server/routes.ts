@@ -2557,7 +2557,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             // Get the financial summary for this procedure
             const summary = await storage.calculateFinancialSummary(
-              procedure.reference,
+              procedure.reference ?? "",
             );
 
             // Log the results for debugging
@@ -3111,7 +3111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         procedureReference: procedureReference
           ? String(procedureReference)
           : "",
-        category: category ? String(category) : "",
+        category: (category ? String(category) : "") as "insurance" | "export_registry_fee" | "awb_fee" | "airport_storage_fee" | "bonded_warehouse_storage_fee" | "transportation" | "international_transportation" | "tareks_fee" | "customs_inspection" | "azo_test" | "other",
         amount: amount ? String(amount) : "0",
         currency: currency ? String(currency) : "TRY",
         invoiceNumber: invoiceNumber ? String(invoiceNumber) : null,
@@ -3176,7 +3176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         procedureReference: procedureReference
           ? String(procedureReference)
           : undefined,
-        category: category ? String(category) : undefined,
+        category: (category ? String(category) : undefined) as "insurance" | "export_registry_fee" | "awb_fee" | "airport_storage_fee" | "bonded_warehouse_storage_fee" | "transportation" | "international_transportation" | "tareks_fee" | "customs_inspection" | "azo_test" | "other" | undefined,
         amount: amount ? String(amount) : undefined,
         currency: currency ? String(currency) : undefined,
         invoiceNumber: invoiceNumber ? String(invoiceNumber) : null,
@@ -3434,7 +3434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       // Create periods for the chart based on the actual expense data, not the query parameters
-      const periods = [];
+      const periods: { period: string; amount: number; date: Date }[] = [];
 
       // Use the actual min and max dates from the data itself for a complete history
       let start, end;
@@ -3460,7 +3460,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           d.setHours(0, 0, 0, 0);
           d.setDate(d.getDate() + 4 - (d.getDay() || 7)); // Set to Thursday of this week
           const yearStart = new Date(d.getFullYear(), 0, 1);
-          const weekNum = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+          const weekNum = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 
           // Get month name for better labeling
           const monthName = current.toLocaleString("default", {
@@ -3514,7 +3514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           expD.setHours(0, 0, 0, 0);
           expD.setDate(expD.getDate() + 4 - (expD.getDay() || 7)); // Set to Thursday of this week
           const expYearStart = new Date(expD.getFullYear(), 0, 1);
-          const expWeek = Math.ceil(((expD - expYearStart) / 86400000 + 1) / 7);
+          const expWeek = Math.ceil(((expD.getTime() - expYearStart.getTime()) / 86400000 + 1) / 7);
           const expYear = expD.getFullYear();
 
           const matchingPeriod = periods.find((p) => {
@@ -3524,7 +3524,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             periodD.setDate(periodD.getDate() + 4 - (periodD.getDay() || 7)); // Set to Thursday of this week
             const periodYearStart = new Date(periodD.getFullYear(), 0, 1);
             const periodWeek = Math.ceil(
-              ((periodD - periodYearStart) / 86400000 + 1) / 7,
+              ((periodD.getTime() - periodYearStart.getTime()) / 86400000 + 1) / 7,
             );
             const periodYear = periodD.getFullYear();
 
@@ -4247,7 +4247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Decode the reference parameter to handle forward slashes properly
       const reference = decodeURIComponent(req.params.reference);
-      const summary = await storage.getProcedureFinancialSummary(reference);
+      const summary = await storage.calculateFinancialSummary(reference);
       res.json({ summary });
     } catch (error) {
       console.error("Error fetching procedure financial summary:", error);
@@ -4344,7 +4344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const invoicesResult = await rawDb.query(invoicesQuery);
 
       // Helper function to safely parse numbers
-      const safeParseFloat = (value) => {
+      const safeParseFloat = (value: unknown): number => {
         if (!value || value === "" || value === null || value === undefined)
           return 0;
         const num = parseFloat(String(value).trim());
@@ -4760,13 +4760,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if items were returned in correct order
       if (result.updatedItems && Array.isArray(result.updatedItems)) {
         console.log(
-          `[API] Final items order: ${result.updatedItems.map((item) => `ID:${item.id}, order:${item.sortOrder || "null"}`).join(" -> ")}`,
+          `[API] Final items order: ${result.updatedItems.map((item: { id: number; sortOrder?: number | null }) => `ID:${item.id}, order:${item.sortOrder || "null"}`).join(" -> ")}`,
         );
 
         // Ensure items are returned in sortOrder sequence
-        result.updatedItems.sort((a, b) => {
-          const aSortOrder = a.sortOrder !== null ? a.sortOrder : 9999999;
-          const bSortOrder = b.sortOrder !== null ? b.sortOrder : 9999999;
+        result.updatedItems.sort((a: { sortOrder?: number | null }, b: { sortOrder?: number | null }) => {
+          const aSortOrder = a.sortOrder !== null && a.sortOrder !== undefined ? a.sortOrder : 9999999;
+          const bSortOrder = b.sortOrder !== null && b.sortOrder !== undefined ? b.sortOrder : 9999999;
           return aSortOrder - bSortOrder;
         });
       }
@@ -5036,7 +5036,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ found: [], missing: [] });
       }
       
-      const uniqueCodes = [...new Set(codes.filter((code): code is string => typeof code === 'string' && code.length > 0))];
+      const uniqueCodes = Array.from(new Set(codes.filter((code): code is string => typeof code === 'string' && code.length > 0)));
       
       if (uniqueCodes.length === 0) {
         return res.status(400).json({ error: 'No valid codes provided' });
@@ -5694,7 +5694,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.body.rates) {
         ratesToSave = req.body.rates;
       } else if (req.body.tr_hs_code && req.body.customs_tax_percent !== undefined) {
-        ratesToSave = [{ tr_hs_code: req.body.tr_hs_code, customs_tax_percent: req.body.customs_tax_percent }];
+        ratesToSave = [{ tr_hs_code: String(req.body.tr_hs_code), customs_tax_percent: String(req.body.customs_tax_percent) }];
       } else {
         return res.status(400).json({ error: "Either rates array or tr_hs_code/customs_tax_percent are required" });
       }
@@ -5702,7 +5702,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!Array.isArray(ratesToSave) || ratesToSave.length === 0) {
         return res.status(400).json({ error: "Rates array is required" });
       }
-      const saved = await storage.saveAtrCustomsRates(ratesToSave);
+      const normalizedRates = ratesToSave.map(r => ({ tr_hs_code: String(r.tr_hs_code), customs_tax_percent: String(r.customs_tax_percent) }));
+      const saved = await storage.saveAtrCustomsRates(normalizedRates);
       res.json({ success: true, rates: saved });
     } catch (error) {
       res
@@ -6199,7 +6200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       // Row 1 - 2 wide cards (Total Value and Total Pieces)
-      drawCard(cardsStartX, currentY, wideCardWidth, 'Total Value (USD)', `$${parseFloat(calculation.total_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, [59, 130, 246]);
+      drawCard(cardsStartX, currentY, wideCardWidth, 'Total Value (USD)', `$${parseFloat(calculation.total_value ?? '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, [59, 130, 246]);
       drawCard(cardsStartX + wideCardWidth + cardGap, currentY, wideCardWidth, 'Total Pieces', (calculation.total_quantity || 0).toLocaleString('en-US'), [16, 185, 129]);
       
       // Row 2 - 4 cards (Customs Tax, Add. Tax, KKDF, VAT)
@@ -6267,16 +6268,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         '' // Empty string - badges will be drawn in didDrawCell instead
       ]);
       
-      // Calculate column widths for right alignment (landscape A4 = 297mm width)
-      // Available width: 297mm - 30mm (margins) = 267mm
-      const rightMargin = 15;
       const columnWidths = [15, 12, 11, 28, 20, 20, 15, 13, 13, 24, 24, 72]; // Total: 267mm
-      const totalTableWidth = columnWidths.reduce((sum, w) => sum + w, 0);
-      const startX = pageWidth - rightMargin - totalTableWidth;
 
       autoTable(doc, {
         startY: currentY,
-        startX: startX, // Right-align the table
         head: [[
           'Style',
           'Cost',
@@ -7048,7 +7043,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         doc.text(value, x + labelWidth, y);
       };
       
-      drawLabelValue('Reference: ', procedureResult.reference, 20, infoStartY);
+      drawLabelValue('Reference: ', procedureResult.reference ?? '', 20, infoStartY);
       drawLabelValue('Shipper: ', procedureResult.shipper || 'N/A', 20, infoStartY + 7);
       drawLabelValue('Invoice #: ', procedureResult.invoice_no || 'N/A', 20, infoStartY + 14);
       drawLabelValue('Invoice Date: ', procedureResult.invoice_date ? (() => { const d = new Date(procedureResult.invoice_date); return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`; })() : 'N/A', 20, infoStartY + 21);
@@ -7245,7 +7240,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ]);
         
         // Get unique incoming payment IDs and their total amounts
-        const incomingPaymentIds = [...new Set(paymentDistributions.map(d => d.incomingPaymentId))];
+        const incomingPaymentIds = Array.from(new Set(paymentDistributions.map(d => d.incomingPaymentId)));
         let totalIncomingPaymentValue = 0;
         let incomingPaymentDetails: string[] = [];
         
