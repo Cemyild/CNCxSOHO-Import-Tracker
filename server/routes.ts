@@ -4511,7 +4511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           (SELECT string_agg(DISTINCT tci.style, ', ' ORDER BY tci.style)
            FROM tax_calculation_items tci
            JOIN tax_calculations tc ON tci.tax_calculation_id = tc.id
-           WHERE tc.reference = p.reference AND tci.style IS NOT NULL AND tci.style != '') AS style_nos
+           WHERE tc.procedure_id = p.id AND tci.style IS NOT NULL AND tci.style != '') AS style_nos
         FROM procedures p
         WHERE p.shipment_status = 'tareks_application'
         ORDER BY p.created_at DESC
