@@ -4508,9 +4508,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const query = `
         SELECT p.id, p.reference, p.shipper, p.invoice_no, p.invoice_date, p.amount, p.currency, p.piece, p.tareks_status, p.created_at,
-          (SELECT string_agg(DISTINCT ili.style_no, ', ' ORDER BY ili.style_no)
-           FROM invoice_line_items ili
-           WHERE ili.procedure_reference = p.reference AND ili.style_no IS NOT NULL AND ili.style_no != '') AS style_nos
+          (SELECT string_agg(DISTINCT tci.style, ', ' ORDER BY tci.style)
+           FROM tax_calculation_items tci
+           JOIN tax_calculations tc ON tci.tax_calculation_id = tc.id
+           WHERE tc.reference = p.reference AND tci.style IS NOT NULL AND tci.style != '') AS style_nos
         FROM procedures p
         WHERE p.shipment_status = 'tareks_application'
         ORDER BY p.created_at DESC
