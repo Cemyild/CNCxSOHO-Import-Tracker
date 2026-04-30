@@ -4507,10 +4507,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Tareks application endpoint called");
 
       const query = `
-        SELECT id, reference, shipper, invoice_no, invoice_date, amount, currency, piece, tareks_status, created_at
-        FROM procedures
-        WHERE shipment_status = 'tareks_application'
-        ORDER BY created_at DESC
+        SELECT p.id, p.reference, p.shipper, p.invoice_no, p.invoice_date, p.amount, p.currency, p.piece, p.tareks_status, p.created_at,
+          (SELECT string_agg(DISTINCT ili.style_no, ', ' ORDER BY ili.style_no)
+           FROM invoice_line_items ili
+           WHERE ili.procedure_reference = p.reference AND ili.style_no IS NOT NULL AND ili.style_no != '') AS style_nos
+        FROM procedures p
+        WHERE p.shipment_status = 'tareks_application'
+        ORDER BY p.created_at DESC
       `;
 
       const result = await rawDb.query(query);

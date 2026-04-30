@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import {
   Select,
   SelectContent,
@@ -21,6 +22,7 @@ type TareksProcedure = {
   currency: string | null;
   piece: number | null;
   tareks_status: string | null;
+  style_nos: string | null;
 };
 
 type TareksDashboardData = {
@@ -48,6 +50,16 @@ function getStatusLabel(value: string): string {
   return TAREKS_STATUSES.find((s) => s.value === value)?.label ?? value;
 }
 
+function formatDate(date: string | null): string {
+  if (!date) return "—";
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return date;
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const year = d.getUTCFullYear();
+  return `${day}.${month}.${year}`;
+}
+
 function formatAmount(amount: string | null, currency: string | null): string {
   if (!amount) return "—";
   const num = parseFloat(amount);
@@ -64,6 +76,7 @@ function formatAmount(amount: string | null, currency: string | null): string {
 export function TareksProceduresList() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery<TareksDashboardData>({
@@ -129,6 +142,7 @@ export function TareksProceduresList() {
               <th className="px-4 py-3 text-left font-medium">Invoice Date</th>
               <th className="px-4 py-3 text-right font-medium">Amount</th>
               <th className="px-4 py-3 text-right font-medium">Pieces</th>
+              <th className="px-4 py-3 text-left font-medium">Style No</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
             </tr>
           </thead>
@@ -136,7 +150,7 @@ export function TareksProceduresList() {
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 7 }).map((_, j) => (
+                  {Array.from({ length: 8 }).map((_, j) => (
                     <td key={j} className="px-4 py-3">
                       <Skeleton className="h-4 w-full" />
                     </td>
@@ -146,7 +160,7 @@ export function TareksProceduresList() {
             ) : !data || data.procedures.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-gray-400 text-sm"
                 >
                   No procedures in Tareks Application status
@@ -165,8 +179,17 @@ export function TareksProceduresList() {
                     key={proc.id}
                     className="hover:bg-gray-50 transition-colors"
                   >
-                    <td className="px-4 py-3 font-medium text-gray-900">
-                      {proc.reference ?? "—"}
+                    <td className="px-4 py-3 font-medium">
+                      <button
+                        className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                        onClick={() =>
+                          setLocation(
+                            `/procedure-details?reference=${encodeURIComponent(proc.reference ?? "")}`
+                          )
+                        }
+                      >
+                        {proc.reference ?? "—"}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {proc.shipper ?? "—"}
@@ -175,13 +198,16 @@ export function TareksProceduresList() {
                       {proc.invoice_no ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-gray-600">
-                      {proc.invoice_date ?? "—"}
+                      {formatDate(proc.invoice_date)}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-900 font-medium">
                       {formatAmount(proc.amount, proc.currency)}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-600">
                       {proc.piece ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate" title={proc.style_nos ?? ""}>
+                      {proc.style_nos ?? "—"}
                     </td>
                     <td className="px-4 py-3">
                       <Select
