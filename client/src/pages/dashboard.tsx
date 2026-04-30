@@ -12,6 +12,7 @@ import { DashboardCard } from "@/components/ui/expandable-card";
 import { CardsProvider } from "@/components/hooks/use-cards-context";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { DashboardSnapshot } from "@/components/dashboard-snapshot";
+import { TareksProceduresList } from "@/components/tareks-procedures-list";
 
 // Menu items
 const items = [
@@ -148,6 +149,7 @@ export default function DashboardPage() {
           />
         </div>
       </CardsProvider>
+      <TareksProceduresList />
     </PageLayout>
   );
 }

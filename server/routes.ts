@@ -4501,6 +4501,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET procedures in tareks_application shipment status
+  app.get("/api/dashboard/tareks-application", async (req, res) => {
+    try {
+      console.log("Tareks application endpoint called");
+
+      const query = `
+        SELECT id, reference, shipper, invoice_no, invoice_date, amount, currency, piece, tareks_status, created_at
+        FROM procedures
+        WHERE shipment_status = 'tareks_application'
+        ORDER BY created_at DESC
+      `;
+
+      const result = await rawDb.query(query);
+      console.log("Tareks application result:", { rowCount: result.rowCount });
+
+      res.json({
+        count: result.rowCount || 0,
+        procedures: result.rows || [],
+      });
+    } catch (error) {
+      console.error("Error fetching tareks application procedures:", error);
+      res.status(500).json({
+        error: "Failed to fetch tareks application procedures",
+      });
+    }
+  });
+
   // Debug endpoint to verify database structure and data
   app.get("/api/dashboard/debug", async (req, res) => {
     try {

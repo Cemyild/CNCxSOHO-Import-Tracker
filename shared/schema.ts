@@ -123,7 +123,8 @@ export const procedures = pgTable("procedures", {
   payment_status: text("payment_status"),
   document_status: text("document_status"),
   shipment_status: text("shipment_status"),
-  
+  tareks_status: text("tareks_status"),
+
   // Additional financial fields
   freight_amount: decimal("freight_amount", { precision: 15, scale: 2 }).default('0'),
   
