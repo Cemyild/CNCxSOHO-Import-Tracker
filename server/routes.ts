@@ -5153,7 +5153,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AI-powered document extraction (PDF + Excel → ProductItem[])
-  app.post('/api/tax-calculation/extract-products', requireClaudeAuth, documentUpload.single('file'), async (req: Request, res: Response) => {
+  app.post('/api/tax-calculation/extract-products', documentUpload.single('file'), async (req: Request, res: Response) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
