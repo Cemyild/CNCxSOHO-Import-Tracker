@@ -32,21 +32,34 @@ Each item must have these fields (use null if not found):
 Return ONLY a valid JSON array with no extra text.`;
 
 function parseClaudeProducts(jsonText: string): ExtractedProduct[] {
+  console.log('[parseClaudeProducts] raw response (first 500):', jsonText.slice(0, 500));
+
   const cleaned = jsonText
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/i, '')
     .trim();
 
-  let raw: any[];
+  let raw: any;
   try {
     raw = JSON.parse(cleaned);
   } catch {
+    // Try to pull out a JSON array from anywhere in the text
     const match = cleaned.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error('No JSON array found in Claude response');
+    if (!match) {
+      throw new Error(`No JSON array found in Claude response. First 300 chars: ${jsonText.slice(0, 300)}`);
+    }
     raw = JSON.parse(match[0]);
   }
 
-  if (!Array.isArray(raw)) throw new Error('Claude response is not a JSON array');
+  // Handle object wrapper e.g. { "products": [...] } or { "items": [...] }
+  if (raw && !Array.isArray(raw) && typeof raw === 'object') {
+    const arrayProp = Object.values(raw).find(v => Array.isArray(v)) as any[] | undefined;
+    if (arrayProp) raw = arrayProp;
+  }
+
+  if (!Array.isArray(raw)) {
+    throw new Error(`Claude response is not a JSON array. First 300 chars: ${jsonText.slice(0, 300)}`);
+  }
 
   return raw
     .filter(item => item && typeof item.style === 'string' && item.style.trim())
