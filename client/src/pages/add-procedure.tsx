@@ -13,7 +13,8 @@ import {
   CalendarIcon,
   ArrowLeft,
   Save,
-  XCircle
+  XCircle,
+  Sparkles
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -63,6 +64,11 @@ const items = [
     title: "Reports",
     url: "/reports",
     icon: BarChart2,
+  },
+  {
+    title: "Ask CNC?",
+    url: "/ask",
+    icon: Sparkles,
   },
   {
     title: "Settings",

@@ -13,7 +13,8 @@ import {
   FileText,
   Upload,
   Database,
-  CheckCircle
+  CheckCircle,
+  Sparkles
 } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,11 @@ const items = [
     title: "Reports",
     url: "/reports",
     icon: BarChart2,
+  },
+  {
+    title: "Ask CNC?",
+    url: "/ask",
+    icon: Sparkles,
   },
   {
     title: "Settings",

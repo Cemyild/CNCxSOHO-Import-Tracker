@@ -6,7 +6,8 @@ import {
   Inbox,
   Search,
   Settings,
-  BarChart2
+  BarChart2,
+  Sparkles
 } from "lucide-react"
 import {
   Sidebar,
@@ -53,6 +54,11 @@ const items = [
     title: "Reports",
     url: "/reports",
     icon: BarChart2,
+  },
+  {
+    title: "Ask CNC?",
+    url: "/ask",
+    icon: Sparkles,
   },
   {
     title: "Settings",

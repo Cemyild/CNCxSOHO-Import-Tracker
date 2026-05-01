@@ -8,7 +8,8 @@ import {
   Calculator,
   FileText,
   Download,
-  RefreshCw
+  RefreshCw,
+  Sparkles
 } from "lucide-react";
 import { useState } from "react";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -58,6 +59,11 @@ const items = [
     title: "Reports",
     url: "/reports",
     icon: BarChart2,
+  },
+  {
+    title: "Ask CNC?",
+    url: "/ask",
+    icon: Sparkles,
   },
   {
     title: "Settings",

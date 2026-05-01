@@ -5,7 +5,8 @@ import {
   Home,
   Inbox,
   Search,
-  Settings 
+  Settings,
+  Sparkles
 } from "lucide-react"
 import {
   Sidebar,
@@ -52,6 +53,11 @@ const items = [
     title: "Reports",
     url: "#",
     icon: Calendar,
+  },
+  {
+    title: "Ask CNC?",
+    url: "/ask",
+    icon: Sparkles,
   },
   {
     title: "Settings",

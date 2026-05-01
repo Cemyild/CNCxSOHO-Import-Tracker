@@ -11,7 +11,8 @@ import {
   Plus,
   CalendarIcon,
   Wand2,
-  Calculator
+  Calculator,
+  Sparkles
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
@@ -59,6 +60,11 @@ const items = [
     title: "Reports",
     url: "/reports",
     icon: BarChart2,
+  },
+  {
+    title: "Ask CNC?",
+    url: "/ask",
+    icon: Sparkles,
   },
   {
     title: "Settings",

@@ -52,6 +52,7 @@ import {
   Hash,
   ArrowUp,
   ArrowDown,
+  Sparkles
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { UploadTemplateForm } from "@/components/ui/upload-template-form";
@@ -128,6 +129,11 @@ const items = [
     title: "Reports",
     url: "/reports",
     icon: BarChart2,
+  },
+  {
+    title: "Ask CNC?",
+    url: "/ask",
+    icon: Sparkles,
   },
   {
     title: "Settings",

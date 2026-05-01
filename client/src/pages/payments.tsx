@@ -13,7 +13,8 @@ import {
   Eye,
   Database,
   MoreHorizontal,
-  Calculator
+  Calculator,
+  Sparkles
 } from "lucide-react"
 import { PageLayout } from "@/components/layout/PageLayout"
 import { PaymentsTable } from "@/components/ui/payments-table"
@@ -92,6 +93,11 @@ const items = [
     title: "Reports",
     url: "/reports",
     icon: BarChart2,
+  },
+  {
+    title: "Ask CNC?",
+    url: "/ask",
+    icon: Sparkles,
   },
   {
     title: "Settings",

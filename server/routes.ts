@@ -55,6 +55,7 @@ import {
   buildProcedureMasterRows,
 } from "./master-excel-helper";
 import { appendRowsToMasterXlsx } from "./master-excel-zip";
+import { handleAskRequest, isAskConfigured } from "./ai-ask";
 // Import rate limiting
 import rateLimit from "express-rate-limit";
 // Import Zod for validation
@@ -1579,6 +1580,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('[Master Excel] inspect error:', error);
       res.status(500).json({ error: 'Failed to inspect', detail: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  // ── Ask CNC? — natural-language Q&A backed by Claude tool-use ─────────────
+  app.post("/api/ask", async (req: Request, res: Response) => {
+    try {
+      if (!isAskConfigured()) {
+        return res.status(503).json({ error: "AI Q&A not configured (ANTHROPIC_API_KEY missing)" });
+      }
+      const question = (req.body?.question ?? "").toString().trim();
+      if (!question) {
+        return res.status(400).json({ error: "Missing 'question' in body" });
+      }
+      if (question.length > 1000) {
+        return res.status(400).json({ error: "Question too long (max 1000 chars)" });
+      }
+      const todayISO = typeof req.body?.todayISO === "string" ? req.body.todayISO : undefined;
+      const result = await handleAskRequest({ question, todayISO });
+      return res.json(result);
+    } catch (error) {
+      console.error("[Ask CNC] error:", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      return res.status(500).json({ error: "Failed to answer", detail: msg });
     }
   });
 

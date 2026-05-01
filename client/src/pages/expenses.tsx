@@ -5,7 +5,8 @@ import {
   Settings,
   BarChart2,
   CreditCard,
-  Calculator
+  Calculator,
+  Sparkles
 } from "lucide-react"
 import { PageLayout } from "@/components/layout/PageLayout"
 import { ExpensesTable } from "@/components/ui/expenses-table"
@@ -41,6 +42,11 @@ const items = [
     title: "Reports",
     url: "/reports",
     icon: BarChart2,
+  },
+  {
+    title: "Ask CNC?",
+    url: "/ask",
+    icon: Sparkles,
   },
   {
     title: "Settings",

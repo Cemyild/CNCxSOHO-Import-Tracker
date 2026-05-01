@@ -7,6 +7,7 @@ import {
   Settings,
   BarChart2,
   Calculator,
+  Sparkles
 } from "lucide-react";
 import { DashboardCard } from "@/components/ui/expandable-card";
 import { CardsProvider } from "@/components/hooks/use-cards-context";
@@ -45,6 +46,11 @@ const items = [
     title: "Reports",
     url: "/reports",
     icon: BarChart2,
+  },
+  {
+    title: "Ask CNC?",
+    url: "/ask",
+    icon: Sparkles,
   },
   {
     title: "Settings",

@@ -15,7 +15,8 @@ import {
   Eye,
   Share2,
   Receipt,
-  Loader2
+  Loader2,
+  Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -87,6 +88,11 @@ const items = [
     title: "Reports",
     url: "/reports",
     icon: BarChart2,
+  },
+  {
+    title: "Ask CNC?",
+    url: "/ask",
+    icon: Sparkles,
   },
   {
     title: "Settings",

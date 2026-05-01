@@ -27,6 +27,7 @@ import TaxCalculationPage from "@/pages/tax-calculation";
 import TaxCalculationNewPage from "@/pages/tax-calculation-new";
 import TaxCalculationEditPage from "@/pages/tax-calculation-edit";
 import TaxCalculationResultsPage from "@/pages/tax-calculation-results";
+import AskPage from "@/pages/ask";
 
 function Router() {
   return (
@@ -179,6 +180,13 @@ function Router() {
         {() => (
           <ProtectedRoute>
             <HomePage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/ask">
+        {() => (
+          <ProtectedRoute>
+            <AskPage />
           </ProtectedRoute>
         )}
       </Route>

@@ -17,7 +17,8 @@ import {
   Calculator,
   BarChart,
   Save,
-  X
+  X,
+  Sparkles
 } from "lucide-react";
 import InvoiceLineItemsTable from "@/components/ui/invoice-line-items-table";
 import ExpenseTrendsChart from "@/components/ui/expense-trends-chart";
@@ -95,6 +96,11 @@ const items = [
     title: "Reports",
     url: "/reports",
     icon: BarChart2,
+  },
+  {
+    title: "Ask CNC?",
+    url: "/ask",
+    icon: Sparkles,
   },
   {
     title: "Settings",
