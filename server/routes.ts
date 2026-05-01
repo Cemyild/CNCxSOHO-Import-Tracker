@@ -6256,8 +6256,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ error: 'Invalid calculation ID' });
         }
 
-        const { products, invoiceMetadata, userId } = req.body ?? {};
-        if (!Array.isArray(products) || products.length === 0) {
+        const { products: inputProducts, invoiceMetadata, userId } = req.body ?? {};
+        if (!Array.isArray(inputProducts) || inputProducts.length === 0) {
           return res.status(400).json({ error: 'products must be a non-empty array' });
         }
 
@@ -6281,7 +6281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // populate product_id + tr_hs_code (calculateAllItems skips items without tr_hs_code).
         const incomingStyles = Array.from(
           new Set(
-            (products as any[])
+            (inputProducts as any[])
               .map(p => (typeof p?.style === 'string' ? p.style.trim() : ''))
               .filter(s => s.length > 0)
           )
@@ -6295,7 +6295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // 4. Map + insert new items (mirrors /items/batch shape)
-        const itemsToInsert = (products as any[]).map((item: any, index: number) => {
+        const itemsToInsert = (inputProducts as any[]).map((item: any, index: number) => {
           if (!item.style) {
             throw new Error(`Item at index ${index} is missing required field: style`);
           }
