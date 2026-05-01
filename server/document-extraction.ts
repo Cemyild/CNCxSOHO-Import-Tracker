@@ -1,7 +1,7 @@
 // server/document-extraction.ts
 import * as crypto from 'crypto';
 import * as XLSX from 'xlsx';
-import { analyzePdfWithClaude, analyzeText } from './claude';
+import { analyzeImage, analyzeText } from './claude';
 
 export interface ExtractedProduct {
   tempId: string;
@@ -82,13 +82,7 @@ export async function extractFromPdf(buffer: Buffer): Promise<ExtractedProduct[]
     throw new Error('Empty file buffer provided');
   }
   const base64Data = buffer.toString('base64');
-  const response = await analyzePdfWithClaude({
-    base64Data,
-    prompt: PDF_PROMPT,
-    maxTokens: 4096,
-    temperature: 0,
-    model: 'claude-haiku-4-5-20251001',
-  });
+  const response = await analyzeImage(base64Data, 'application/pdf', PDF_PROMPT);
   return parseClaudeProducts(response);
 }
 
@@ -127,6 +121,6 @@ Return ONLY a valid JSON array with no extra text.
 Headers: ${JSON.stringify(headers)}
 Rows: ${JSON.stringify(dataRows.slice(0, 500))}`;
 
-  const response = await analyzeText(excelPrompt, undefined, 0, 4096, 'claude-haiku-4-5-20251001');
+  const response = await analyzeText(excelPrompt, undefined, 0, 4096, 'claude-3-5-haiku-20241022');
   return parseClaudeProducts(response);
 }
