@@ -22,6 +22,22 @@ interface FormState {
   is_atr: boolean;
 }
 
+function formatNumber(value: any, decimals: number = 2): string {
+  const n = typeof value === "number" ? value : parseFloat(String(value ?? ""));
+  if (!isFinite(n)) return "";
+  return n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function formatUsd(value: any): string {
+  const s = formatNumber(value, 2);
+  return s ? `$${s}` : "";
+}
+
+function formatTry(value: any): string {
+  const s = formatNumber(value, 4);
+  return s ? `₺${s}` : "";
+}
+
 function isoDateInput(d: any): string {
   if (!d) return "";
   if (typeof d === "string") {
@@ -177,10 +193,10 @@ export function CalculationInfoCard({ calculation, calculationQueryKey }: Props)
                 : "",
               "calc-info-invoice-date"
             )}
-            {renderRead("Currency Rate", calculation.currency_rate ?? "", "calc-info-currency-rate")}
-            {renderRead("Transport Cost", calculation.transport_cost ?? "", "calc-info-transport-cost")}
-            {renderRead("Insurance Cost", calculation.insurance_cost ?? "", "calc-info-insurance-cost")}
-            {renderRead("Storage Cost", calculation.storage_cost ?? "", "calc-info-storage-cost")}
+            {renderRead("Currency Rate", formatTry(calculation.currency_rate), "calc-info-currency-rate")}
+            {renderRead("Transport Cost", formatUsd(calculation.transport_cost), "calc-info-transport-cost")}
+            {renderRead("Insurance Cost", formatUsd(calculation.insurance_cost), "calc-info-insurance-cost")}
+            {renderRead("Storage Cost", formatUsd(calculation.storage_cost), "calc-info-storage-cost")}
             {renderRead(
               "Flags",
               [
