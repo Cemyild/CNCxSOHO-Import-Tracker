@@ -23,7 +23,7 @@ import type { InsertTaxCalculation, TaxCalculation, TaxCalculationItem, Product 
 import { InvoiceInfoForm } from "@/components/tax-calculation/InvoiceInfoForm";
 import { ProductsTable, ProductItem } from "@/components/tax-calculation/ProductsTable";
 import { ExcelPasteDialog } from "@/components/tax-calculation/ExcelPasteDialog";
-import { ExcelUploadDialog } from "@/components/tax-calculation/ExcelUploadDialog";
+import { DocumentUploadDialog } from "@/components/tax-calculation/DocumentUploadDialog";
 import { MissingDataModal } from "@/components/tax-calculation/MissingDataModal";
 import { CalculationLoadingModal } from "@/components/tax-calculation/CalculationLoadingModal";
 import { AtrRatesModal } from "@/components/tax-calculation/AtrRatesModal";
@@ -881,7 +881,7 @@ export default function TaxCalculationEditPage() {
         onImport={handleImportProducts}
       />
 
-      <ExcelUploadDialog
+      <DocumentUploadDialog
         open={showUploadDialog}
         onOpenChange={setShowUploadDialog}
         onImport={handleImportProducts}
