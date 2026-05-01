@@ -1485,18 +1485,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ error: 'No file uploaded' });
     }
     try {
+      console.log(`[Master Excel] upload received: name=${req.file.originalname} size=${req.file.size} buffer.length=${req.file.buffer.length}`);
       // Sanity-check the workbook can be opened and has the expected sheet
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(req.file.buffer as any);
+      const names = wb.worksheets.map(w => w.name);
       const sheet = wb.getWorksheet('IMPORT LIST');
+      console.log(`[Master Excel] upload validation: sheets=${names.length} hasImportList=${!!sheet} all=${JSON.stringify(names.slice(0, 5))}`);
       if (!sheet) {
-        return res.status(400).json({ error: 'Workbook does not contain a sheet named "IMPORT LIST"' });
+        return res.status(400).json({
+          error: 'Workbook does not contain a sheet named "IMPORT LIST"',
+          detail: `Found sheets: ${JSON.stringify(names)}`,
+        });
       }
       await saveMasterExcel(req.file.buffer);
-      return res.json({ ok: true, size: req.file.buffer.length });
+      // Read it back to confirm round-trip
+      const verify = await getMasterExcel();
+      console.log(`[Master Excel] upload persisted: stored=${verify?.buffer.length ?? 'NULL'} matches=${verify?.buffer.length === req.file.buffer.length}`);
+      return res.json({ ok: true, size: req.file.buffer.length, stored: verify?.buffer.length ?? null });
     } catch (error) {
       console.error('[Master Excel] upload error:', error);
-      res.status(500).json({ error: 'Failed to save master excel' });
+      res.status(500).json({ error: 'Failed to save master excel', detail: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -1618,11 +1627,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const out = await wb.xlsx.writeBuffer();
       const buffer = Buffer.from(out as ArrayBuffer);
 
+      console.log(`[Master Excel] writeBuffer: type=${typeof out} byteLength=${(out as any)?.byteLength ?? (out as any)?.length} buffer.length=${buffer.length}`);
+      if (!buffer.length) {
+        console.error('[Master Excel] writeBuffer produced empty buffer; refusing to overwrite stored master');
+        return res.status(500).json({
+          error: 'exceljs produced an empty workbook',
+          detail: `writeBuffer length=${buffer.length}; stored master left untouched`,
+        });
+      }
+
       // Persist the updated master file
       await saveMasterExcel(buffer);
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="master-import-list.xlsx"`);
+      res.setHeader('Content-Length', String(buffer.length));
       res.send(buffer);
     } catch (error) {
       console.error('[Master Excel] append error:', error);
