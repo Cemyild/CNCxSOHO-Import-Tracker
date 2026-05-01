@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -67,7 +67,9 @@ export function DocumentUploadDialog({
         body: formData,
       });
 
-      const data = await response.json();
+      const text = await response.text();
+      let data: any = {};
+      try { data = JSON.parse(text); } catch { /* not JSON */ }
 
       if (!response.ok) {
         toast({
@@ -122,7 +124,7 @@ export function DocumentUploadDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
       <DialogContent className="max-w-6xl max-h-[85vh] overflow-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -197,7 +199,7 @@ export function DocumentUploadDialog({
                         {product.fabric_content || "-"}
                       </TableCell>
                       <TableCell className="text-sm text-right">
-                        ${product.cost}
+                        {product.cost ? `$${product.cost}` : "-"}
                       </TableCell>
                       <TableCell className="text-sm text-right">
                         {product.unit_count}
@@ -209,7 +211,7 @@ export function DocumentUploadDialog({
                         {product.hts_code || "-"}
                       </TableCell>
                       <TableCell className="text-sm font-bold text-right">
-                        ${product.total_value}
+                        {product.total_value ? `$${product.total_value}` : "-"}
                       </TableCell>
                     </TableRow>
                   ))}
