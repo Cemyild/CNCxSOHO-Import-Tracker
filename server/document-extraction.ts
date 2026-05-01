@@ -35,18 +35,18 @@ function parseClaudeProducts(jsonText: string): ExtractedProduct[] {
   const start = jsonText.indexOf('[');
   const end = jsonText.lastIndexOf(']');
   if (start === -1 || end === -1 || end < start) {
-    throw new Error(`No JSON array found in Claude response. First 300 chars: ${jsonText.slice(0, 300)}`);
+    throw new Error(`[v2] Brackets not found. start=${start} end=${end}. First 300 chars: ${jsonText.slice(0, 300)}`);
   }
 
   let raw: any[];
   try {
     raw = JSON.parse(jsonText.slice(start, end + 1));
   } catch (e) {
-    throw new Error(`Failed to parse JSON from Claude response: ${e}. First 300 chars: ${jsonText.slice(0, 300)}`);
+    throw new Error(`[v2] JSON.parse failed: ${e}. Sliced len=${end - start + 1}. First 300 chars: ${jsonText.slice(0, 300)}`);
   }
 
   if (!Array.isArray(raw)) {
-    throw new Error(`Claude response is not a JSON array. First 300 chars: ${jsonText.slice(0, 300)}`);
+    throw new Error(`[v2] Result not array. First 300 chars: ${jsonText.slice(0, 300)}`);
   }
 
   return raw
