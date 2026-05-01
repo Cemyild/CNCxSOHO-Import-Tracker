@@ -140,6 +140,7 @@ export function DocumentUploadDialog({
         {!showPreview ? (
           <div className="space-y-4">
             <Input
+              key={fileName}
               type="file"
               accept=".pdf,.xlsx,.xls"
               onChange={handleFileUpload}

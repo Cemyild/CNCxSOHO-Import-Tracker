@@ -729,10 +729,10 @@ export default function TaxCalculationNewPage() {
                 </Button>
                 <Button
                   onClick={() => setShowUploadDialog(true)}
-                  data-testid="button-upload-excel"
+                  data-testid="button-upload-document"
                 >
                   <UploadIcon className="mr-2 h-4 w-4" />
-                  Upload Excel File
+                  Upload Invoice / Excel
                 </Button>
                 <Button
                   variant="outline"
