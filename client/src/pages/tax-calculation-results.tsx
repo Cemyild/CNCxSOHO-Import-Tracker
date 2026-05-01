@@ -23,6 +23,7 @@ import { CalculationSummary } from "@/components/tax-calculation/CalculationSumm
 import { ResultsTable } from "@/components/tax-calculation/ResultsTable";
 import { AdvTaxletterModal } from "@/components/tax-calculation/AdvTaxletterModal";
 import { DocumentUploadDialog, type InvoiceMetadata } from "@/components/tax-calculation/DocumentUploadDialog";
+import { CalculationInfoCard } from "@/components/tax-calculation/CalculationInfoCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -439,6 +440,11 @@ export default function TaxCalculationResultsPage() {
             )}
           </div>
         </div>
+
+        <CalculationInfoCard
+          calculation={calculation}
+          calculationQueryKey={[`/api/tax-calculation/calculations/${id}`]}
+        />
 
         <CalculationSummary
           totalValue={parseFloat(calculation.total_value || "0")}

@@ -6277,8 +6277,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // 2. Bulk-delete existing items
         await db.delete(taxCalculationItems).where(eq(taxCalculationItems.tax_calculation_id, id));
 
-        // 3. Map + insert new items (mirrors /items/batch shape)
-        const itemsToInsert = products.map((item: any, index: number) => {
+        // 3. Match incoming products against the products table by style so we can
+        // populate product_id + tr_hs_code (calculateAllItems skips items without tr_hs_code).
+        const incomingStyles = Array.from(
+          new Set(
+            (products as any[])
+              .map(p => (typeof p?.style === 'string' ? p.style.trim() : ''))
+              .filter(s => s.length > 0)
+          )
+        );
+        const matchedProducts = incomingStyles.length
+          ? await db.select().from(products).where(inArray(products.style, incomingStyles))
+          : [];
+        const productByStyle = new Map<string, typeof matchedProducts[number]>();
+        for (const p of matchedProducts) {
+          if (p.style) productByStyle.set(p.style.toLowerCase().trim(), p);
+        }
+
+        // 4. Map + insert new items (mirrors /items/batch shape)
+        const itemsToInsert = (products as any[]).map((item: any, index: number) => {
           if (!item.style) {
             throw new Error(`Item at index ${index} is missing required field: style`);
           }
@@ -6292,20 +6309,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             throw new Error(`Item at index ${index} has invalid unit_count: ${item.unit_count}`);
           }
           const safeTotal = isNaN(totalValue) ? cost * unitCount : totalValue;
+
+          const matched = productByStyle.get(String(item.style).toLowerCase().trim());
+
           return {
             tax_calculation_id: id,
+            product_id: matched?.id ?? null,
             line_number: index + 1,
             style: item.style,
-            color: item.color || null,
-            category: item.category || null,
-            description: item.description || null,
-            fabric_content: item.fabric_content || null,
-            country_of_origin: item.country_of_origin || null,
-            hts_code: item.hts_code || null,
+            color: item.color || matched?.color || null,
+            category: item.category || matched?.category || null,
+            description: item.description || matched?.item_description || null,
+            fabric_content: item.fabric_content || matched?.fabric_content || null,
+            country_of_origin: item.country_of_origin || matched?.country_of_origin || null,
+            hts_code: item.hts_code || matched?.hts_code || null,
             cost: cost.toString(),
             unit_count: unitCount,
             total_value: safeTotal.toString(),
-            tr_hs_code: item.tr_hs_code || null,
+            tr_hs_code: item.tr_hs_code || matched?.tr_hs_code || null,
           };
         });
 
