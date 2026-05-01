@@ -259,21 +259,23 @@ export async function analyzePdfWithClaude({
   base64Data,
   prompt,
   maxTokens = 4096,
-  temperature = 1
+  temperature = 1,
+  model = DEFAULT_MODEL_STR,
 }: {
   base64Data: string;
   prompt: string;
   maxTokens?: number;
   temperature?: number;
+  model?: string;
 }): Promise<string> {
   ensureConfigured();
-  
+
   if (!anthropic) {
     throw new Error('Anthropic client not initialized - API key not configured');
   }
 
   const message = await anthropic.messages.create({
-    model: DEFAULT_MODEL_STR,
+    model,
     max_tokens: maxTokens,
     temperature: temperature,
     messages: [
@@ -303,7 +305,7 @@ export async function analyzePdfWithClaude({
 /**
  * Analyze text with Claude (non-vision)
  */
-export async function analyzeText(prompt: string, systemPrompt?: string, temperature: number = 1, maxTokens: number = 4096): Promise<string> {
+export async function analyzeText(prompt: string, systemPrompt?: string, temperature: number = 1, maxTokens: number = 4096, model: string = DEFAULT_MODEL_STR): Promise<string> {
   ensureConfigured();
 
   if (!anthropic) {
@@ -313,7 +315,7 @@ export async function analyzeText(prompt: string, systemPrompt?: string, tempera
   const message = await anthropic.messages.create({
     max_tokens: maxTokens,
     messages: [{ role: 'user', content: prompt }],
-    model: DEFAULT_MODEL_STR,
+    model,
     temperature,
     ...(systemPrompt && { system: systemPrompt })
   });
