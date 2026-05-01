@@ -86,7 +86,7 @@ export async function extractFromPdf(buffer: Buffer): Promise<ExtractedProduct[]
   const response = await analyzePdfWithClaude({
     base64Data,
     prompt: PDF_PROMPT,
-    maxTokens: 8192,
+    maxTokens: 16384,
     temperature: 0,
     model: 'claude-haiku-4-5-20251001',
   });
@@ -128,6 +128,6 @@ Return ONLY a valid JSON array with no extra text.
 Headers: ${JSON.stringify(headers)}
 Rows: ${JSON.stringify(dataRows.slice(0, 500))}`;
 
-  const response = await analyzeText(excelPrompt, undefined, 0, 8192, 'claude-haiku-4-5-20251001');
+  const response = await analyzeText(excelPrompt, undefined, 0, 16384, 'claude-haiku-4-5-20251001');
   return parseClaudeProducts(response);
 }
