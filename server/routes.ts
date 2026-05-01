@@ -1570,6 +1570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sample.row5_B = importList.getCell(5, 2).value;
       }
       res.json({
+        codeVersion: 'table-aware-fill-v1',
         size: file.buffer.length,
         modifiedAt: file.modifiedAt.toISOString(),
         sheetCount: wb.worksheets.length,
