@@ -5169,7 +5169,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ products });
     } catch (error) {
       console.error('[extract-products]', error);
-      return res.status(500).json({ error: 'AI extraction failed, please try again' });
+      return res.status(500).json({ error: String(error) });
     }
   });
 
