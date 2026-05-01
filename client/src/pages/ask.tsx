@@ -71,12 +71,12 @@ interface Message {
 }
 
 const SUGGESTIONS = [
-  "Ocak 2026'da kaç procedure yaptık, toplam fatura bedeli ne kadar?",
-  "Bu yıl ödenen toplam KDV nedir?",
-  "Geçen 6 ayda en çok masraf ödenen 5 issuer kim?",
-  "Aylık procedure sayısı son 12 ay grafik olarak göster",
-  "ALO LLC için bu yıl ödenen toplam customs tax?",
-  "Hangi TR HS kodları AZO test gerektiriyor?",
+  "How many procedures did we run in January 2026, and what was the total invoice value?",
+  "How much VAT was paid this year?",
+  "Top 5 issuers by total fees paid in the last 6 months",
+  "Show monthly procedure count for the last 12 months as a chart",
+  "Total customs tax paid for ALO LLC this year",
+  "Which TR HS codes require AZO dye test?",
 ];
 
 function fmtNum(v: any): string {
@@ -216,14 +216,14 @@ export default function AskPage() {
         if (last?.role === "assistant" && last.pending) {
           next[next.length - 1] = {
             role: "assistant",
-            text: `Hata: ${err?.message ?? "İstek başarısız"}`,
+            text: `Error: ${err?.message ?? "Request failed"}`,
           };
         }
         return next;
       });
       toast({
-        title: "Hata",
-        description: err?.message ?? "İstek başarısız",
+        title: "Error",
+        description: err?.message ?? "Request failed",
         variant: "destructive",
       });
     } finally {
@@ -245,7 +245,7 @@ export default function AskPage() {
             Ask CNC?
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Procedures, taxes, expenses, payments, products ve TR HS kodları üzerine doğal dilde soru sor.
+            Ask natural-language questions about procedures, taxes, expenses, payments, products, and TR HS codes.
           </p>
         </div>
 
@@ -254,7 +254,7 @@ export default function AskPage() {
           {messages.length === 0 ? (
             <Card>
               <CardContent className="pt-6">
-                <div className="text-sm font-medium mb-3">Örnek sorular:</div>
+                <div className="text-sm font-medium mb-3">Example questions:</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {SUGGESTIONS.map((q, i) => (
                     <Button
@@ -285,7 +285,7 @@ export default function AskPage() {
                       {m.pending ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Loader2 className="h-4 w-4 animate-spin" />
-                          Düşünüyorum…
+                          Thinking…
                         </div>
                       ) : (
                         <>
@@ -327,7 +327,7 @@ export default function AskPage() {
                 handleSubmit(e as any);
               }
             }}
-            placeholder="Sorunu yaz…"
+            placeholder="Type your question…"
             rows={2}
             disabled={isAsking}
             data-testid="ask-input"
