@@ -1610,72 +1610,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Master workbook is missing sheet "IMPORT LIST"' });
       }
 
-      // Find the last row whose column A (REFERENCE) is non-empty.
-      // NOTE: exceljs's actualRowCount returns the COUNT of rows with values, not the last
-      // row index. Use rowCount (last index used) as the upper bound when scanning.
+      // The IMPORT LIST sheet is an Excel Table whose formulas use structured references
+      // like Tablo1[[#This Row],[…]]. Our previous duplicateRow+write approach inserted
+      // rows OUTSIDE the table — Excel then flagged sheet1.xml invalid and stripped its
+      // contents on open ("recovery → completely empty").
+      //
+      // The master file has many empty styled rows RESERVED inside the table range
+      // (rows after the last data row but within the table's defined ref). Writing into
+      // those rows preserves all styles + table-formulas without changing structure.
+
+      // Detect the table that covers the IMPORT LIST data (typically named "Tablo1").
+      const tablesObj = (sheet as any).tables ?? {};
+      let tableEndRow: number | null = null;
+      let tableName: string | null = null;
+      for (const name of Object.keys(tablesObj)) {
+        const t = sheet.getTable(name) as any;
+        const ref: string | undefined = t?.table?.tableRef ?? t?.table?.ref;
+        const m = ref?.match(/^[A-Z]+\d+:[A-Z]+(\d+)$/);
+        if (m) {
+          tableEndRow = parseInt(m[1], 10);
+          tableName = name;
+          break;
+        }
+      }
+
+      // Find the LAST row in column A that is non-empty (current last-reference row).
       const scanFrom = Math.max(sheet.rowCount ?? 0, 0);
       let lastRefRow = 0;
       for (let r = scanFrom; r >= 1; r--) {
-        const cell = sheet.getCell(r, 1);
-        const v = cell.value;
+        const v = sheet.getCell(r, 1).value;
         if (v != null && String(v).trim() !== '') {
           lastRefRow = r;
           break;
         }
       }
       if (lastRefRow < 3) {
-        console.error(`[Master Excel] Could not find a reference row. rowCount=${sheet.rowCount} actualRowCount=${(sheet as any).actualRowCount} scanFrom=${scanFrom}`);
         return res.status(400).json({
-          error: 'Could not find an existing reference row in IMPORT LIST to copy formatting from',
+          error: 'Could not find an existing reference row in IMPORT LIST',
           detail: `rowCount=${sheet.rowCount}, lastRefRow=${lastRefRow}`,
         });
       }
-      console.log(`[Master Excel] Append target: rowCount=${sheet.rowCount} lastRefRow=${lastRefRow} appending=${rowsToAppend.length}`);
 
-      // Pre-read the source row's formula state so we know which cells NOT to overwrite.
-      const sourceCells = [] as Array<{ col: number; isFormula: boolean; formula: string | null }>;
-      for (let c = 1; c <= MASTER_COLUMN_COUNT; c++) {
-        const cell = sheet.getCell(lastRefRow, c);
-        const f = (cell as any).formula as string | undefined;
-        const valIsFormula = cell.value && typeof cell.value === 'object' && (cell.value as any).formula;
-        const formula = f || (valIsFormula ? (cell.value as any).formula : null);
-        sourceCells.push({ col: c, isFormula: !!formula, formula: formula || null });
+      console.log(`[Master Excel] table=${tableName ?? 'none'} tableEndRow=${tableEndRow} rowCount=${sheet.rowCount} lastRefRow=${lastRefRow} appending=${rowsToAppend.length}`);
+
+      // Resolve target rows. If we run out of reserved empty rows inside the table,
+      // extend it via the exceljs table API (which updates table refs cleanly).
+      const writeRows: number[] = [];
+      let nextRow = lastRefRow + 1;
+      for (let i = 0; i < rowsToAppend.length; i++) {
+        if (tableEndRow != null && nextRow <= tableEndRow) {
+          writeRows.push(nextRow);
+        } else if (tableName) {
+          const table = sheet.getTable(tableName) as any;
+          const tableCols = (table?.table?.columns?.length ?? MASTER_COLUMN_COUNT) as number;
+          table.addRow(new Array(tableCols).fill(null));
+          table.commit();
+          const newRef: string | undefined = table?.table?.tableRef ?? table?.table?.ref;
+          const m = newRef?.match(/^[A-Z]+\d+:[A-Z]+(\d+)$/);
+          if (m) tableEndRow = parseInt(m[1], 10);
+          writeRows.push(nextRow);
+        } else {
+          writeRows.push(nextRow);
+        }
+        nextRow++;
       }
 
-      // Duplicate the source row N times, inserting copies right below it (preserves styles + formulas).
-      sheet.duplicateRow(lastRefRow, rowsToAppend.length, true);
-
-      // Helper to shift relative row references in a formula by `delta`.
-      const shiftFormula = (formula: string, srcRow: number, dstRow: number): string => {
-        const delta = dstRow - srcRow;
-        if (delta === 0) return formula;
-        // Match cell refs like A1, $A1, A$1, $A$1
-        return formula.replace(/(\$?[A-Z]+)(\$?)(\d+)/g, (_match, col, rowAbs, rowDigits) => {
-          if (rowAbs === '$') return `${col}${rowAbs}${rowDigits}`; // absolute row, leave alone
-          const rowNum = parseInt(rowDigits, 10);
-          // Adjust references that pointed at the source row of the duplicated template.
-          if (rowNum === srcRow) return `${col}${rowAbs}${rowNum + delta}`;
-          return `${col}${rowAbs}${rowDigits}`;
-        });
-      };
-
-      // Write data into each new row. Skip cells whose source had a formula (keep duplicated formula).
-      // Adjust formula row references where needed.
+      // Write data values into the target rows. Skip cells that already hold a formula
+      // (the reserved empty rows have table-column formulas pre-populated).
       for (let i = 0; i < rowsToAppend.length; i++) {
-        const dstRow = lastRefRow + 1 + i;
+        const dstRow = writeRows[i];
         const data = rowsToAppend[i];
         for (let c = 1; c <= MASTER_COLUMN_COUNT; c++) {
           const cell = sheet.getCell(dstRow, c);
-          const src = sourceCells[c - 1];
-          if (src.isFormula) {
-            // Re-write formula with shifted row references so it operates on this row.
-            if (src.formula) {
-              const adjusted = shiftFormula(src.formula, lastRefRow, dstRow);
-              cell.value = { formula: adjusted } as any;
-            }
-            continue;
-          }
+          const f = (cell as any).formula as string | undefined;
+          const valIsFormula = cell.value && typeof cell.value === 'object' && (cell.value as any).formula;
+          if (f || valIsFormula) continue; // leave existing formula alone
+
           const value = data[c - 1] ?? null;
+          if (value === null || value === undefined || value === '') continue;
           cell.value = value as any;
           if (DATE_COLUMNS.includes(c) && value instanceof Date) {
             cell.numFmt = cell.numFmt || 'DD/MM/YYYY';
