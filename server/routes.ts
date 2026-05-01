@@ -1530,8 +1530,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Find the last row whose column A (REFERENCE) is non-empty.
+      // NOTE: exceljs's actualRowCount returns the COUNT of rows with values, not the last
+      // row index. Use rowCount (last index used) as the upper bound when scanning.
+      const scanFrom = Math.max(sheet.rowCount ?? 0, 0);
       let lastRefRow = 0;
-      for (let r = sheet.actualRowCount ?? sheet.rowCount; r >= 1; r--) {
+      for (let r = scanFrom; r >= 1; r--) {
         const cell = sheet.getCell(r, 1);
         const v = cell.value;
         if (v != null && String(v).trim() !== '') {
@@ -1540,8 +1543,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       if (lastRefRow < 3) {
-        return res.status(400).json({ error: 'Could not find an existing reference row in IMPORT LIST to copy formatting from' });
+        console.error(`[Master Excel] Could not find a reference row. rowCount=${sheet.rowCount} actualRowCount=${(sheet as any).actualRowCount} scanFrom=${scanFrom}`);
+        return res.status(400).json({
+          error: 'Could not find an existing reference row in IMPORT LIST to copy formatting from',
+          detail: `rowCount=${sheet.rowCount}, lastRefRow=${lastRefRow}`,
+        });
       }
+      console.log(`[Master Excel] Append target: rowCount=${sheet.rowCount} lastRefRow=${lastRefRow} appending=${rowsToAppend.length}`);
 
       // Pre-read the source row's formula state so we know which cells NOT to overwrite.
       const sourceCells = [] as Array<{ col: number; isFormula: boolean; formula: string | null }>;
