@@ -26,6 +26,7 @@ import {
   importServiceInvoices,
   paymentDistributions,
   taxCalculations,
+  taxCalculationItems,
 } from "@shared/schema";
 import { calculateAllItems, checkMissingAtrRates } from "./tax-calculation-service";
 import { jsPDF } from "jspdf";
@@ -5162,14 +5163,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.file.mimetype === 'application/pdf' ||
         req.file.originalname.toLowerCase().endsWith('.pdf');
 
-      const products = isPdf
+      const result = isPdf
         ? await extractFromPdf(req.file.buffer)
         : await extractFromExcel(req.file.buffer);
 
-      return res.json({ products });
+      return res.json(result);
     } catch (error) {
       console.error('[extract-products]', error);
-      return res.status(500).json({ error: String(error) });
+      return res.status(500).json({ error: 'AI extraction failed, please try again' });
     }
   });
 
@@ -6070,6 +6071,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
             message: "Failed to create procedure",
             error: error instanceof Error ? error.message : String(error),
           });
+      }
+    },
+  );
+
+  // Replace product list on a calculation, recalculate taxes, and (if linked) sync the procedure.
+  app.put(
+    "/api/tax-calculation/calculations/:id/replace-products",
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) {
+          return res.status(400).json({ error: 'Invalid calculation ID' });
+        }
+
+        const { products, invoiceMetadata, userId } = req.body ?? {};
+        if (!Array.isArray(products) || products.length === 0) {
+          return res.status(400).json({ error: 'products must be a non-empty array' });
+        }
+
+        const calculation = await storage.getTaxCalculation(id);
+        if (!calculation) {
+          return res.status(404).json({ message: "Calculation not found" });
+        }
+
+        // 1. Update calculation invoice metadata if provided
+        const calcUpdate: Record<string, any> = {};
+        if (invoiceMetadata?.invoice_no) calcUpdate.invoice_no = invoiceMetadata.invoice_no;
+        if (invoiceMetadata?.invoice_date) calcUpdate.invoice_date = invoiceMetadata.invoice_date;
+        if (Object.keys(calcUpdate).length > 0) {
+          await storage.updateTaxCalculation(id, calcUpdate);
+        }
+
+        // 2. Bulk-delete existing items
+        await db.delete(taxCalculationItems).where(eq(taxCalculationItems.tax_calculation_id, id));
+
+        // 3. Map + insert new items (mirrors /items/batch shape)
+        const itemsToInsert = products.map((item: any, index: number) => {
+          if (!item.style) {
+            throw new Error(`Item at index ${index} is missing required field: style`);
+          }
+          const cost = typeof item.cost === 'number' ? item.cost : parseFloat(item.cost);
+          if (isNaN(cost)) {
+            throw new Error(`Item at index ${index} has invalid cost: ${item.cost}`);
+          }
+          const totalValue = typeof item.total_value === 'number' ? item.total_value : parseFloat(item.total_value);
+          const unitCount = typeof item.unit_count === 'number' ? item.unit_count : parseInt(String(item.unit_count), 10);
+          if (isNaN(unitCount)) {
+            throw new Error(`Item at index ${index} has invalid unit_count: ${item.unit_count}`);
+          }
+          const safeTotal = isNaN(totalValue) ? cost * unitCount : totalValue;
+          return {
+            tax_calculation_id: id,
+            line_number: index + 1,
+            style: item.style,
+            color: item.color || null,
+            category: item.category || null,
+            description: item.description || null,
+            fabric_content: item.fabric_content || null,
+            country_of_origin: item.country_of_origin || null,
+            hts_code: item.hts_code || null,
+            cost: cost.toString(),
+            unit_count: unitCount,
+            total_value: safeTotal.toString(),
+            tr_hs_code: item.tr_hs_code || null,
+          };
+        });
+
+        await storage.batchCreateTaxCalculationItems(itemsToInsert);
+
+        // 4. Recalculate taxes (sets status to 'calculated', fills tax columns + totals)
+        await calculateAllItems(id);
+
+        // 5. Read fresh state
+        const refreshedCalculation = await storage.getTaxCalculation(id);
+        const refreshedItems = await storage.getTaxCalculationItems(id);
+
+        // 6. If a procedure is already linked, sync it
+        let procedureSynced = false;
+        if (refreshedCalculation?.procedure_id) {
+          const procId = refreshedCalculation.procedure_id;
+
+          // a. update procedure header (invoice metadata if provided + totals)
+          const procUpdate: Record<string, any> = {
+            amount: refreshedCalculation.total_value,
+            piece: refreshedCalculation.total_quantity,
+          };
+          if (invoiceMetadata?.invoice_no) procUpdate.invoice_no = invoiceMetadata.invoice_no;
+          if (invoiceMetadata?.invoice_date) procUpdate.invoice_date = invoiceMetadata.invoice_date;
+          if (invoiceMetadata?.shipper) procUpdate.shipper = invoiceMetadata.shipper;
+          await storage.updateProcedure(procId, procUpdate);
+
+          // b. replace invoice line items by procedure reference
+          await db.delete(invoiceLineItems).where(eq(invoiceLineItems.procedureReference, refreshedCalculation.reference));
+
+          if (refreshedItems.length > 0) {
+            const lineItemsData = refreshedItems.map((item, index) => ({
+              procedureReference: refreshedCalculation.reference,
+              styleNo: item.style,
+              description: item.category,
+              quantity: item.unit_count,
+              unitPrice: item.cost,
+              totalPrice: item.total_value,
+              sortOrder: index,
+              source: 'tax_calculation',
+              createdBy: userId || 3,
+            }));
+            await db.insert(invoiceLineItems).values(lineItemsData);
+          }
+          procedureSynced = true;
+        }
+
+        res.json({
+          calculation: refreshedCalculation,
+          items: refreshedItems,
+          procedureSynced,
+        });
+      } catch (error) {
+        console.error('[Replace Products] ❌ ERROR:', error);
+        const message = error instanceof Error ? error.message : String(error);
+        const status = message.startsWith('Item at index') ? 422 : 500;
+        res.status(status).json({
+          message: "Failed to replace products",
+          error: message,
+        });
       }
     },
   );

@@ -17,8 +17,25 @@ export interface ExtractedProduct {
   matchStatus: string;
 }
 
-const PDF_PROMPT = `This is a commercial invoice PDF. Extract all product line items and return a JSON array.
-Each item must have these fields (use null if not found):
+export interface InvoiceMetadata {
+  invoice_no?: string;
+  invoice_date?: string;
+  shipper?: string;
+}
+
+export interface ExtractionResult {
+  products: ExtractedProduct[];
+  invoiceMetadata?: InvoiceMetadata;
+}
+
+const PDF_PROMPT = `This is a commercial invoice PDF. Return a single JSON object with two top-level keys: "invoice" and "products".
+
+"invoice" — invoice header info (use null for any field that isn't present):
+- invoice_no: invoice number / document number
+- invoice_date: invoice date in YYYY-MM-DD format
+- shipper: shipper / sender / exporter / consignor company name
+
+"products" — array of line items. Each item has these fields (use null if not found):
 - style: Style No. column
 - color: Color column
 - category: Style Description column
@@ -29,56 +46,90 @@ Each item must have these fields (use null if not found):
 - cost: Unit Price column (decimal number, no currency symbol)
 - total_value: Amount column (decimal number, no currency symbol)
 
-Return ONLY a valid JSON array with no extra text.`;
+Return ONLY a valid JSON object shaped like { "invoice": {...}, "products": [...] }. No markdown fences, no extra text.`;
 
-function parseClaudeProducts(jsonText: string): ExtractedProduct[] {
-  const start = jsonText.indexOf('[');
-  const end = jsonText.lastIndexOf(']');
-  if (start === -1 || end === -1 || end < start) {
-    throw new Error(`[v2] Brackets not found. start=${start} end=${end}. First 300 chars: ${jsonText.slice(0, 300)}`);
-  }
+function mapToExtractedProduct(item: any): ExtractedProduct {
+  const cost = parseFloat(String(item.cost ?? '0'));
+  const units = parseInt(String(item.unit_count ?? '0'), 10);
+  const validCost = isNaN(cost) || cost < 0 ? 0 : cost;
+  const validUnits = isNaN(units) || units < 1 ? 0 : units;
 
-  let raw: any[];
-  try {
-    raw = JSON.parse(jsonText.slice(start, end + 1));
-  } catch (e) {
-    throw new Error(`[v2] JSON.parse failed: ${e}. Sliced len=${end - start + 1}. First 300 chars: ${jsonText.slice(0, 300)}`);
-  }
+  const rawTotal = parseFloat(String(item.total_value ?? ''));
+  const totalValue = isNaN(rawTotal)
+    ? (validCost * validUnits).toFixed(2)
+    : rawTotal.toFixed(2);
 
-  if (!Array.isArray(raw)) {
-    throw new Error(`[v2] Result not array. First 300 chars: ${jsonText.slice(0, 300)}`);
-  }
-
-  return raw
-    .filter(item => item && typeof item.style === 'string' && item.style.trim())
-    .map((item) => {
-      const cost = parseFloat(String(item.cost ?? '0'));
-      const units = parseInt(String(item.unit_count ?? '0'), 10);
-      const validCost = isNaN(cost) || cost < 0 ? 0 : cost;
-      const validUnits = isNaN(units) || units < 1 ? 0 : units;
-
-      const rawTotal = parseFloat(String(item.total_value ?? ''));
-      const totalValue = isNaN(rawTotal)
-        ? (validCost * validUnits).toFixed(2)
-        : rawTotal.toFixed(2);
-
-      return {
-        tempId: crypto.randomUUID(),
-        style: String(item.style).trim(),
-        color: item.color ? String(item.color).trim() : undefined,
-        category: item.category ? String(item.category).trim() : undefined,
-        fabric_content: item.fabric_content ? String(item.fabric_content).trim() : undefined,
-        country_of_origin: item.country_of_origin ? String(item.country_of_origin).trim() : undefined,
-        hts_code: item.hts_code ? String(item.hts_code).trim() : undefined,
-        cost: validCost.toFixed(2),
-        unit_count: validUnits,
-        total_value: totalValue,
-        matchStatus: 'unmatched',
-      };
-    });
+  return {
+    tempId: crypto.randomUUID(),
+    style: String(item.style).trim(),
+    color: item.color ? String(item.color).trim() : undefined,
+    category: item.category ? String(item.category).trim() : undefined,
+    fabric_content: item.fabric_content ? String(item.fabric_content).trim() : undefined,
+    country_of_origin: item.country_of_origin ? String(item.country_of_origin).trim() : undefined,
+    hts_code: item.hts_code ? String(item.hts_code).trim() : undefined,
+    cost: validCost.toFixed(2),
+    unit_count: validUnits,
+    total_value: totalValue,
+    matchStatus: 'unmatched',
+  };
 }
 
-export async function extractFromPdf(buffer: Buffer): Promise<ExtractedProduct[]> {
+function parseInvoiceMetadata(invoice: any): InvoiceMetadata | undefined {
+  if (!invoice || typeof invoice !== 'object') return undefined;
+  const m: InvoiceMetadata = {
+    invoice_no: trimOrUndef(invoice.invoice_no),
+    invoice_date: trimOrUndef(invoice.invoice_date),
+    shipper: trimOrUndef(invoice.shipper),
+  };
+  if (!m.invoice_no && !m.invoice_date && !m.shipper) return undefined;
+  return m;
+}
+
+function parseClaudeInvoiceResponse(jsonText: string): ExtractionResult {
+  // Find outermost JSON object first; fall back to bare array (legacy/defensive)
+  const objStart = jsonText.indexOf('{');
+  const objEnd = jsonText.lastIndexOf('}');
+  const arrStart = jsonText.indexOf('[');
+  const arrEnd = jsonText.lastIndexOf(']');
+
+  let raw: any;
+  if (objStart !== -1 && objEnd > objStart) {
+    try {
+      raw = JSON.parse(jsonText.slice(objStart, objEnd + 1));
+    } catch (e) {
+      throw new Error(`[v2] JSON.parse failed: ${e}. First 300 chars: ${jsonText.slice(0, 300)}`);
+    }
+  } else if (arrStart !== -1 && arrEnd > arrStart) {
+    try {
+      raw = JSON.parse(jsonText.slice(arrStart, arrEnd + 1));
+    } catch (e) {
+      throw new Error(`[v2] JSON.parse failed: ${e}. First 300 chars: ${jsonText.slice(0, 300)}`);
+    }
+  } else {
+    throw new Error(`[v2] No JSON found. First 300 chars: ${jsonText.slice(0, 300)}`);
+  }
+
+  let productsArr: any[];
+  let invoiceMetadata: InvoiceMetadata | undefined;
+  if (Array.isArray(raw)) {
+    productsArr = raw;
+  } else if (raw && typeof raw === 'object') {
+    productsArr = Array.isArray(raw.products)
+      ? raw.products
+      : (Object.values(raw).find(v => Array.isArray(v)) as any[] | undefined) ?? [];
+    invoiceMetadata = parseInvoiceMetadata(raw.invoice);
+  } else {
+    throw new Error(`[v2] Unexpected JSON shape. First 300 chars: ${jsonText.slice(0, 300)}`);
+  }
+
+  const products = productsArr
+    .filter((item: any) => item && typeof item.style === 'string' && item.style.trim())
+    .map(mapToExtractedProduct);
+
+  return { products, invoiceMetadata };
+}
+
+export async function extractFromPdf(buffer: Buffer): Promise<ExtractionResult> {
   if (!buffer || buffer.length === 0) {
     throw new Error('Empty file buffer provided');
   }
@@ -90,7 +141,7 @@ export async function extractFromPdf(buffer: Buffer): Promise<ExtractedProduct[]
     temperature: 0,
     model: 'claude-haiku-4-5-20251001',
   });
-  return parseClaudeProducts(response);
+  return parseClaudeInvoiceResponse(response);
 }
 
 function parseNumericCell(val: any): number {
@@ -158,7 +209,7 @@ function parseColumnMapping(jsonText: string, headers: string[]): Partial<Record
   return mapping;
 }
 
-export async function extractFromExcel(buffer: Buffer): Promise<ExtractedProduct[]> {
+export async function extractFromExcel(buffer: Buffer): Promise<ExtractionResult> {
   if (!buffer || buffer.length === 0) {
     throw new Error('Empty file buffer provided');
   }
@@ -173,11 +224,11 @@ export async function extractFromExcel(buffer: Buffer): Promise<ExtractedProduct
   const worksheet = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
-  if (rows.length < 2) return [];
+  if (rows.length < 2) return { products: [] };
 
   const headers = rows[0].map((h: any) => String(h ?? '').trim());
   const dataRows = rows.slice(1).filter(r => r.some(cell => cell != null && cell !== ''));
-  if (dataRows.length === 0) return [];
+  if (dataRows.length === 0) return { products: [] };
 
   const sampleRows = dataRows.slice(0, 3);
   const mappingPrompt = `You are mapping Excel column headers to product fields.
@@ -237,5 +288,5 @@ No markdown, no extra text.`;
       matchStatus: 'unmatched',
     });
   }
-  return products;
+  return { products };
 }

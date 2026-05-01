@@ -1,4 +1,4 @@
-import { 
+import {
   Calendar,
   Home,
   Inbox,
@@ -7,7 +7,8 @@ import {
   BarChart2,
   Calculator,
   FileText,
-  Download
+  Download,
+  RefreshCw
 } from "lucide-react";
 import { useState } from "react";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -21,6 +22,7 @@ import type { TaxCalculation, TaxCalculationItem } from "@shared/schema";
 import { CalculationSummary } from "@/components/tax-calculation/CalculationSummary";
 import { ResultsTable } from "@/components/tax-calculation/ResultsTable";
 import { AdvTaxletterModal } from "@/components/tax-calculation/AdvTaxletterModal";
+import { DocumentUploadDialog, type InvoiceMetadata } from "@/components/tax-calculation/DocumentUploadDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,6 +75,7 @@ export default function TaxCalculationResultsPage() {
   const [isCountryCodeModalOpen, setIsCountryCodeModalOpen] = useState(false);
   const [missingCountryCodes, setMissingCountryCodes] = useState<string[]>([]);
   const [countryCodeMappings, setCountryCodeMappings] = useState<Record<string, string>>({});
+  const [isUpdateProductsOpen, setIsUpdateProductsOpen] = useState(false);
 
   const { data, isLoading } = useQuery<{ calculation: TaxCalculation; items: TaxCalculationItem[] }>({
     queryKey: [`/api/tax-calculation/calculations/${id}`],
@@ -97,6 +100,42 @@ export default function TaxCalculationResultsPage() {
       toast({
         title: "Error",
         description: "Failed to create procedure",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const replaceProductsMutation = useMutation({
+    mutationFn: async (payload: { products: any[]; invoiceMetadata?: InvoiceMetadata }) => {
+      const response = await apiRequest(
+        "PUT",
+        `/api/tax-calculation/calculations/${id}/replace-products`,
+        { ...payload, userId: 3 }
+      );
+      if (!response.ok) {
+        const text = await response.text();
+        let msg = "Failed to update product list";
+        try { const j = JSON.parse(text); msg = j.error ?? j.message ?? msg; } catch {}
+        throw new Error(msg);
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/tax-calculation/calculations/${id}`] });
+      if (data?.procedureSynced) {
+        queryClient.invalidateQueries({ queryKey: ["/api/procedures"] });
+      }
+      toast({
+        title: "Updated",
+        description: data?.procedureSynced
+          ? "Product list and linked procedure updated"
+          : "Product list updated and taxes recalculated",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to update product list",
         variant: "destructive",
       });
     },
@@ -380,8 +419,17 @@ export default function TaxCalculationResultsPage() {
               <FileText className="mr-2 h-4 w-4" />
               Adv. Taxletter
             </Button>
+            <Button
+              variant="outline"
+              data-testid="button-update-products"
+              onClick={() => setIsUpdateProductsOpen(true)}
+              disabled={replaceProductsMutation.isPending}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${replaceProductsMutation.isPending ? "animate-spin" : ""}`} />
+              {replaceProductsMutation.isPending ? "Updating..." : "Update Product List"}
+            </Button>
             {calculation.status === "calculated" && (
-              <Button 
+              <Button
                 onClick={() => createProcedureMutation.mutate()}
                 disabled={createProcedureMutation.isPending}
                 data-testid="button-create-procedure"
@@ -457,6 +505,17 @@ export default function TaxCalculationResultsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DocumentUploadDialog
+        open={isUpdateProductsOpen}
+        onOpenChange={setIsUpdateProductsOpen}
+        title="Update Product List"
+        description="Upload a new commercial invoice PDF or Excel. The product list will be replaced, taxes recalculated, and any linked procedure synced."
+        importButtonLabel={(count) => `Replace with ${count} Products`}
+        onImport={(products, invoiceMetadata) => {
+          replaceProductsMutation.mutate({ products, invoiceMetadata });
+        }}
+      />
     </PageLayout>
   );
 }

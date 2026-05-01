@@ -34,19 +34,32 @@ interface ProductItem {
   matchStatus?: string;
 }
 
+export interface InvoiceMetadata {
+  invoice_no?: string;
+  invoice_date?: string;
+  shipper?: string;
+}
+
 interface DocumentUploadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (products: ProductItem[]) => void;
+  onImport: (products: ProductItem[], invoiceMetadata?: InvoiceMetadata) => void;
+  title?: string;
+  description?: string;
+  importButtonLabel?: (count: number) => string;
 }
 
 export function DocumentUploadDialog({
   open,
   onOpenChange,
   onImport,
+  title,
+  description,
+  importButtonLabel,
 }: DocumentUploadDialogProps) {
   const { toast } = useToast();
   const [parsedData, setParsedData] = useState<ProductItem[]>([]);
+  const [invoiceMeta, setInvoiceMeta] = useState<InvoiceMetadata | undefined>(undefined);
   const [showPreview, setShowPreview] = useState(false);
   const [fileName, setFileName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -90,6 +103,7 @@ export function DocumentUploadDialog({
       }
 
       setParsedData(data.products);
+      setInvoiceMeta(data.invoiceMetadata);
       setShowPreview(true);
       toast({
         title: "Success",
@@ -107,7 +121,7 @@ export function DocumentUploadDialog({
   };
 
   const handleImport = () => {
-    onImport(parsedData);
+    onImport(parsedData, invoiceMeta);
     toast({
       title: "Success",
       description: `Imported ${parsedData.length} products`,
@@ -117,6 +131,7 @@ export function DocumentUploadDialog({
 
   const handleClose = () => {
     setParsedData([]);
+    setInvoiceMeta(undefined);
     setShowPreview(false);
     setFileName("");
     setIsLoading(false);
@@ -129,11 +144,11 @@ export function DocumentUploadDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            Upload Invoice / Excel
+            {title ?? "Upload Invoice / Excel"}
           </DialogTitle>
           <DialogDescription>
-            Upload a commercial invoice PDF or Excel file (.pdf, .xlsx, .xls).
-            AI will extract product data automatically.
+            {description ??
+              "Upload a commercial invoice PDF or Excel file (.pdf, .xlsx, .xls). AI will extract product data automatically."}
           </DialogDescription>
         </DialogHeader>
 
@@ -162,6 +177,17 @@ export function DocumentUploadDialog({
               File: <span className="font-medium">{fileName}</span> (
               {parsedData.length} products)
             </div>
+
+            {invoiceMeta && (invoiceMeta.invoice_no || invoiceMeta.invoice_date || invoiceMeta.shipper) && (
+              <div className="rounded-md border bg-muted/40 p-3 text-sm">
+                <div className="font-medium mb-1">Detected invoice info</div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div><span className="text-muted-foreground">Invoice #: </span>{invoiceMeta.invoice_no || "-"}</div>
+                  <div><span className="text-muted-foreground">Date: </span>{invoiceMeta.invoice_date || "-"}</div>
+                  <div><span className="text-muted-foreground">Shipper: </span>{invoiceMeta.shipper || "-"}</div>
+                </div>
+              </div>
+            )}
 
             <div className="border rounded-lg overflow-x-auto max-h-[400px]">
               <Table>
@@ -225,7 +251,9 @@ export function DocumentUploadDialog({
                 Back
               </Button>
               <Button onClick={handleImport}>
-                Import {parsedData.length} Products
+                {importButtonLabel
+                  ? importButtonLabel(parsedData.length)
+                  : `Import ${parsedData.length} Products`}
               </Button>
             </DialogFooter>
           </div>
