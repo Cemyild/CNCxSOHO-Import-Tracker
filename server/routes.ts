@@ -140,7 +140,9 @@ const documentUpload = multer({
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'application/vnd.ms-excel',
     ];
-    if (allowed.includes(file.mimetype) || /\.(pdf|xlsx|xls)$/i.test(file.originalname)) {
+    const mimeOk = allowed.includes(file.mimetype);
+    const extOk = /\.(pdf|xlsx|xls)$/i.test(file.originalname);
+    if (mimeOk || (extOk && file.mimetype === 'application/octet-stream')) {
       cb(null, true);
     } else {
       cb(new Error('Only PDF and Excel files (.pdf, .xlsx, .xls) are supported.'));
