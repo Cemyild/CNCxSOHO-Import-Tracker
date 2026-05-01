@@ -46,6 +46,7 @@ import taxCalculationBeyannameRoute from "./tax-calculation-beyanname";
 import excelEnrichmentRouter from "./excel-enrichment";
 // Import Claude AI utilities
 import claude from "./claude";
+import { extractFromPdf, extractFromExcel } from "./document-extraction";
 // Import rate limiting
 import rateLimit from "express-rate-limit";
 // Import Zod for validation
@@ -128,6 +129,24 @@ const pdfUpload = multer({
   limits: {
     fileSize: 20 * 1024 * 1024 // 20MB limit for PDF analysis
   }
+});
+
+// Configure multer for AI document extraction (PDF + Excel, memory storage)
+const documentUpload = multer({
+  storage: memoryStorage,
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+    ];
+    if (allowed.includes(file.mimetype) || /\.(pdf|xlsx|xls)$/i.test(file.originalname)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF and Excel files (.pdf, .xlsx, .xls) are supported.'));
+    }
+  },
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -5128,6 +5147,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res
         .status(500)
         .json({ message: "Failed to delete HS code", error: String(error) });
+    }
+  });
+
+  // AI-powered document extraction (PDF + Excel → ProductItem[])
+  app.post('/api/tax-calculation/extract-products', documentUpload.single('file'), async (req: Request, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    try {
+      const isPdf =
+        req.file.mimetype === 'application/pdf' ||
+        req.file.originalname.toLowerCase().endsWith('.pdf');
+
+      const products = isPdf
+        ? await extractFromPdf(req.file.buffer)
+        : await extractFromExcel(req.file.buffer);
+
+      return res.json({ products });
+    } catch (error) {
+      console.error('[extract-products]', error);
+      return res.status(500).json({ error: 'AI extraction failed, please try again' });
     }
   });
 
