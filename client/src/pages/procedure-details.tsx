@@ -49,6 +49,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { formatCurrency, formatNumber, formatDate, formatCategoryName, formatTaxAmount } from "@/utils/formatters";
 import { GeneratePdfButton } from "@/components/ui/generate-pdf-button";
 import { ViewDistributionModal } from "@/components/view-distribution-modal";
+import { AddToMasterExcelButton } from "@/components/procedure/AddToMasterExcelButton";
 import { useQuery } from "@tanstack/react-query";
 
 
@@ -910,7 +911,7 @@ export default function ProcedureDetailsPage() {
           <div className="flex items-center gap-2">
             <GeneratePdfButton procedureReference={procedure.reference} />
             
-            <Button 
+            <Button
               onClick={handleExcelExport}
               variant="outline"
               data-testid="button-export-excel"
@@ -918,8 +919,10 @@ export default function ProcedureDetailsPage() {
               <Download className="mr-2 h-4 w-4" />
               Export to Excel
             </Button>
-            
-            <Button 
+
+            <AddToMasterExcelButton procedureReference={procedure.reference} />
+
+            <Button
               onClick={handleFinalBalancePdf}
               disabled={isGeneratingFinalBalance}
               variant="default"

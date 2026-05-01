@@ -12,6 +12,8 @@ import {
   deleteFile,
   createSignedUrl,
   listAllKeys,
+  getMasterExcel,
+  saveMasterExcel,
 } from "./object-storage";
 import { db, rawDb } from "./db";
 import { eq, inArray, and, isNotNull, sql, ne, or, like } from "drizzle-orm";
@@ -48,6 +50,12 @@ import excelEnrichmentRouter from "./excel-enrichment";
 // Import Claude AI utilities
 import claude from "./claude";
 import { extractFromPdf, extractFromExcel } from "./document-extraction";
+import {
+  buildProcedureMasterRows,
+  MASTER_COLUMN_COUNT,
+  DATE_COLUMNS,
+  NUMBER_COLUMNS,
+} from "./master-excel-helper";
 // Import rate limiting
 import rateLimit from "express-rate-limit";
 // Import Zod for validation
@@ -130,6 +138,23 @@ const pdfUpload = multer({
   limits: {
     fileSize: 20 * 1024 * 1024 // 20MB limit for PDF analysis
   }
+});
+
+// Multer config for the master Excel file (.xlsx only)
+const masterExcelUpload = multer({
+  storage: memoryStorage,
+  fileFilter: (req, file, cb) => {
+    const isXlsx =
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      file.mimetype === 'application/vnd.ms-excel' ||
+      /\.xlsx?$/i.test(file.originalname);
+    if (isXlsx) {
+      cb(null, true);
+    } else {
+      cb(new Error('Master file must be an Excel (.xlsx) file'));
+    }
+  },
+  limits: { fileSize: 30 * 1024 * 1024 },
 });
 
 // Configure multer for AI document extraction (PDF + Excel, memory storage)
@@ -1438,6 +1463,152 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: 'Failed to export Excel file',
         error: error instanceof Error ? error.message : String(error)
       });
+    }
+  });
+
+  // ── Master Excel: status / upload / download / append ──────────────────────
+
+  app.get("/api/master-excel/status", async (_req, res) => {
+    try {
+      const file = await getMasterExcel();
+      if (!file) return res.json({ exists: false });
+      return res.json({ exists: true, modifiedAt: file.modifiedAt.toISOString(), size: file.buffer.length });
+    } catch (error) {
+      console.error('[Master Excel] status error:', error);
+      res.status(500).json({ error: 'Failed to read master excel status' });
+    }
+  });
+
+  app.post("/api/master-excel/upload", masterExcelUpload.single('file'), async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    try {
+      // Sanity-check the workbook can be opened and has the expected sheet
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(req.file.buffer as any);
+      const sheet = wb.getWorksheet('IMPORT LIST');
+      if (!sheet) {
+        return res.status(400).json({ error: 'Workbook does not contain a sheet named "IMPORT LIST"' });
+      }
+      await saveMasterExcel(req.file.buffer);
+      return res.json({ ok: true, size: req.file.buffer.length });
+    } catch (error) {
+      console.error('[Master Excel] upload error:', error);
+      res.status(500).json({ error: 'Failed to save master excel' });
+    }
+  });
+
+  app.get("/api/master-excel/download", async (_req, res) => {
+    try {
+      const file = await getMasterExcel();
+      if (!file) return res.status(404).json({ error: 'Master excel not uploaded yet' });
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="master-import-list.xlsx"`);
+      res.send(file.buffer);
+    } catch (error) {
+      console.error('[Master Excel] download error:', error);
+      res.status(500).json({ error: 'Failed to download master excel' });
+    }
+  });
+
+  app.post("/api/procedures/:reference/append-to-master-excel", async (req, res) => {
+    try {
+      const reference = decodeURIComponent(req.params.reference);
+      const file = await getMasterExcel();
+      if (!file) {
+        return res.status(412).json({ error: 'master_not_uploaded', message: 'Master excel not uploaded yet' });
+      }
+
+      const { rows: rowsToAppend } = await buildProcedureMasterRows(reference);
+
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(file.buffer as any);
+      const sheet = wb.getWorksheet('IMPORT LIST');
+      if (!sheet) {
+        return res.status(400).json({ error: 'Master workbook is missing sheet "IMPORT LIST"' });
+      }
+
+      // Find the last row whose column A (REFERENCE) is non-empty.
+      let lastRefRow = 0;
+      for (let r = sheet.actualRowCount ?? sheet.rowCount; r >= 1; r--) {
+        const cell = sheet.getCell(r, 1);
+        const v = cell.value;
+        if (v != null && String(v).trim() !== '') {
+          lastRefRow = r;
+          break;
+        }
+      }
+      if (lastRefRow < 3) {
+        return res.status(400).json({ error: 'Could not find an existing reference row in IMPORT LIST to copy formatting from' });
+      }
+
+      // Pre-read the source row's formula state so we know which cells NOT to overwrite.
+      const sourceCells = [] as Array<{ col: number; isFormula: boolean; formula: string | null }>;
+      for (let c = 1; c <= MASTER_COLUMN_COUNT; c++) {
+        const cell = sheet.getCell(lastRefRow, c);
+        const f = (cell as any).formula as string | undefined;
+        const valIsFormula = cell.value && typeof cell.value === 'object' && (cell.value as any).formula;
+        const formula = f || (valIsFormula ? (cell.value as any).formula : null);
+        sourceCells.push({ col: c, isFormula: !!formula, formula: formula || null });
+      }
+
+      // Duplicate the source row N times, inserting copies right below it (preserves styles + formulas).
+      sheet.duplicateRow(lastRefRow, rowsToAppend.length, true);
+
+      // Helper to shift relative row references in a formula by `delta`.
+      const shiftFormula = (formula: string, srcRow: number, dstRow: number): string => {
+        const delta = dstRow - srcRow;
+        if (delta === 0) return formula;
+        // Match cell refs like A1, $A1, A$1, $A$1
+        return formula.replace(/(\$?[A-Z]+)(\$?)(\d+)/g, (_match, col, rowAbs, rowDigits) => {
+          if (rowAbs === '$') return `${col}${rowAbs}${rowDigits}`; // absolute row, leave alone
+          const rowNum = parseInt(rowDigits, 10);
+          // Adjust references that pointed at the source row of the duplicated template.
+          if (rowNum === srcRow) return `${col}${rowAbs}${rowNum + delta}`;
+          return `${col}${rowAbs}${rowDigits}`;
+        });
+      };
+
+      // Write data into each new row. Skip cells whose source had a formula (keep duplicated formula).
+      // Adjust formula row references where needed.
+      for (let i = 0; i < rowsToAppend.length; i++) {
+        const dstRow = lastRefRow + 1 + i;
+        const data = rowsToAppend[i];
+        for (let c = 1; c <= MASTER_COLUMN_COUNT; c++) {
+          const cell = sheet.getCell(dstRow, c);
+          const src = sourceCells[c - 1];
+          if (src.isFormula) {
+            // Re-write formula with shifted row references so it operates on this row.
+            if (src.formula) {
+              const adjusted = shiftFormula(src.formula, lastRefRow, dstRow);
+              cell.value = { formula: adjusted } as any;
+            }
+            continue;
+          }
+          const value = data[c - 1] ?? null;
+          cell.value = value as any;
+          if (DATE_COLUMNS.includes(c) && value instanceof Date) {
+            cell.numFmt = cell.numFmt || 'DD/MM/YYYY';
+          } else if (NUMBER_COLUMNS.includes(c) && typeof value === 'number') {
+            cell.numFmt = cell.numFmt || '#,##0.00';
+          }
+        }
+      }
+
+      const out = await wb.xlsx.writeBuffer();
+      const buffer = Buffer.from(out as ArrayBuffer);
+
+      // Persist the updated master file
+      await saveMasterExcel(buffer);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="master-import-list.xlsx"`);
+      res.send(buffer);
+    } catch (error) {
+      console.error('[Master Excel] append error:', error);
+      const msg = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: 'Failed to append to master excel', detail: msg });
     }
   });
 

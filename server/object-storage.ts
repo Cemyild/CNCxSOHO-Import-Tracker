@@ -256,3 +256,47 @@ export async function createSignedUrl(objectKey: string): Promise<string> {
   // Return API endpoint for accessing the file internally (proxied)
   return `/api/expense-documents/file/${encodeURIComponent(objectKey)}`;
 }
+
+// ── Master Excel (single fixed-key file) ────────────────────────────────────
+const MASTER_EXCEL_KEY = `${BUCKET_PREFIX}_system/master-import-list.xlsx`;
+
+export async function getMasterExcel(): Promise<{ buffer: Buffer; modifiedAt: Date } | null> {
+  if (s3Client && S3_BUCKET) {
+    try {
+      const command = new GetObjectCommand({ Bucket: S3_BUCKET, Key: MASTER_EXCEL_KEY });
+      const response = await s3Client.send(command);
+      if (!response.Body) return null;
+      const stream = response.Body as Readable;
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+      return {
+        buffer: Buffer.concat(chunks),
+        modifiedAt: response.LastModified ?? new Date(),
+      };
+    } catch (err: any) {
+      if (err?.name === 'NoSuchKey' || err?.$metadata?.httpStatusCode === 404) return null;
+      throw err;
+    }
+  }
+  const localPath = getLocalPath(MASTER_EXCEL_KEY);
+  if (!fs.existsSync(localPath)) return null;
+  const buffer = fs.readFileSync(localPath);
+  const stat = fs.statSync(localPath);
+  return { buffer, modifiedAt: stat.mtime };
+}
+
+export async function saveMasterExcel(buffer: Buffer): Promise<void> {
+  if (s3Client && S3_BUCKET) {
+    await s3Client.send(new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: MASTER_EXCEL_KEY,
+      Body: buffer,
+      ContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }));
+    return;
+  }
+  const localPath = getLocalPath(MASTER_EXCEL_KEY);
+  const dir = path.dirname(localPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(localPath, buffer);
+}
