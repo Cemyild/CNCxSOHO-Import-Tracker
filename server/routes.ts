@@ -14,6 +14,7 @@ import {
   listAllKeys,
   getMasterExcel,
   saveMasterExcel,
+  deleteMasterExcel,
 } from "./object-storage";
 import { db, rawDb } from "./db";
 import { eq, inArray, and, isNotNull, sql, ne, or, like } from "drizzle-orm";
@@ -1509,6 +1510,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('[Master Excel] download error:', error);
       res.status(500).json({ error: 'Failed to download master excel' });
+    }
+  });
+
+  app.delete("/api/master-excel", async (_req, res) => {
+    try {
+      const deleted = await deleteMasterExcel();
+      res.json({ deleted });
+    } catch (error) {
+      console.error('[Master Excel] delete error:', error);
+      res.status(500).json({ error: 'Failed to delete master excel' });
     }
   });
 

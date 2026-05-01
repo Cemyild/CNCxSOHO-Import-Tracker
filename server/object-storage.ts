@@ -300,3 +300,19 @@ export async function saveMasterExcel(buffer: Buffer): Promise<void> {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(localPath, buffer);
 }
+
+export async function deleteMasterExcel(): Promise<boolean> {
+  if (s3Client && S3_BUCKET) {
+    try {
+      await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: MASTER_EXCEL_KEY }));
+      return true;
+    } catch (err: any) {
+      if (err?.name === 'NoSuchKey' || err?.$metadata?.httpStatusCode === 404) return false;
+      throw err;
+    }
+  }
+  const localPath = getLocalPath(MASTER_EXCEL_KEY);
+  if (!fs.existsSync(localPath)) return false;
+  fs.unlinkSync(localPath);
+  return true;
+}
