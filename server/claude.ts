@@ -303,7 +303,7 @@ export async function analyzePdfWithClaude({
 /**
  * Analyze text with Claude (non-vision)
  */
-export async function analyzeText(prompt: string, systemPrompt?: string, temperature: number = 1): Promise<string> {
+export async function analyzeText(prompt: string, systemPrompt?: string, temperature: number = 1, maxTokens: number = 4096): Promise<string> {
   ensureConfigured();
 
   if (!anthropic) {
@@ -311,7 +311,7 @@ export async function analyzeText(prompt: string, systemPrompt?: string, tempera
   }
 
   const message = await anthropic.messages.create({
-    max_tokens: 4096,
+    max_tokens: maxTokens,
     messages: [{ role: 'user', content: prompt }],
     model: DEFAULT_MODEL_STR,
     temperature,

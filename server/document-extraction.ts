@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { analyzePdfWithClaude, analyzeText } from './claude';
 
 export interface ExtractedProduct {
-  tempId?: string;
+  tempId: string;
   style: string;
   color?: string;
   category?: string;
@@ -102,6 +102,7 @@ export async function extractFromExcel(buffer: Buffer): Promise<ExtractedProduct
     throw new Error('Invalid or corrupt Excel file');
   }
   const sheetName = workbook.SheetNames[0];
+  if (!sheetName) throw new Error('Excel file contains no sheets');
   const worksheet = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
@@ -125,6 +126,6 @@ Return ONLY a valid JSON array with no extra text.
 Headers: ${JSON.stringify(headers)}
 Rows: ${JSON.stringify(dataRows.slice(0, 500))}`;
 
-  const response = await analyzeText(excelPrompt, undefined, 0);
+  const response = await analyzeText(excelPrompt, undefined, 0, 8192);
   return parseClaudeProducts(response);
 }
