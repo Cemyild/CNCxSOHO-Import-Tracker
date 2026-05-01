@@ -93,6 +93,71 @@ export async function extractFromPdf(buffer: Buffer): Promise<ExtractedProduct[]
   return parseClaudeProducts(response);
 }
 
+function parseNumericCell(val: any): number {
+  if (val == null || val === '') return 0;
+  if (typeof val === 'number') return isFinite(val) ? val : 0;
+  let s = String(val).trim();
+  s = s.replace(/[$€£¥₺\s]/g, '');
+  const lastDot = s.lastIndexOf('.');
+  const lastComma = s.lastIndexOf(',');
+  if (lastComma > lastDot && lastComma !== -1) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    s = s.replace(/,/g, '');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+function trimOrUndef(val: any): string | undefined {
+  if (val == null || val === '') return undefined;
+  const s = String(val).trim();
+  return s === '' ? undefined : s;
+}
+
+type FieldKey =
+  | 'style' | 'color' | 'category' | 'hts_code' | 'fabric_content'
+  | 'country_of_origin' | 'unit_count' | 'cost' | 'total_value';
+
+const FIELD_KEYS: FieldKey[] = [
+  'style', 'color', 'category', 'hts_code', 'fabric_content',
+  'country_of_origin', 'unit_count', 'cost', 'total_value',
+];
+
+function parseColumnMapping(jsonText: string, headers: string[]): Partial<Record<FieldKey, number>> {
+  const start = jsonText.indexOf('{');
+  const end = jsonText.lastIndexOf('}');
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error(`[v2] Mapping object not found. First 300 chars: ${jsonText.slice(0, 300)}`);
+  }
+  let parsed: any;
+  try {
+    parsed = JSON.parse(jsonText.slice(start, end + 1));
+  } catch (e) {
+    throw new Error(`[v2] Mapping JSON.parse failed: ${e}. First 300 chars: ${jsonText.slice(0, 300)}`);
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('[v2] Mapping is not an object');
+  }
+
+  const mapping: Partial<Record<FieldKey, number>> = {};
+  const lowerHeaders = headers.map(h => h.toLowerCase());
+
+  for (const field of FIELD_KEYS) {
+    const target = parsed[field];
+    if (target == null) continue;
+    if (typeof target === 'number' && Number.isInteger(target) && target >= 0 && target < headers.length) {
+      mapping[field] = target;
+      continue;
+    }
+    if (typeof target === 'string') {
+      const idx = lowerHeaders.indexOf(target.toLowerCase());
+      if (idx !== -1) mapping[field] = idx;
+    }
+  }
+  return mapping;
+}
+
 export async function extractFromExcel(buffer: Buffer): Promise<ExtractedProduct[]> {
   if (!buffer || buffer.length === 0) {
     throw new Error('Empty file buffer provided');
@@ -112,22 +177,65 @@ export async function extractFromExcel(buffer: Buffer): Promise<ExtractedProduct
 
   const headers = rows[0].map((h: any) => String(h ?? '').trim());
   const dataRows = rows.slice(1).filter(r => r.some(cell => cell != null && cell !== ''));
+  if (dataRows.length === 0) return [];
 
-  if (dataRows.length > 500) {
-    console.warn(`extractFromExcel: ${dataRows.length} data rows found; only the first 500 will be sent to Claude.`);
+  const sampleRows = dataRows.slice(0, 3);
+  const mappingPrompt = `You are mapping Excel column headers to product fields.
+
+Target fields: ${FIELD_KEYS.join(', ')}.
+
+For each target field, return either the column index (0-based integer) of the matching Excel header, or null if no column matches.
+
+Excel headers (with their indices):
+${headers.map((h, i) => `  ${i}: ${JSON.stringify(h)}`).join('\n')}
+
+Sample rows for context:
+${sampleRows.map(r => '  ' + JSON.stringify(r)).join('\n')}
+
+Return ONLY a JSON object like:
+{"style": 0, "color": 1, "category": null, "hts_code": 5, "fabric_content": null, "country_of_origin": 6, "unit_count": 3, "cost": 4, "total_value": 7}
+
+No markdown, no extra text.`;
+
+  const response = await analyzeText(mappingPrompt, undefined, 0, 512, 'claude-haiku-4-5-20251001');
+  const mapping = parseColumnMapping(response, headers);
+
+  const styleIdx = mapping.style;
+  if (styleIdx === undefined) {
+    throw new Error('Could not identify a "style" column in the Excel file');
   }
 
-  const excelPrompt = `The following is Excel spreadsheet data with headers and rows.
-Map each column to the appropriate field and return a JSON array of product objects.
-Target fields: style, color, category, hts_code, fabric_content, country_of_origin, unit_count, cost, total_value.
-Skip rows where style is empty or missing.
-cost and total_value must be plain decimal numbers without currency symbols.
-unit_count must be a plain integer.
-Return ONLY a valid JSON array with no extra text.
+  const products: ExtractedProduct[] = [];
+  for (const row of dataRows) {
+    const get = (field: FieldKey): any => {
+      const idx = mapping[field];
+      return idx === undefined ? undefined : row[idx];
+    };
 
-Headers: ${JSON.stringify(headers)}
-Rows: ${JSON.stringify(dataRows.slice(0, 500))}`;
+    const style = trimOrUndef(get('style'));
+    if (!style) continue;
 
-  const response = await analyzeText(excelPrompt, undefined, 0, 16384, 'claude-haiku-4-5-20251001');
-  return parseClaudeProducts(response);
+    const cost = parseNumericCell(get('cost'));
+    const validCost = cost < 0 ? 0 : cost;
+    const unitsRaw = parseInt(String(get('unit_count') ?? '0'), 10);
+    const validUnits = isNaN(unitsRaw) || unitsRaw < 1 ? 0 : unitsRaw;
+
+    const rawTotal = parseNumericCell(get('total_value'));
+    const totalValue = rawTotal > 0 ? rawTotal.toFixed(2) : (validCost * validUnits).toFixed(2);
+
+    products.push({
+      tempId: crypto.randomUUID(),
+      style,
+      color: trimOrUndef(get('color')),
+      category: trimOrUndef(get('category')),
+      fabric_content: trimOrUndef(get('fabric_content')),
+      country_of_origin: trimOrUndef(get('country_of_origin')),
+      hts_code: trimOrUndef(get('hts_code')),
+      cost: validCost.toFixed(2),
+      unit_count: validUnits,
+      total_value: totalValue,
+      matchStatus: 'unmatched',
+    });
+  }
+  return products;
 }
