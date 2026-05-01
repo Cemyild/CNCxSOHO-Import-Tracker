@@ -1522,6 +1522,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Diagnostic: load+save the stored master with NO modification, return result.
+  // If this output opens blank, exceljs round-trip itself is the problem.
+  app.get("/api/master-excel/roundtrip", async (_req, res) => {
+    try {
+      const file = await getMasterExcel();
+      if (!file) return res.status(404).json({ error: 'Master excel not uploaded yet' });
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(file.buffer as any);
+      const out = await wb.xlsx.writeBuffer();
+      const buffer = Buffer.from(out as ArrayBuffer);
+      console.log(`[Master Excel] roundtrip: original=${file.buffer.length} roundtripped=${buffer.length} sheets=${wb.worksheets.length}`);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="roundtrip-test.xlsx"`);
+      res.setHeader('Content-Length', String(buffer.length));
+      res.send(buffer);
+    } catch (error) {
+      console.error('[Master Excel] roundtrip error:', error);
+      res.status(500).json({ error: 'Failed roundtrip', detail: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  // Diagnostic: inspect saved master without sending the binary.
+  app.get("/api/master-excel/inspect", async (_req, res) => {
+    try {
+      const file = await getMasterExcel();
+      if (!file) return res.status(404).json({ error: 'Master excel not uploaded yet' });
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(file.buffer as any);
+      const sheets = wb.worksheets.map(ws => ({
+        name: ws.name,
+        rowCount: ws.rowCount,
+        actualRowCount: (ws as any).actualRowCount,
+        state: ws.state,
+      }));
+      const importList = wb.getWorksheet('IMPORT LIST');
+      const sample: any = {};
+      if (importList) {
+        let lastRefRow = 0;
+        for (let r = importList.rowCount; r >= 1; r--) {
+          const v = importList.getCell(r, 1).value;
+          if (v != null && String(v).trim() !== '') { lastRefRow = r; break; }
+        }
+        sample.lastRefRow = lastRefRow;
+        sample.lastRefValue = importList.getCell(lastRefRow, 1).value;
+        sample.row5_A = importList.getCell(5, 1).value;
+        sample.row5_B = importList.getCell(5, 2).value;
+      }
+      res.json({
+        size: file.buffer.length,
+        modifiedAt: file.modifiedAt.toISOString(),
+        sheetCount: wb.worksheets.length,
+        sheets,
+        importListPresent: !!importList,
+        sample,
+      });
+    } catch (error) {
+      console.error('[Master Excel] inspect error:', error);
+      res.status(500).json({ error: 'Failed to inspect', detail: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
   app.delete("/api/master-excel", async (_req, res) => {
     try {
       const deleted = await deleteMasterExcel();
