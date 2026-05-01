@@ -303,9 +303,9 @@ export async function analyzePdfWithClaude({
 /**
  * Analyze text with Claude (non-vision)
  */
-export async function analyzeText(prompt: string, systemPrompt?: string): Promise<string> {
+export async function analyzeText(prompt: string, systemPrompt?: string, temperature: number = 1): Promise<string> {
   ensureConfigured();
-  
+
   if (!anthropic) {
     throw new Error('Anthropic client not initialized - API key not configured');
   }
@@ -314,6 +314,7 @@ export async function analyzeText(prompt: string, systemPrompt?: string): Promis
     max_tokens: 4096,
     messages: [{ role: 'user', content: prompt }],
     model: DEFAULT_MODEL_STR,
+    temperature,
     ...(systemPrompt && { system: systemPrompt })
   });
 
