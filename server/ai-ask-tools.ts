@@ -57,7 +57,8 @@ export const TOOL_SCHEMAS = [
     name: 'query_taxes',
     description:
       'Query the taxes table (one row per procedure). Returns sums of customs_tax, additional_customs_tax, ' +
-      'kkdf, vat, stamp_tax. Joins to procedures to filter by date / shipper. Use group_by for trends.',
+      'kkdf, vat, stamp_tax. Joins to procedures to filter by date / shipper. Use group_by for trends, ' +
+      'or list_limit to return per-procedure tax rows.',
     input_schema: {
       type: 'object',
       properties: {
@@ -67,6 +68,7 @@ export const TOOL_SCHEMAS = [
         shipper_contains: { type: 'string' },
         reference_prefix: { type: 'string' },
         group_by: { type: 'string', enum: ['shipper', 'month', 'year'] },
+        list_limit: { type: 'integer', description: 'If set, also return up to N per-procedure tax rows (max 200).' },
       },
     },
   },
@@ -74,7 +76,10 @@ export const TOOL_SCHEMAS = [
     name: 'query_expenses',
     description:
       'Query importExpenses (categorized fees: AWB, insurance, transport, customs inspection, etc.) ' +
-      'and optionally importServiceInvoices (CNC service fees) together. Filter by category, issuer, date.',
+      'and optionally importServiceInvoices (CNC service fees) together. Filter by category, issuer, ' +
+      'date, currency. Use list_limit to return individual expense rows with date/invoice/issuer/amount. ' +
+      'IMPORTANT: amounts in different currencies cannot be summed — always filter by a single currency ' +
+      'OR use group_by:"currency" when reporting totals.',
     input_schema: {
       type: 'object',
       properties: {
@@ -87,8 +92,10 @@ export const TOOL_SCHEMAS = [
         },
         issuer_contains: { type: 'string' },
         reference_prefix: { type: 'string' },
+        currency: { type: 'string', description: 'Filter to a single currency (e.g. TL, USD, EUR). Recommended whenever you report a total.' },
         include_service_invoices: { type: 'boolean', description: 'Also include CNC service-invoice totals. Default false.' },
-        group_by: { type: 'string', enum: ['category', 'issuer', 'month', 'year'] },
+        group_by: { type: 'string', enum: ['category', 'issuer', 'month', 'year', 'currency'] },
+        list_limit: { type: 'integer', description: 'If set, return up to N matching expense rows (max 200) with date, invoice number, issuer, amount, currency, procedure reference, notes. Use this whenever the user asks for a list / breakdown / details.' },
       },
     },
   },
@@ -96,7 +103,9 @@ export const TOOL_SCHEMAS = [
     name: 'query_payments',
     description:
       'Query payments (legacy) + paymentDistributions (new). Returns sums by payment_type ' +
-      '(advance/balance) and optionally per period.',
+      '(advance/balance) and optionally per period. Use list_limit to return individual payment rows. ' +
+      'NOTE: payments table itself has no currency column — currency lives on the parent procedure row, ' +
+      'so payment totals across procedures of different currencies cannot be cleanly summed.',
     input_schema: {
       type: 'object',
       properties: {
@@ -105,6 +114,7 @@ export const TOOL_SCHEMAS = [
         payment_type: { type: 'string', enum: ['advance', 'balance'] },
         reference_prefix: { type: 'string' },
         group_by: { type: 'string', enum: ['type', 'month', 'year'] },
+        list_limit: { type: 'integer', description: 'If set, return up to N payment rows (max 200) with date, amount, type, procedure reference, notes.' },
       },
     },
   },
@@ -407,6 +417,29 @@ export async function runQueryTaxes(input: any): Promise<any> {
     });
   }
 
+  if (input.list_limit && input.list_limit > 0) {
+    const items = await db
+      .select({
+        procedure_reference: (taxes as any).procedureReference,
+        shipper: procedures.shipper,
+        invoice_no: procedures.invoice_no,
+        invoice_date: procedures.invoice_date,
+        arrival_date: (procedures as any).arrival_date,
+        import_dec_date: (procedures as any).import_dec_date,
+        customs_tax: (taxes as any).customsTax,
+        additional_customs_tax: (taxes as any).additionalCustomsTax,
+        kkdf: taxes.kkdf,
+        vat: taxes.vat,
+        stamp_tax: (taxes as any).stampTax,
+      })
+      .from(taxes)
+      .innerJoin(procedures, eq((taxes as any).procedureReference, procedures.reference))
+      .where(where)
+      .orderBy(desc(procDate))
+      .limit(Math.min(input.list_limit, 200));
+    result.items = items;
+  }
+
   return result;
 }
 
@@ -417,6 +450,7 @@ export async function runQueryExpenses(input: any): Promise<any> {
     input.category ? eq(importExpenses.category, input.category as any) : undefined,
     input.issuer_contains ? ilike((importExpenses as any).issuer, `%${input.issuer_contains}%`) : undefined,
     input.reference_prefix ? ilike((importExpenses as any).procedureReference, `${input.reference_prefix}%`) : undefined,
+    input.currency ? eq((importExpenses as any).currency, input.currency) : undefined,
   );
 
   const aggRow = await db.select({
@@ -429,11 +463,27 @@ export async function runQueryExpenses(input: any): Promise<any> {
     expense_total: num(aggRow[0]?.total),
   };
 
+  // Always also break down by currency so callers can see whether totals mix currencies.
+  // (Summing across currencies is meaningless — caller should report per-currency.)
+  const currencyRows = await db.select({
+    key: sql<string>`COALESCE(${(importExpenses as any).currency}::text, '(empty)')`,
+    count: sql<number>`COUNT(*)::int`,
+    total: sql<string>`COALESCE(SUM(${importExpenses.amount}), 0)::text`,
+  })
+    .from(importExpenses)
+    .where(where)
+    .groupBy(sql`1`)
+    .orderBy(sql`1`);
+  result.totals_by_currency = currencyRows.map(g => ({
+    currency: g.key, count: g.count, total: num(g.total),
+  }));
+
   if (input.include_service_invoices) {
     const svcDateField = (importServiceInvoices as any).date;
     const svcWhere = and(
       ...dateBetweenSql(svcDateField, input.start_date, input.end_date),
       input.reference_prefix ? ilike((importServiceInvoices as any).procedureReference, `${input.reference_prefix}%`) : undefined,
+      input.currency ? eq((importServiceInvoices as any).currency, input.currency) : undefined,
     );
     const svcRow = await db.select({
       count: sql<number>`COUNT(*)::int`,
@@ -450,6 +500,7 @@ export async function runQueryExpenses(input: any): Promise<any> {
     else if (input.group_by === 'issuer') groupExpr = (importExpenses as any).issuer;
     else if (input.group_by === 'month') groupExpr = toMonth(expDateField);
     else if (input.group_by === 'year') groupExpr = toYear(expDateField);
+    else if (input.group_by === 'currency') groupExpr = (importExpenses as any).currency;
 
     const groups = await db.select({
       key: sql<string>`COALESCE(${groupExpr}::text, '(empty)')`,
@@ -464,13 +515,35 @@ export async function runQueryExpenses(input: any): Promise<any> {
     result.groups = groups.map(g => ({ key: g.key, count: g.count, total: num(g.total) }));
   }
 
+  if (input.list_limit && input.list_limit > 0) {
+    const items = await db.select({
+      id: importExpenses.id,
+      procedure_reference: (importExpenses as any).procedureReference,
+      category: importExpenses.category,
+      amount: importExpenses.amount,
+      currency: (importExpenses as any).currency,
+      invoice_number: (importExpenses as any).invoiceNumber,
+      invoice_date: (importExpenses as any).invoiceDate,
+      issuer: (importExpenses as any).issuer,
+      document_number: (importExpenses as any).documentNumber,
+      policy_number: (importExpenses as any).policyNumber,
+      notes: (importExpenses as any).notes,
+    })
+      .from(importExpenses)
+      .where(where)
+      .orderBy(desc(expDateField))
+      .limit(Math.min(input.list_limit, 200));
+    result.items = items;
+  }
+
   return result;
 }
 
 export async function runQueryPayments(input: any): Promise<any> {
+  const payDateField = (payments as any).paymentDate;
   // payments table (legacy)
   const where = and(
-    ...dateBetweenSql((payments as any).paymentDate, input.start_date, input.end_date),
+    ...dateBetweenSql(payDateField, input.start_date, input.end_date),
     input.payment_type ? eq((payments as any).paymentType, input.payment_type as any) : undefined,
     input.reference_prefix ? ilike((payments as any).procedureReference, `${input.reference_prefix}%`) : undefined,
   );
@@ -497,13 +570,36 @@ export async function runQueryPayments(input: any): Promise<any> {
     grand_total: num(aggRow[0]?.total) + num(distRow[0]?.total),
   };
 
-  if (input.group_by === 'type') {
-    const types = await db.select({
-      key: sql<string>`COALESCE(${(payments as any).paymentType}::text, '(empty)')`,
-      count: sql<number>`COUNT(*)::int`,
-      total: sql<string>`COALESCE(SUM(${payments.amount}), 0)::text`,
-    }).from(payments).where(where).groupBy(sql`1`);
-    result.groups = types.map(t => ({ key: t.key, count: t.count, total: num(t.total) }));
+  if (input.group_by) {
+    let groupExpr: any;
+    if (input.group_by === 'type') groupExpr = (payments as any).paymentType;
+    else if (input.group_by === 'month') groupExpr = toMonth(payDateField);
+    else if (input.group_by === 'year') groupExpr = toYear(payDateField);
+
+    if (groupExpr) {
+      const groups = await db.select({
+        key: sql<string>`COALESCE(${groupExpr}::text, '(empty)')`,
+        count: sql<number>`COUNT(*)::int`,
+        total: sql<string>`COALESCE(SUM(${payments.amount}), 0)::text`,
+      }).from(payments).where(where).groupBy(sql`1`).orderBy(sql`1`);
+      result.groups = groups.map(t => ({ key: t.key, count: t.count, total: num(t.total) }));
+    }
+  }
+
+  if (input.list_limit && input.list_limit > 0) {
+    const items = await db.select({
+      id: payments.id,
+      procedure_reference: (payments as any).procedureReference,
+      payment_date: (payments as any).paymentDate,
+      payment_type: (payments as any).paymentType,
+      amount: payments.amount,
+      notes: (payments as any).notes,
+    })
+      .from(payments)
+      .where(where)
+      .orderBy(desc(payDateField))
+      .limit(Math.min(input.list_limit, 200));
+    result.items = items;
   }
 
   return result;

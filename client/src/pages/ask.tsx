@@ -12,6 +12,8 @@ import {
   Loader2,
   Bot,
   User as UserIcon,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
@@ -63,10 +65,16 @@ interface Block {
   data?: { name: string; value: number }[];
 }
 
+interface ToolCall {
+  name: string;
+  input: any;
+}
+
 interface Message {
   role: "user" | "assistant";
   text: string;
   blocks?: Block[];
+  toolCalls?: ToolCall[];
   pending?: boolean;
 }
 
@@ -145,6 +153,44 @@ function TableBlock({ block }: { block: Block }) {
   );
 }
 
+function TraceBlock({ calls }: { calls: ToolCall[] }) {
+  const [open, setOpen] = useState(false);
+  if (!calls || calls.length === 0) return null;
+  const dataCalls = calls.filter((c) => c.name !== "present_answer");
+  const summary = dataCalls.length > 0
+    ? dataCalls.map((c) => c.name).join(" → ")
+    : "present_answer";
+
+  return (
+    <div className="mt-3 rounded-md border bg-muted/30">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+        data-testid="ask-trace-toggle"
+      >
+        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        <span>How AI got this ({calls.length} call{calls.length === 1 ? "" : "s"})</span>
+        <span className="ml-auto font-normal opacity-70 truncate">{summary}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 pt-1 border-t space-y-2">
+          {calls.map((c, i) => (
+            <div key={i} className="text-[11px] font-mono">
+              <div className="text-muted-foreground mb-0.5">
+                <span className="text-blue-700 font-semibold">{i + 1}.</span> {c.name}
+              </div>
+              <pre className="bg-background border rounded px-2 py-1.5 overflow-x-auto whitespace-pre-wrap">
+                {JSON.stringify(c.input, null, 2)}
+              </pre>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Light markdown renderer (paragraphs + bold). The model is told to keep answers short markdown.
 function renderMarkdown(text: string): React.ReactNode {
   const paragraphs = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
@@ -205,6 +251,7 @@ export default function AskPage() {
             role: "assistant",
             text: data.answer ?? "(no answer)",
             blocks: data.blocks,
+            toolCalls: Array.isArray(data.tool_calls) ? data.tool_calls : undefined,
           };
         }
         return next;
@@ -300,6 +347,9 @@ export default function AskPage() {
                             ) : (
                               <TableBlock key={bi} block={b} />
                             ),
+                          )}
+                          {m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0 && (
+                            <TraceBlock calls={m.toolCalls} />
                           )}
                         </>
                       )}
