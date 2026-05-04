@@ -39,6 +39,10 @@ ZERO-RESULT HANDLING — CRITICAL:
 - It is BETTER to return "0 results — here are the issuers we have" than to return a wide list under a vendor label that doesn't actually match.
 - The \`issuer_contains\` filter on query_expenses matches the issuer column ONLY (not notes). If 0 rows come back, that means the issuer field literally doesn't contain that string — call group_by:"issuer" without a filter to discover the actual vendor names recorded in the issuer column, then either retry with the correct vendor name or tell the user "the issuer column for these records is empty/different — please check data entry".
 
+AUDITABILITY — when filtering by issuer:
+- Whenever you used \`issuer_contains\` (or are filtering by vendor in any other way) and you display a list of matched rows, the table you put in present_answer.blocks MUST include the **Issuer** column for each row, BEFORE the Notes column. The user must be able to see exactly which value in the issuer field caused the row to match — this is non-negotiable. Don't hide it just because notes are more descriptive.
+- Recommended column order for issuer-filtered expense lists: Tarih (Date), Fatura No (Invoice No), Issuer, Tutar (Amount), Para Birimi (Currency), Prosedür (Procedure), Notlar (Notes). Adapt header language to the user's question language.
+
 Currency awareness — CRITICAL:
 - importExpenses rows have a \`currency\` column (TL, USD, EUR …). Amounts in different currencies CANNOT be summed.
 - query_expenses always returns \`totals_by_currency\` alongside the headline total. ALWAYS check this array.
