@@ -285,7 +285,7 @@ export default function AskPage() {
 
   return (
     <PageLayout title="Ask CNC?" navItems={items}>
-      <div className="flex flex-col h-[calc(100vh-100px)] max-w-4xl mx-auto p-4">
+      <div className="flex flex-col h-[calc(100vh-100px)] w-full max-w-screen-2xl mx-auto px-4 md:px-6 lg:px-8 py-4">
         <div className="mb-4">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Sparkles className="h-6 w-6 text-blue-600" />
@@ -326,7 +326,7 @@ export default function AskPage() {
                     <Bot className="h-4 w-4 text-blue-600" />
                   </div>
                 )}
-                <div className={`max-w-[85%] ${m.role === "user" ? "" : "flex-1"}`}>
+                <div className={m.role === "user" ? "max-w-[640px]" : "flex-1 min-w-0"}>
                   <Card>
                     <CardContent className="pt-4 pb-4">
                       {m.pending ? (
