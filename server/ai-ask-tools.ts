@@ -4,7 +4,7 @@
 // natural-language questions about procedures, taxes, expenses, payments,
 // products, and Turkish HS codes.
 
-import { and, eq, gte, lte, ilike, isNotNull, sql, desc, asc, inArray, or } from "drizzle-orm";
+import { and, eq, gte, lte, ilike, isNotNull, sql, desc, asc, inArray } from "drizzle-orm";
 import { db } from "./db";
 import {
   procedures,
@@ -90,7 +90,7 @@ export const TOOL_SCHEMAS = [
           enum: ['export_registry_fee','insurance','awb_fee','airport_storage_fee','bonded_warehouse_storage_fee',
                  'transportation','international_transportation','tareks_fee','customs_inspection','azo_test','other'],
         },
-        issuer_contains: { type: 'string', description: 'Vendor name substring. Matched case-insensitively against BOTH the issuer column AND the notes column, since vendor names are often recorded in notes (e.g. "THY Ardiye") rather than the issuer field. If 0 rows match, do NOT silently retry without this filter — report 0 to the user.' },
+        issuer_contains: { type: 'string', description: 'Vendor name substring. Matched case-insensitively against the issuer column ONLY (not notes). If 0 rows match, do NOT silently retry without this filter — report 0 to the user, optionally call group_by:"issuer" to show what issuer values exist.' },
         reference_prefix: { type: 'string' },
         currency: { type: 'string', description: 'Filter to a single currency (e.g. TL, USD, EUR). Recommended whenever you report a total.' },
         include_service_invoices: { type: 'boolean', description: 'Also include CNC service-invoice totals. Default false.' },
@@ -448,12 +448,7 @@ export async function runQueryExpenses(input: any): Promise<any> {
   const where = and(
     ...dateBetweenSql(expDateField, input.start_date, input.end_date),
     input.category ? eq(importExpenses.category, input.category as any) : undefined,
-    input.issuer_contains
-      ? or(
-          ilike((importExpenses as any).issuer, `%${input.issuer_contains}%`),
-          ilike((importExpenses as any).notes, `%${input.issuer_contains}%`),
-        )
-      : undefined,
+    input.issuer_contains ? ilike((importExpenses as any).issuer, `%${input.issuer_contains}%`) : undefined,
     input.reference_prefix ? ilike((importExpenses as any).procedureReference, `${input.reference_prefix}%`) : undefined,
     input.currency ? eq((importExpenses as any).currency, input.currency) : undefined,
   );

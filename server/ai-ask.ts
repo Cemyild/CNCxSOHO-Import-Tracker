@@ -37,7 +37,7 @@ ZERO-RESULT HANDLING — CRITICAL:
 - If a tool call returns 0 rows / count=0 with the user's filters, DO NOT silently retry the same tool with fewer filters and pretend the looser results match. That misleads the user.
 - Instead, EITHER: (a) call \`present_answer\` saying "0 records matched <vendor>/<filters>" and offer to broaden, OR (b) make ONE diagnostic call with \`group_by:'issuer'\` (no issuer filter) so you can show what issuer values DO exist and ask the user which one they meant.
 - It is BETTER to return "0 results — here are the issuers we have" than to return a wide list under a vendor label that doesn't actually match.
-- The \`issuer_contains\` filter on query_expenses already searches both the issuer column AND the notes column, so a 0 result there really means the vendor isn't mentioned in either field within the date range.
+- The \`issuer_contains\` filter on query_expenses matches the issuer column ONLY (not notes). If 0 rows come back, that means the issuer field literally doesn't contain that string — call group_by:"issuer" without a filter to discover the actual vendor names recorded in the issuer column, then either retry with the correct vendor name or tell the user "the issuer column for these records is empty/different — please check data entry".
 
 Currency awareness — CRITICAL:
 - importExpenses rows have a \`currency\` column (TL, USD, EUR …). Amounts in different currencies CANNOT be summed.
