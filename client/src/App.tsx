@@ -28,6 +28,7 @@ import TaxCalculationNewPage from "@/pages/tax-calculation-new";
 import TaxCalculationEditPage from "@/pages/tax-calculation-edit";
 import TaxCalculationResultsPage from "@/pages/tax-calculation-results";
 import AskPage from "@/pages/ask";
+import StorageCalculatorPage from "@/pages/storage-calculator";
 
 function Router() {
   return (
@@ -187,6 +188,13 @@ function Router() {
         {() => (
           <ProtectedRoute>
             <AskPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/storage-calculator">
+        {() => (
+          <ProtectedRoute>
+            <StorageCalculatorPage />
           </ProtectedRoute>
         )}
       </Route>

@@ -177,11 +177,61 @@ const documentUpload = multer({
   limits: { fileSize: 20 * 1024 * 1024 },
 });
 
+// In-memory cache for TCMB USD/TRY rate. TCMB publishes once per business day
+// around 15:30 TR time, so a 30-min TTL is plenty and avoids hammering them.
+let usdTlRateCache: { rate: number; source: string; date: string | null; fetchedAt: number } | null = null;
+const USD_TL_CACHE_TTL_MS = 30 * 60 * 1000;
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Adobe PDF Services removed - now using jsPDF for PDF generation
-  
+
   // Register Excel Enrichment Router
   app.use("/api/enrichment", excelEnrichmentRouter);
+
+  // Fetch the official USD/TRY rate (ForexSelling) from TCMB's daily XML feed.
+  // Used by the Storage Calculator to pre-fill the exchange rate input.
+  app.get("/api/usdtl-rate", async (_req, res) => {
+    try {
+      if (usdTlRateCache && Date.now() - usdTlRateCache.fetchedAt < USD_TL_CACHE_TTL_MS) {
+        return res.json(usdTlRateCache);
+      }
+
+      const response = await fetch("https://www.tcmb.gov.tr/kurlar/today.xml");
+      if (!response.ok) {
+        return res.status(502).json({ error: `TCMB returned ${response.status}` });
+      }
+
+      // TCMB serves the XML as ISO-8859-9 (Turkish). Decode explicitly.
+      const buffer = await response.arrayBuffer();
+      const xml = new TextDecoder("iso-8859-9").decode(buffer);
+
+      const usdSection = xml.match(/<Currency[^>]*Kod="USD"[^>]*>[\s\S]*?<\/Currency>/i);
+      if (!usdSection) {
+        return res.status(502).json({ error: "USD section not found in TCMB feed" });
+      }
+      const sellingMatch = usdSection[0].match(/<ForexSelling>([\d.]+)<\/ForexSelling>/);
+      if (!sellingMatch) {
+        return res.status(502).json({ error: "ForexSelling not found for USD" });
+      }
+      const rate = parseFloat(sellingMatch[1]);
+      if (!isFinite(rate) || rate <= 0) {
+        return res.status(502).json({ error: "Invalid rate value" });
+      }
+
+      const dateMatch = xml.match(/Tarih_Date[^>]*Tarih="([^"]+)"/);
+      const result = {
+        rate,
+        source: "TCMB",
+        date: dateMatch?.[1] ?? null,
+        fetchedAt: Date.now(),
+      };
+      usdTlRateCache = result;
+      res.json(result);
+    } catch (err) {
+      console.error("USD/TL rate fetch failed:", err);
+      res.status(502).json({ error: "Failed to fetch USD/TL rate from TCMB" });
+    }
+  });
 
   // Route to upload PDF template - DEPRECATED (keeping for backward compatibility)
   app.post(

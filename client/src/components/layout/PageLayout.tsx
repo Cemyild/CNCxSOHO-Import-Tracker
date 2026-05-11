@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { BackgroundPaths } from '@/components/ui/background-paths';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Text_03 } from '@/components/ui/wave-text';
+import { defaultNavItems, type NavItem } from '@/lib/nav-items';
 import {
   Sidebar,
   SidebarProvider,
@@ -23,14 +24,13 @@ import {
 type PageLayoutProps = {
   title: string;
   children: React.ReactNode;
-  navItems: Array<{
-    title: string;
-    url: string;
-    icon: React.ComponentType<any>;
-  }>;
+  // Legacy prop kept for backward compatibility with existing pages.
+  // The sidebar always renders defaultNavItems from @/lib/nav-items.
+  navItems?: NavItem[];
 };
 
-export function PageLayout({ title, children, navItems }: PageLayoutProps) {
+export function PageLayout({ title, children }: PageLayoutProps) {
+  const navItems = defaultNavItems;
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
