@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Download, Check, ChevronsUpDown } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -121,6 +123,19 @@ export default function BulkDownloadPage() {
     },
   });
 
+  const [multiSearch, setMultiSearch] = useState("");
+  const filteredForMulti = useMemo(() => {
+    const q = multiSearch.trim().toLowerCase();
+    if (!q) return procedureList;
+    return procedureList.filter(
+      (p) =>
+        p.reference.toLowerCase().includes(q) || (p.shipper ?? "").toLowerCase().includes(q),
+    );
+  }, [procedureList, multiSearch]);
+
+  const allFilteredSelected =
+    filteredForMulti.length > 0 && filteredForMulti.every((p) => multiIds.includes(p.id));
+
   const singleSelected = procedureList.find((p) => p.id === singleId) ?? null;
   const [singleOpen, setSingleOpen] = useState(false);
 
@@ -223,8 +238,62 @@ export default function BulkDownloadPage() {
                 </PopoverContent>
               </Popover>
             </TabsContent>
-            <TabsContent value="multi" className="pt-4">
-              <p className="text-sm text-muted-foreground">Multi-select tab — implemented in Task 13</p>
+            <TabsContent value="multi" className="pt-4 space-y-3">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Search reference or shipper…"
+                  value={multiSearch}
+                  onChange={(e) => setMultiSearch(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (allFilteredSelected) {
+                      const filteredIds = new Set(filteredForMulti.map((p) => p.id));
+                      setMultiIds(multiIds.filter((id) => !filteredIds.has(id)));
+                    } else {
+                      const merged = new Set([...multiIds, ...filteredForMulti.map((p) => p.id)]);
+                      setMultiIds(Array.from(merged));
+                    }
+                  }}
+                >
+                  {allFilteredSelected ? "Deselect visible" : "Select visible"}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setMultiIds([])} disabled={multiIds.length === 0}>
+                  Clear
+                </Button>
+              </div>
+
+              <div className="max-h-[360px] overflow-y-auto border rounded-md divide-y">
+                {filteredForMulti.length === 0 && (
+                  <div className="p-4 text-sm text-muted-foreground">No procedures match.</div>
+                )}
+                {filteredForMulti.map((p) => (
+                  <label
+                    key={p.id}
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={multiIds.includes(p.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          if (!multiIds.includes(p.id)) setMultiIds([...multiIds, p.id]);
+                        } else {
+                          setMultiIds(multiIds.filter((id) => id !== p.id));
+                        }
+                      }}
+                    />
+                    <span className="font-mono text-sm w-32">{p.reference}</span>
+                    <span className="text-sm text-muted-foreground flex-1 truncate">{p.shipper ?? "—"}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="text-xs text-muted-foreground">
+                {multiIds.length} selected ({filteredForMulti.length} visible / {procedureList.length} total)
+              </div>
             </TabsContent>
             <TabsContent value="dateRange" className="pt-4">
               <p className="text-sm text-muted-foreground">Date range tab — implemented in Task 14</p>
