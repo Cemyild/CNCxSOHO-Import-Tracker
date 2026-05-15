@@ -31,7 +31,7 @@ Preferred communication style: Simple, everyday language.
 ## External Dependencies
 
 -   **PDF Generation**: Adobe PDF Services SDK (`@adobe/pdfservices-node-sdk`) for template-based PDF reports.
--   **File Storage**: AWS S3 SDK and Replit Object Storage for file and document storage using presigned URLs.
+-   **File Storage**: Hetzner S3-compatible object storage accessed via the AWS S3 SDK, with a local `uploads/` fallback when S3 env vars are unset.
 -   **Excel Generation**: Python `openpyxl` for template-based Excel exports, preserving formatting and supporting dynamic data.
 -   **Document Analysis**: Anthropic Claude Sonnet 4 via a custom API for extracting data from various PDF documents (customs declarations, import expense invoices, service invoices).
 -   **Database & ORM**: Drizzle ORM (`drizzle-kit`), Neon serverless PostgreSQL (`@neondatabase/serverless`).

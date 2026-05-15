@@ -28,8 +28,8 @@ The ANTHROPIC_API_KEY environment variable is not set or invalid.
 
 To fix this:
 1. Go to https://console.anthropic.com/ to get your API key
-2. Add it to Replit Secrets as ANTHROPIC_API_KEY
-3. Restart the "Start application" workflow
+2. Set it as the ANTHROPIC_API_KEY environment variable on the server
+3. Restart the server process
 
 Claude Vision API endpoints will return 503 until this is configured.
 `.trim();
@@ -54,7 +54,7 @@ export function isConfigured(): boolean {
  */
 function ensureConfigured() {
   if (!isConfigured()) {
-    throw new Error('ANTHROPIC_API_KEY is not configured. Add your API key to Replit Secrets and restart the server.');
+    throw new Error('ANTHROPIC_API_KEY is not configured. Set it as an environment variable on the server and restart the process.');
   }
 }
 

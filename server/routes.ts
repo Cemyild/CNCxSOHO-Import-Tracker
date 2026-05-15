@@ -3924,12 +3924,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Debug endpoint to check stored objects in Replit Object Storage
+  // Debug endpoint to check stored objects in S3 object storage
   app.get("/api/debug/storage-keys", async (req, res) => {
     try {
       const prefix = (req.query.prefix as string) || "";
       console.log(
-        `Listing all objects in Replit Object Storage with prefix: "${prefix}"`,
+        `Listing all objects in S3 object storage with prefix: "${prefix}"`,
       );
       const keys = await listAllKeys(prefix);
       console.log("Found objects:", keys);
@@ -3963,12 +3963,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `Document requested: ID ${id}, Filename: ${document.originalFilename}, Type: ${document.fileType}, Object Key: ${document.objectKey || "N/A"}`,
       );
 
-      // If document is in Replit Object Storage
+      // If document is in S3 object storage
       if (document.objectKey) {
         // Get the file from storage
         try {
           console.log(
-            `Retrieving file from Replit Object Storage, key: ${document.objectKey}`,
+            `Retrieving file from S3 object storage, key: ${document.objectKey}`,
           );
           const { buffer, contentType } = await getFile(document.objectKey);
 
@@ -4117,7 +4117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get the file from storage
       try {
         console.log(
-          `Retrieving file from Replit Object Storage, key: ${objectKey}`,
+          `Retrieving file from S3 object storage, key: ${objectKey}`,
         );
         const { buffer, contentType } = await getFile(objectKey);
 
@@ -4142,7 +4142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         console.log(
-          `File retrieved successfully from Replit Object Storage: ${objectKey}`,
+          `File retrieved successfully from S3 object storage: ${objectKey}`,
         );
         console.log(
           `Serving file: ${originalFilename}, size: ${buffer.length} bytes, type: ${contentType}`,
@@ -4245,7 +4245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const fileSize = file.size;
         const fileType = file.mimetype;
 
-        // Upload file to Replit Object Storage with procedure reference folder
+        // Upload file to S3 object storage with procedure reference folder
         const objectKey = await uploadFile(
           file.buffer,
           originalFilename,
@@ -10859,7 +10859,7 @@ Return ONLY the JSON object, no explanation before or after.
       if (!claude.isConfigured()) {
         return res.status(503).json({ 
           error: "Claude API not configured",
-          details: "ANTHROPIC_API_KEY is not set or invalid. Please add your API key to Replit Secrets."
+          details: "ANTHROPIC_API_KEY is not set or invalid. Please set it as an environment variable on the server."
         });
       }
 

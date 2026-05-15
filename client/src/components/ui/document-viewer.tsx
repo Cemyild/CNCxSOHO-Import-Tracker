@@ -41,7 +41,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onDown
       // Determine the document URL based on storage method
       let url = '';
       if (document.objectKey) {
-        // Use Replit Object Storage path
+        // Use S3 object storage path
         url = `/api/expense-documents/file/${encodeURIComponent(document.objectKey)}?preview=true`;
       } else if (document.storedFilename) {
         // Fallback for legacy documents

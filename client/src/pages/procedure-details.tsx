@@ -208,7 +208,7 @@ interface Document {
   procedureReference: string;
   createdAt: string;
   updatedAt: string;
-  objectKey?: string; // Added for Replit Object Storage integration
+  objectKey?: string; // S3 object storage key
   importDocumentType?: string; // Added for import documents
 }
 
@@ -770,7 +770,7 @@ export default function ProcedureDetailsPage() {
   // Handle download document
   const handleDownloadDocument = (document: Document) => {
     if (document.objectKey) {
-      // Use the new Replit Object Storage path
+      // Use the S3 object storage path
       window.open(`/api/expense-documents/file/${encodeURIComponent(document.objectKey)}`, '_blank');
     } else if (document.storedFilename) {
       // Fallback for legacy documents (should not be needed after migration)
