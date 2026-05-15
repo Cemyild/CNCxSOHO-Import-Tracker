@@ -415,7 +415,9 @@ export function registerBulkDownloadRoutes(app: Express): void {
       }
 
       for (const [key, group] of grouped) {
-        const [ref, expenseType] = key.split("::");
+        const sep = key.indexOf("::");
+        const ref = key.slice(0, sep);
+        const expenseType = key.slice(sep + 2);
         const proc = procByRef.get(ref);
         if (!proc) continue;
         const folder = buildProcedureFolderName({
@@ -459,31 +461,38 @@ export function registerBulkDownloadRoutes(app: Express): void {
 
     // Sequentially fetch each file from S3 object storage and append to the archive.
     const manifestRows: ManifestRow[] = [];
-    for (const p of planned) {
-      const proc = procByRef.get(p.doc.procedureReference);
-      const baseRow: ManifestRow = {
-        procedureReference: p.doc.procedureReference,
-        importDecNumber: proc?.importDecNumber ?? null,
-        importDecDate: proc?.importDecDate ?? null,
-        shipper: proc?.shipper ?? null,
-        category: subfolderForExpenseType(p.doc.expenseType),
-        originalFilename: p.doc.originalFilename,
-        pathInZip: p.pathInZip,
-        fileSizeBytes: p.doc.fileSize ?? 0,
-        status: "OK",
-      };
-      try {
-        const { buffer } = await getFile(p.doc.objectKey);
-        archive.append(buffer, { name: p.pathInZip });
-        manifestRows.push(baseRow);
-      } catch (err) {
-        console.warn(`bulk-download: failed to fetch ${p.doc.objectKey}: ${err}`);
-        manifestRows.push({ ...baseRow, status: `ERROR: ${err instanceof Error ? err.message : String(err)}` });
+    try {
+      for (const p of planned) {
+        const proc = procByRef.get(p.doc.procedureReference);
+        const baseRow: ManifestRow = {
+          procedureReference: p.doc.procedureReference,
+          importDecNumber: proc?.importDecNumber ?? null,
+          importDecDate: proc?.importDecDate ?? null,
+          shipper: proc?.shipper ?? null,
+          category: subfolderForExpenseType(p.doc.expenseType),
+          originalFilename: p.doc.originalFilename,
+          pathInZip: p.pathInZip,
+          fileSizeBytes: p.doc.fileSize ?? 0,
+          status: "OK",
+        };
+        try {
+          const { buffer } = await getFile(p.doc.objectKey);
+          archive.append(buffer, { name: p.pathInZip });
+          manifestRows.push(baseRow);
+        } catch (err) {
+          console.warn(`bulk-download: failed to fetch ${p.doc.objectKey}: ${err}`);
+          manifestRows.push({ ...baseRow, status: `ERROR: ${err instanceof Error ? err.message : String(err)}` });
+        }
       }
-    }
 
-    // Append manifest as the very last entry, then finalize
-    archive.append(buildManifestCsv(manifestRows), { name: "manifest.csv" });
-    await archive.finalize();
+      // Append manifest as the very last entry, then finalize
+      archive.append(buildManifestCsv(manifestRows), { name: "manifest.csv" });
+      await archive.finalize();
+    } catch (err) {
+      console.error("bulk-download: streaming error:", err);
+      // Headers are already sent and the stream is already piped, so we can't send JSON.
+      // End the response cleanly so the client doesn't hang.
+      try { res.end(); } catch {}
+    }
   });
 }
