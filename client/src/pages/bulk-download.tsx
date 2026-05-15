@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
 
 type Mode = "single" | "multi" | "dateRange" | "all";
 
@@ -86,6 +87,7 @@ export default function BulkDownloadPage() {
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<number>(0);
 
   const body: BulkBody = useMemo(() => {
     switch (mode) {
@@ -158,6 +160,7 @@ export default function BulkDownloadPage() {
       if (!proceed) return;
     }
     setDownloading(true);
+    setDownloadProgress(0);
     try {
       const res = await fetch("/api/bulk-download", {
         method: "POST",
@@ -169,8 +172,26 @@ export default function BulkDownloadPage() {
         const errText = await res.text();
         throw new Error(`HTTP ${res.status}: ${errText}`);
       }
-      const blob = await res.blob();
-      const filename = parseFilenameFromContentDisposition(res.headers.get("content-disposition")) ?? "CNCxSOHO-Documents.zip";
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("Response has no body to stream");
+
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          received += value.length;
+          setDownloadProgress(received);
+        }
+      }
+
+      const blob = new Blob(chunks, { type: "application/zip" });
+      const filename =
+        parseFilenameFromContentDisposition(res.headers.get("content-disposition")) ??
+        "CNCxSOHO-Documents.zip";
       triggerBlobDownload(blob, filename);
     } catch (err) {
       toast({
@@ -180,6 +201,7 @@ export default function BulkDownloadPage() {
       });
     } finally {
       setDownloading(false);
+      setDownloadProgress(0);
     }
   }
 
@@ -333,12 +355,36 @@ export default function BulkDownloadPage() {
             </TabsContent>
           </Tabs>
 
-          <div className="flex items-center justify-between border-t pt-4">
-            <div className="text-sm text-muted-foreground">{summaryText}</div>
-            <Button disabled={!ready || downloading} onClick={handleDownload}>
-              <Download className="mr-2 h-4 w-4" />
-              {downloading ? "Preparing…" : "Download ZIP"}
-            </Button>
+          <div className="space-y-3 border-t pt-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">{summaryText}</div>
+              <Button disabled={!ready || downloading} onClick={handleDownload}>
+                <Download className="mr-2 h-4 w-4" />
+                {downloading ? "Downloading…" : "Download ZIP"}
+              </Button>
+            </div>
+            {downloading && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>
+                    {formatBytes(downloadProgress)}
+                    {count?.totalBytes ? ` / ~${formatBytes(count.totalBytes)}` : ""}
+                  </span>
+                  <span>
+                    {count?.totalBytes && downloadProgress > 0
+                      ? `${Math.min(100, Math.round((downloadProgress / count.totalBytes) * 100))}%`
+                      : ""}
+                  </span>
+                </div>
+                <Progress
+                  value={
+                    count?.totalBytes
+                      ? Math.min(100, (downloadProgress / count.totalBytes) * 100)
+                      : 0
+                  }
+                />
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
