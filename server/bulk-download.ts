@@ -102,8 +102,21 @@ export function subfolderForExpenseType(t: string): string {
  * Deduplicate filenames within the same target folder by suffixing " (2)", " (3)" ...
  * Input items are returned in the same order with a new `name` field.
  */
-export function dedupFilenames<T extends { originalFilename: string }>(_items: T[]): (T & { name: string })[] {
-  throw new Error("not implemented");
+export function dedupFilenames<T extends { originalFilename: string }>(items: T[]): (T & { name: string })[] {
+  const counts = new Map<string, number>();
+  return items.map((item) => {
+    const cleaned = sanitizePathSegment(item.originalFilename);
+    const seen = counts.get(cleaned) ?? 0;
+    counts.set(cleaned, seen + 1);
+
+    if (seen === 0) return { ...item, name: cleaned };
+
+    // Insert " (n)" before the extension. No extension → append at end.
+    const dot = cleaned.lastIndexOf(".");
+    const suffix = ` (${seen + 1})`;
+    const name = dot > 0 ? cleaned.slice(0, dot) + suffix + cleaned.slice(dot) : cleaned + suffix;
+    return { ...item, name };
+  });
 }
 
 /** Manifest row before CSV serialization. */
@@ -129,14 +142,30 @@ export function buildManifestCsv(_rows: ManifestRow[]): Buffer {
 }
 
 /** Build the downloaded ZIP filename per spec table. */
-export function buildZipFilename(_args: {
+export function buildZipFilename(args: {
   mode: "single" | "multi" | "dateRange" | "all";
   singleReference?: string;
   dateFrom?: string;
   dateTo?: string;
   today: Date;
 }): string {
-  throw new Error("not implemented");
+  const today = formatDateDot(args.today);
+  switch (args.mode) {
+    case "single":
+      return `CNCxSOHO-${sanitizePathSegment(args.singleReference ?? "Unknown")}-${today}.zip`;
+    case "all":
+      return `CNCxSOHO-Documents-All-${today}.zip`;
+    case "dateRange": {
+      const fromD = args.dateFrom ? parseImportDecDate(args.dateFrom) : null;
+      const toD = args.dateTo ? parseImportDecDate(args.dateTo) : null;
+      const from = fromD ? formatDateDot(fromD) : (args.dateFrom ?? "");
+      const to = toD ? formatDateDot(toD) : (args.dateTo ?? "");
+      return `CNCxSOHO-Documents-${from}_${to}.zip`;
+    }
+    case "multi":
+    default:
+      return `CNCxSOHO-Documents-${today}.zip`;
+  }
 }
 
 // ── Route registration (filled in later tasks) ─────────────────────────────
