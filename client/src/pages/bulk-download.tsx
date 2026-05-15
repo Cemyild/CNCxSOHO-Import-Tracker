@@ -113,7 +113,8 @@ export default function BulkDownloadPage() {
     queryKey: ["/api/procedures"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/procedures");
-      const rows = await res.json();
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data : (data?.procedures ?? []);
       return rows.map((r: any) => ({
         id: r.id,
         reference: r.reference ?? `#${r.id}`,

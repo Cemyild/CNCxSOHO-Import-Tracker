@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import archiver from "archiver";
 import { db } from "./db";
-import { procedures, expenseDocuments } from "@shared/schema";
+import { procedures, expenseDocuments, importExpenses } from "@shared/schema";
 import { inArray } from "drizzle-orm";
 import { getFile } from "./object-storage";
 
@@ -96,6 +96,26 @@ const SUBFOLDER_MAP: Record<string, string> = {
   service_invoice: "03-Service-Invoices",
   tax: "04-Tax-Documents",
 };
+
+const EXPENSE_CATEGORY_DISPLAY: Record<string, string> = {
+  export_registry_fee: "Export Registry Fee",
+  insurance: "Insurance",
+  awb_fee: "AWB Fee",
+  airport_storage_fee: "Airport Storage Fee",
+  bonded_warehouse_storage_fee: "Bonded Warehouse Storage Fee",
+  transportation: "Transportation",
+  international_transportation: "International Transportation",
+  tareks_fee: "Tareks Fee",
+  customs_inspection: "Customs Inspection",
+  azo_test: "AZO Test",
+  other: "Other Expense",
+};
+
+function getFileExtension(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  if (dot <= 0) return "";
+  return filename.slice(dot);
+}
 
 /**
  * Map expense_documents.expenseType to the subfolder name inside a procedure folder.
@@ -406,6 +426,22 @@ export function registerBulkDownloadRoutes(app: Express): void {
         return res.status(400).json({ error: "No documents found for the selected procedures" });
       }
 
+      // Fetch category for import_expense docs so we can rename files by category
+      const importExpenseIds = docs
+        .filter((d) => d.expenseType === "import_expense")
+        .map((d) => d.expenseId);
+
+      const categoryById = new Map<number, string>();
+      if (importExpenseIds.length > 0) {
+        const expenseRows = await db
+          .select({ id: importExpenses.id, category: importExpenses.category })
+          .from(importExpenses)
+          .where(inArray(importExpenses.id, importExpenseIds));
+        for (const e of expenseRows) {
+          categoryById.set(e.id, e.category);
+        }
+      }
+
       // Group documents by (procedureReference, expenseType) and dedup names inside each bucket
       const grouped = new Map<string, typeof docs>();
       for (const d of docs) {
@@ -426,7 +462,23 @@ export function registerBulkDownloadRoutes(app: Express): void {
           importDecDate: proc.importDecDate,
         });
         const subfolder = subfolderForExpenseType(expenseType);
-        const deduped = dedupFilenames(group);
+
+        // Rename files for import_expense / service_invoice based on category
+        const renamed = group.map((d) => {
+          const ext = getFileExtension(d.originalFilename);
+          if (d.expenseType === "import_expense") {
+            const cat = categoryById.get(d.expenseId);
+            if (cat) {
+              const display = EXPENSE_CATEGORY_DISPLAY[cat] ?? cat;
+              return { ...d, originalFilename: `${display}${ext}` };
+            }
+          } else if (d.expenseType === "service_invoice") {
+            return { ...d, originalFilename: `Service Invoice${ext}` };
+          }
+          return d;
+        });
+
+        const deduped = dedupFilenames(renamed);
         for (const d of deduped) {
           planned.push({ doc: d, pathInZip: `${folder}/${subfolder}/${d.name}` });
         }
