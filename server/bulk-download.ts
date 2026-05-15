@@ -3,7 +3,7 @@ import { z } from "zod";
 import archiver from "archiver";
 import { db } from "./db";
 import { procedures, expenseDocuments } from "@shared/schema";
-import { inArray, eq } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { getFile } from "./object-storage";
 
 // ── Pure utilities (exported for testing) ──────────────────────────────────
@@ -388,47 +388,50 @@ export function registerBulkDownloadRoutes(app: Express): void {
       return res.status(400).json({ error: "No procedures match the filter" });
     }
 
-    // Fetch document metadata for all matched procedures in one query
-    const docs = await db
-      .select()
-      .from(expenseDocuments)
-      .where(inArray(expenseDocuments.procedureReference, resolved.procedures.map((p) => p.reference)));
-
-    if (docs.length === 0) {
-      return res.status(400).json({ error: "No documents found for the selected procedures" });
-    }
-
-    // Index procedures by reference for fast folder-name lookup
-    const procByRef = new Map(resolved.procedures.map((p) => [p.reference, p]));
-
-    // Group documents by (procedureReference, expenseType) and dedup names inside each bucket
     interface PlannedFile {
-      doc: typeof docs[number];
+      doc: typeof expenseDocuments.$inferSelect;
       pathInZip: string;
     }
+    const procByRef = new Map(resolved.procedures.map((p) => [p.reference, p]));
     const planned: PlannedFile[] = [];
 
-    const grouped = new Map<string, typeof docs>();
-    for (const d of docs) {
-      const key = `${d.procedureReference}::${d.expenseType}`;
-      if (!grouped.has(key)) grouped.set(key, []);
-      grouped.get(key)!.push(d);
-    }
+    try {
+      // Fetch document metadata for all matched procedures in one query
+      const docs = await db
+        .select()
+        .from(expenseDocuments)
+        .where(inArray(expenseDocuments.procedureReference, resolved.procedures.map((p) => p.reference)));
 
-    for (const [key, group] of grouped) {
-      const [ref, expenseType] = key.split("::");
-      const proc = procByRef.get(ref);
-      if (!proc) continue;
-      const folder = buildProcedureFolderName({
-        reference: proc.reference,
-        importDecNumber: proc.importDecNumber,
-        importDecDate: proc.importDecDate,
-      });
-      const subfolder = subfolderForExpenseType(expenseType);
-      const deduped = dedupFilenames(group);
-      for (const d of deduped) {
-        planned.push({ doc: d, pathInZip: `${folder}/${subfolder}/${d.name}` });
+      if (docs.length === 0) {
+        return res.status(400).json({ error: "No documents found for the selected procedures" });
       }
+
+      // Group documents by (procedureReference, expenseType) and dedup names inside each bucket
+      const grouped = new Map<string, typeof docs>();
+      for (const d of docs) {
+        const key = `${d.procedureReference}::${d.expenseType}`;
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key)!.push(d);
+      }
+
+      for (const [key, group] of grouped) {
+        const [ref, expenseType] = key.split("::");
+        const proc = procByRef.get(ref);
+        if (!proc) continue;
+        const folder = buildProcedureFolderName({
+          reference: proc.reference,
+          importDecNumber: proc.importDecNumber,
+          importDecDate: proc.importDecDate,
+        });
+        const subfolder = subfolderForExpenseType(expenseType);
+        const deduped = dedupFilenames(group);
+        for (const d of deduped) {
+          planned.push({ doc: d, pathInZip: `${folder}/${subfolder}/${d.name}` });
+        }
+      }
+    } catch (err) {
+      console.error("bulk-download: error fetching/planning docs:", err);
+      return res.status(500).json({ error: "Failed to prepare documents", details: String(err) });
     }
 
     // Compute filename and headers
