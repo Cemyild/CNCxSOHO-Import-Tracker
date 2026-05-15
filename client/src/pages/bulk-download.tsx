@@ -149,6 +149,13 @@ export default function BulkDownloadPage() {
   });
 
   async function handleDownload() {
+    if (count && count.totalBytes > 500 * 1024 * 1024) {
+      const mb = Math.round(count.totalBytes / (1024 * 1024));
+      const proceed = window.confirm(
+        `This will download about ${mb} MB and may take several minutes. Continue?`,
+      );
+      if (!proceed) return;
+    }
     setDownloading(true);
     try {
       const res = await fetch("/api/bulk-download", {
