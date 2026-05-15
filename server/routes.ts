@@ -4637,21 +4637,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       `;
       const proceduresResult = await rawDb.query(proceduresQuery);
 
+      // Inner-join procedures so orphan rows (procedure deleted but tax/expense/invoice
+      // kept) are excluded — this keeps Dashboard totals consistent with the per-procedure
+      // views (Tax Analytics, Expense Analytics) which all filter through procedures.
       const taxesQuery = `
-        SELECT 
-          customs_tax::text as customs_tax, 
-          additional_customs_tax::text as additional_customs_tax, 
-          kkdf::text as kkdf, 
-          vat::text as vat, 
-          stamp_tax::text as stamp_tax 
-        FROM taxes
+        SELECT
+          t.customs_tax::text as customs_tax,
+          t.additional_customs_tax::text as additional_customs_tax,
+          t.kkdf::text as kkdf,
+          t.vat::text as vat,
+          t.stamp_tax::text as stamp_tax
+        FROM taxes t
+        INNER JOIN procedures p ON t.procedure_reference = p.reference
       `;
       const taxesResult = await rawDb.query(taxesQuery);
 
-      const expensesQuery = `SELECT amount::text as amount, currency FROM import_expenses`;
+      const expensesQuery = `
+        SELECT e.amount::text as amount, e.currency
+        FROM import_expenses e
+        INNER JOIN procedures p ON e.procedure_reference = p.reference
+      `;
       const expensesResult = await rawDb.query(expensesQuery);
 
-      const invoicesQuery = `SELECT amount::text as amount, currency FROM import_service_invoices`;
+      const invoicesQuery = `
+        SELECT i.amount::text as amount, i.currency
+        FROM import_service_invoices i
+        INNER JOIN procedures p ON i.procedure_reference = p.reference
+      `;
       const invoicesResult = await rawDb.query(invoicesQuery);
 
       // Helper function to safely parse numbers
