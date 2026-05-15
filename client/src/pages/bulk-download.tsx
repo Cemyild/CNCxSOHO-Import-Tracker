@@ -4,9 +4,19 @@ import { PageLayout } from "@/components/layout/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download } from "lucide-react";
+import { Download, Check, ChevronsUpDown } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 type Mode = "single" | "multi" | "dateRange" | "all";
 
@@ -90,6 +100,30 @@ export default function BulkDownloadPage() {
 
   const ready = isBodyReady(body);
 
+  interface ProcedureListItem {
+    id: number;
+    reference: string;
+    shipper: string | null;
+    import_dec_date: string | null;
+  }
+
+  const { data: procedureList = [] } = useQuery<ProcedureListItem[]>({
+    queryKey: ["/api/procedures"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/procedures");
+      const rows = await res.json();
+      return rows.map((r: any) => ({
+        id: r.id,
+        reference: r.reference ?? `#${r.id}`,
+        shipper: r.shipper ?? null,
+        import_dec_date: r.import_dec_date ?? null,
+      }));
+    },
+  });
+
+  const singleSelected = procedureList.find((p) => p.id === singleId) ?? null;
+  const [singleOpen, setSingleOpen] = useState(false);
+
   const { data: count } = useQuery<CountResult>({
     queryKey: ["/api/bulk-download/count", body],
     queryFn: async () => {
@@ -148,8 +182,46 @@ export default function BulkDownloadPage() {
               <TabsTrigger value="all">Everything</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="single" className="pt-4">
-              <p className="text-sm text-muted-foreground">Single procedure tab — implemented in Task 12</p>
+            <TabsContent value="single" className="pt-4 space-y-2">
+              <label className="text-sm font-medium">Procedure</label>
+              <Popover open={singleOpen} onOpenChange={setSingleOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                  >
+                    {singleSelected
+                      ? `${singleSelected.reference}${singleSelected.shipper ? " — " + singleSelected.shipper : ""}`
+                      : "Pick a procedure…"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[min(640px,90vw)] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search reference or shipper…" />
+                    <CommandList>
+                      <CommandEmpty>No matches.</CommandEmpty>
+                      <CommandGroup>
+                        {procedureList.map((p) => (
+                          <CommandItem
+                            key={p.id}
+                            value={`${p.reference} ${p.shipper ?? ""}`}
+                            onSelect={() => {
+                              setSingleId(p.id);
+                              setSingleOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", singleId === p.id ? "opacity-100" : "opacity-0")} />
+                            <span className="font-mono mr-2">{p.reference}</span>
+                            {p.shipper && <span className="text-muted-foreground">— {p.shipper}</span>}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </TabsContent>
             <TabsContent value="multi" className="pt-4">
               <p className="text-sm text-muted-foreground">Multi-select tab — implemented in Task 13</p>
