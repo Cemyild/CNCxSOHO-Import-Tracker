@@ -1,4 +1,9 @@
 import type { Express, Request, Response } from "express";
+import { z } from "zod";
+import { db } from "./db";
+import { procedures, expenseDocuments } from "@shared/schema";
+import { inArray, eq } from "drizzle-orm";
+import { getFile } from "./object-storage";
 
 // ── Pure utilities (exported for testing) ──────────────────────────────────
 
@@ -219,6 +224,101 @@ export function buildZipFilename(args: {
     default:
       return `CNCxSOHO-Documents-${today}.zip`;
   }
+}
+
+// ── Request validation ─────────────────────────────────────────────────────
+
+export const bulkDownloadRequestSchema = z
+  .object({
+    mode: z.enum(["single", "multi", "dateRange", "all"]),
+    procedureIds: z.array(z.number().int().positive()).optional(),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.mode === "single") {
+      if (!data.procedureIds || data.procedureIds.length !== 1) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "single mode requires exactly one procedureId" });
+      }
+    }
+    if (data.mode === "multi") {
+      if (!data.procedureIds || data.procedureIds.length === 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "multi mode requires at least one procedureId" });
+      }
+    }
+    if (data.mode === "dateRange") {
+      if (!data.dateFrom || !data.dateTo) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "dateRange mode requires dateFrom and dateTo" });
+      }
+    }
+  });
+
+export type BulkDownloadRequest = z.infer<typeof bulkDownloadRequestSchema>;
+
+// ── Procedure resolver ─────────────────────────────────────────────────────
+
+export interface ResolvedProcedures {
+  procedures: Array<{
+    id: number;
+    reference: string;
+    importDecNumber: string | null;
+    importDecDate: string | null;
+    shipper: string | null;
+  }>;
+  excludedNoDecDate: number;
+}
+
+export async function resolveProcedureIds(req: BulkDownloadRequest): Promise<ResolvedProcedures> {
+  // Load the slim columns we need from procedures
+  const allRows = await db
+    .select({
+      id: procedures.id,
+      reference: procedures.reference,
+      importDecNumber: procedures.import_dec_number,
+      importDecDate: procedures.import_dec_date,
+      shipper: procedures.shipper,
+    })
+    .from(procedures);
+
+  // Drop rows with no reference — they can't appear in a ZIP path anyway
+  const withRef = allRows
+    .filter((r) => r.reference != null && r.reference.trim() !== "")
+    .map((r) => ({
+      id: r.id,
+      reference: r.reference as string,
+      importDecNumber: r.importDecNumber,
+      importDecDate: r.importDecDate,
+      shipper: r.shipper,
+    }));
+
+  if (req.mode === "single" || req.mode === "multi") {
+    const ids = new Set(req.procedureIds ?? []);
+    return { procedures: withRef.filter((r) => ids.has(r.id)), excludedNoDecDate: 0 };
+  }
+
+  if (req.mode === "all") {
+    return { procedures: withRef, excludedNoDecDate: 0 };
+  }
+
+  // dateRange
+  const from = parseImportDecDate(req.dateFrom ?? null);
+  const to = parseImportDecDate(req.dateTo ?? null);
+  if (!from || !to) return { procedures: [], excludedNoDecDate: 0 };
+
+  const fromTs = from.getTime();
+  const toTs = to.getTime();
+  let excluded = 0;
+  const matched = withRef.filter((r) => {
+    const d = parseImportDecDate(r.importDecDate);
+    if (!d) {
+      excluded++;
+      return false;
+    }
+    const ts = d.getTime();
+    return ts >= fromTs && ts <= toTs;
+  });
+
+  return { procedures: matched, excludedNoDecDate: excluded };
 }
 
 // ── Route registration (filled in later tasks) ─────────────────────────────
