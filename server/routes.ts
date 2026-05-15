@@ -60,6 +60,7 @@ import { handleAskRequest, isAskConfigured } from "./ai-ask";
 import rateLimit from "express-rate-limit";
 // Import Zod for validation
 import { z } from "zod";
+import { registerBulkDownloadRoutes } from "./bulk-download";
 
 // Configure multer for memory storage (for cloud uploads)
 // This stores files in memory instead of on disk so we can upload to object storage
@@ -10936,6 +10937,8 @@ Return ONLY the JSON object, no explanation before or after.
       res.status(500).json({ error: String(error) });
     }
   });
+
+  registerBulkDownloadRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

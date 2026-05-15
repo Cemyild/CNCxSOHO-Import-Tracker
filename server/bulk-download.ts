@@ -321,8 +321,42 @@ export async function resolveProcedureIds(req: BulkDownloadRequest): Promise<Res
   return { procedures: matched, excludedNoDecDate: excluded };
 }
 
-// ── Route registration (filled in later tasks) ─────────────────────────────
+// ── Route registration ─────────────────────────────────────────────────────
 
-export function registerBulkDownloadRoutes(_app: Express): void {
-  throw new Error("not implemented");
+export function registerBulkDownloadRoutes(app: Express): void {
+  app.post("/api/bulk-download/count", async (req: Request, res: Response) => {
+    try {
+      const parsed = bulkDownloadRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request", details: parsed.error.issues });
+      }
+      const body = parsed.data;
+      const { procedures: matched, excludedNoDecDate } = await resolveProcedureIds(body);
+
+      if (matched.length === 0) {
+        return res.json({ procedureCount: 0, fileCount: 0, totalBytes: 0, excludedNoDecDate });
+      }
+
+      const docs = await db
+        .select({
+          procedureReference: expenseDocuments.procedureReference,
+          fileSize: expenseDocuments.fileSize,
+        })
+        .from(expenseDocuments)
+        .where(inArray(expenseDocuments.procedureReference, matched.map((m) => m.reference)));
+
+      const refSet = new Set(docs.map((d) => d.procedureReference));
+      const totalBytes = docs.reduce((sum, d) => sum + (d.fileSize ?? 0), 0);
+
+      return res.json({
+        procedureCount: matched.filter((m) => refSet.has(m.reference)).length,
+        fileCount: docs.length,
+        totalBytes,
+        excludedNoDecDate,
+      });
+    } catch (err) {
+      console.error("bulk-download/count error:", err);
+      return res.status(500).json({ error: "Internal error", details: String(err) });
+    }
+  });
 }
