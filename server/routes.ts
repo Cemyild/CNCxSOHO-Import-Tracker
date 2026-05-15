@@ -3669,10 +3669,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const category = req.query.category as string;
     const groupBy = (req.query.groupBy as string) || "month";
 
-    // Date range parameters are received but not used for filtering
-    // We'll include them in the response for reference only
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
+
+    // Validate date params to YYYY-MM-DD exact match (defense in depth even though parameterized)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const validStart = startDate && dateRegex.test(startDate) ? startDate : null;
+    const validEnd = endDate && dateRegex.test(endDate) ? endDate : null;
 
     if (!category) {
       return res.status(400).json({ message: "Category is required" });
@@ -3680,31 +3683,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Log the request
     console.log(
-      `[Trend API] Request for ${category}, date range: ${startDate} to ${endDate}`,
+      `[Trend API] Request for ${category}, date range: ${validStart} to ${validEnd}`,
     );
 
     try {
       // Import the correct pool from db.ts
       const { pool } = await import("./db");
 
-      // Query the database using pool.query - get ALL expense data for the selected category
-      // Join with procedures to get import_dec_date instead of expense date
-      const result = await pool.query(`
-        SELECT 
-          e.id, 
+      // Parameterized query (closes SQL injection on `category`) with optional date filter on import_dec_date
+      const params: any[] = [category];
+      let dateClause = "";
+      if (validStart && validEnd) {
+        params.push(validStart, validEnd);
+        dateClause = ` AND p.import_dec_date::date BETWEEN $2::date AND $3::date`;
+      }
+
+      const result = await pool.query(
+        `
+        SELECT
+          e.id,
           e.amount::numeric as amount,
           e.category,
           p.import_dec_date as date,
           e.procedure_reference
-        FROM 
+        FROM
           import_expenses e
         JOIN
           procedures p ON e.procedure_reference = p.reference
-        WHERE 
-          e.category = '${category}'
+        WHERE
+          e.category = $1${dateClause}
         ORDER BY
           p.import_dec_date ASC
-      `);
+      `,
+        params,
+      );
 
       // Process the results directly with the async/await approach
       // No date filtering - include all expenses for a complete history
@@ -3729,10 +3741,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create periods for the chart based on the actual expense data, not the query parameters
       const periods: { period: string; amount: number; date: Date }[] = [];
 
-      // Use the actual min and max dates from the data itself for a complete history
+      // Use the user's selected date range when provided so the chart spans the requested window
+      // (and shows empty periods if no data falls inside). Fall back to data min/max otherwise.
       let start, end;
 
-      if (expenses.length > 0) {
+      if (validStart && validEnd) {
+        const [sy, sm, sd] = validStart.split("-").map(Number);
+        const [ey, em, ed] = validEnd.split("-").map(Number);
+        start = new Date(sy, sm - 1, sd);
+        end = new Date(ey, em - 1, ed);
+      } else if (expenses.length > 0) {
         // Find the earliest and latest expense dates
         const dates = expenses.map((exp) => exp.date).filter((d) => d !== null);
         start = new Date(Math.min(...dates.map((d) => d.getTime())));

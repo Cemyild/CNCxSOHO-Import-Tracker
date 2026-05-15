@@ -37,27 +37,19 @@ router.post('/generate', async (req, res) => {
       return res.status(400).json({ error: 'Report type is required' });
     }
 
-    // Get all procedures
-    const procedures = await storage.getAllProcedures();
-    let filteredProcedures = procedures;
-
-    // Apply date range filter (import declaration date)
+    // Push date range + shipper filter into SQL (avoids loading all procedures into memory)
+    let filteredProcedures;
     if (filters.dateRange?.from && filters.dateRange?.to) {
-      const fromDate = new Date(filters.dateRange.from);
-      const toDate = new Date(filters.dateRange.to);
-      
-      filteredProcedures = filteredProcedures.filter(proc => {
-        if (!proc.import_dec_date) return false;
-        const procDate = new Date(proc.import_dec_date);
-        return procDate >= fromDate && procDate <= toDate;
-      });
-    }
-
-    // Apply shipper filter
-    if (filters.shippers && filters.shippers.length > 0) {
-      filteredProcedures = filteredProcedures.filter(proc => 
-        filters.shippers!.includes(proc.shipper)
+      filteredProcedures = await storage.getProceduresByDateRange(
+        filters.dateRange.from,
+        filters.dateRange.to,
+        filters.shippers && filters.shippers.length > 0 ? filters.shippers : undefined
       );
+    } else {
+      const all = await storage.getAllProcedures();
+      filteredProcedures = filters.shippers && filters.shippers.length > 0
+        ? all.filter(proc => filters.shippers!.includes(proc.shipper))
+        : all;
     }
 
     console.log(`[custom-report] Filtered to ${filteredProcedures.length} procedures`);
@@ -192,7 +184,7 @@ router.post('/generate', async (req, res) => {
               amount: expense.amount,
               currency: expense.currency,
               invoiceNumber: expense.invoiceNumber || expense.invoice_number,
-              invoiceDate: expense.invoiceDate || expense.invoke_date ? format(new Date(expense.invoiceDate || expense.invoice_date), 'dd/MM/yyyy') : '',
+              invoiceDate: (expense.invoiceDate || expense.invoice_date) ? format(new Date(expense.invoiceDate || expense.invoice_date), 'dd/MM/yyyy') : '',
               documentNumber: expense.documentNumber || expense.document_number,
               policyNumber: expense.policyNumber || expense.policy_number,
               issuer: expense.issuer
@@ -527,26 +519,18 @@ const REPORT_CONFIGURATIONS: { [key: string]: { title: string; headers: string[]
 const fetchReportData = async (reportType: string, filters: ReportFilters) => {
   console.log(`[custom-report] Fetching data for report type: ${reportType}`);
   
-  const procedures = await storage.getAllProcedures();
-  let filteredProcedures = procedures;
-
-  // Apply date range filter
+  let filteredProcedures;
   if (filters.dateRange?.from && filters.dateRange?.to) {
-    const fromDate = new Date(filters.dateRange.from);
-    const toDate = new Date(filters.dateRange.to);
-    
-    filteredProcedures = filteredProcedures.filter(proc => {
-      if (!proc.import_dec_date) return false;
-      const procDate = new Date(proc.import_dec_date);
-      return procDate >= fromDate && procDate <= toDate;
-    });
-  }
-
-  // Apply shipper filter
-  if (filters.shippers && filters.shippers.length > 0) {
-    filteredProcedures = filteredProcedures.filter(proc => 
-      filters.shippers!.includes(proc.shipper || '')
+    filteredProcedures = await storage.getProceduresByDateRange(
+      filters.dateRange.from,
+      filters.dateRange.to,
+      filters.shippers && filters.shippers.length > 0 ? filters.shippers : undefined
     );
+  } else {
+    const all = await storage.getAllProcedures();
+    filteredProcedures = filters.shippers && filters.shippers.length > 0
+      ? all.filter(proc => filters.shippers!.includes(proc.shipper || ''))
+      : all;
   }
 
   const reportData: any[] = [];
@@ -1050,9 +1034,11 @@ router.post('/export-excel', async (req, res) => {
     
     const headers = data[0];
     const dataRows = data.slice(1);
-    
-    // Create title header (row 1) - merge cells A1 to M1 only as requested
-    worksheet.mergeCells('A1:M1');
+
+    // Merge title row across the actual header width (was hardcoded to A1:M1 = 13 cols)
+    const colCount = Math.max(1, headers.length);
+    const lastCol = worksheet.getColumn(colCount).letter;
+    worksheet.mergeCells(`A1:${lastCol}1`);
     worksheet.getCell('A1').value = title;
     worksheet.getCell('A1').style = {
       font: { name: 'Arial', size: 16, bold: true, color: { argb: 'FF1F2937' } },

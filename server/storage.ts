@@ -45,6 +45,7 @@ export interface IStorage {
   // Procedure operations
   getProcedure(id: number): Promise<Procedure | undefined>;
   getAllProcedures(): Promise<Procedure[]>;
+  getProceduresByDateRange(startDate: string, endDate: string, shippers?: string[]): Promise<Procedure[]>;
   getProceduresByUser(userId: number): Promise<Procedure[]>;
   getProceduresByStatus(statusType: string, statusValue: string): Promise<Procedure[]>;
   getProcedureByReference(reference: string): Promise<Procedure[]>;
@@ -336,6 +337,26 @@ export class DatabaseStorage implements IStorage {
         // Second order by: Non-NULL dates sorted newest to oldest (DESC)
         desc(procedures.import_dec_date)
       );
+  }
+
+  // Pushes date-range and optional shipper filter into SQL so we don't pull all rows into memory.
+  // start/end are YYYY-MM-DD strings; comparison happens on the date portion via ::date cast.
+  async getProceduresByDateRange(
+    startDate: string,
+    endDate: string,
+    shippers?: string[]
+  ): Promise<Procedure[]> {
+    const filters: any[] = [
+      isNotNull(procedures.import_dec_date),
+      sql`${procedures.import_dec_date}::date >= ${startDate}::date`,
+      sql`${procedures.import_dec_date}::date <= ${endDate}::date`,
+    ];
+    if (shippers && shippers.length > 0) {
+      filters.push(inArray(procedures.shipper, shippers));
+    }
+    return await db.select().from(procedures)
+      .where(and(...filters))
+      .orderBy(desc(procedures.import_dec_date));
   }
 
   async getProceduresByUser(userId: number): Promise<Procedure[]> {
@@ -1382,10 +1403,21 @@ export class DatabaseStorage implements IStorage {
       console.log(`Date range: ${startDate} to ${endDate}`);
       console.log(`Procedure references: ${procedureReferences ? procedureReferences.join(', ') : ''}`);
       
-      // Convert dates to proper format if they're strings
-      const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
-      const end = typeof endDate === 'string' ? new Date(endDate) : endDate;
-      
+      // Use date-portion comparison so the boundary day is fully included regardless of
+      // stored time-of-day or server timezone. Accept either YYYY-MM-DD strings or Date objects.
+      const toYMD = (d: string | Date): string => {
+        if (typeof d === 'string') {
+          // Already YYYY-MM-DD (or longer ISO) — take the first 10 chars
+          return d.slice(0, 10);
+        }
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+      const startYMD = toYMD(startDate);
+      const endYMD = toYMD(endDate);
+
       // Step 1: Get all procedures with import declaration dates in the selected range
       const proceduresInRange = await db.select({
         reference: procedures.reference
@@ -1393,11 +1425,11 @@ export class DatabaseStorage implements IStorage {
       .from(procedures)
       .where(and(
         isNotNull(procedures.import_dec_date),
-        gte(procedures.import_dec_date, start),
-        lte(procedures.import_dec_date, end)
+        sql`${procedures.import_dec_date}::date >= ${startYMD}::date`,
+        sql`${procedures.import_dec_date}::date <= ${endYMD}::date`
       ));
       
-      console.log(`[DEBUG] Found ${proceduresInRange.length} procedures with import_dec_date in range ${start.toISOString()} to ${end.toISOString()}`);
+      console.log(`[DEBUG] Found ${proceduresInRange.length} procedures with import_dec_date in range ${startYMD} to ${endYMD}`);
       
       // Extract procedure references
       const procedureRefsInDateRange = proceduresInRange.map(p => p.reference);

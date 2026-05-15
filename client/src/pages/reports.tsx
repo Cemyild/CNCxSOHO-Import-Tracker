@@ -1,114 +1,66 @@
-import { 
-  Calendar,
-  Home,
-  Inbox,
-  Search,
-  Settings,
-  BarChart2,
-  Calculator,
-  Sparkles
-} from "lucide-react"
+import { BarChart2, Receipt, SlidersHorizontal, ArrowRight } from "lucide-react"
+import { Link } from "wouter"
 import { PageLayout } from "@/components/layout/PageLayout"
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { buttonVariants } from "@/components/ui/button"
 
-// Menu items
-const items = [
+type ReportCard = {
+  title: string
+  description: string
+  href: string
+  cta: string
+  icon: typeof BarChart2
+}
+
+const reportCards: ReportCard[] = [
   {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: Home,
-  },
-  {
-    title: "Procedures",
-    url: "/procedures",
-    icon: Inbox,
-  },
-  {
-    title: "Expenses",
-    url: "/expenses",
-    icon: Calendar,
-  },
-  {
-    title: "Payments",
-    url: "/payments",
-    icon: Search,
-  },
-  {
-    title: "Tax Calculation",
-    url: "/tax-calculation",
-    icon: Calculator,
-  },
-  {
-    title: "Reports",
-    url: "/reports",
+    title: "Expense Analytics",
+    description: "Analyze expense patterns and distribution across procedures.",
+    href: "/analytics",
+    cta: "View Analytics",
     icon: BarChart2,
   },
   {
-    title: "Ask CNC?",
-    url: "/ask",
-    icon: Sparkles,
+    title: "Tax Analytics",
+    description: "View and analyze all the taxes paid and distribution across procedures.",
+    href: "/taxreport",
+    cta: "View Taxes",
+    icon: Receipt,
   },
   {
-    title: "Settings",
-    url: "/settings",
-    icon: Settings,
+    title: "Custom Reports",
+    description: "Build tailored reports with specific metrics, filters, and date ranges.",
+    href: "/customreport",
+    cta: "Create Report",
+    icon: SlidersHorizontal,
   },
 ]
 
 export default function ReportsPage() {
   return (
-    <PageLayout title="Reports" navItems={items}>
-      <div className="container mx-auto p-6">
-        <h1 className="text-3xl font-bold tracking-tight mb-6">Reports Dashboard</h1>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Analytics Card */}
-          <div className="bg-card border rounded-lg shadow-sm overflow-hidden">
-            <div className="p-6">
-              <div className="flex items-center gap-4 mb-4">
-                <BarChart2 className="h-8 w-8 text-primary" />
-                <h3 className="text-xl font-semibold">Expense Analytics</h3>
-              </div>
-              <p className="text-muted-foreground mb-4">
-                Analyze expense patterns and distribution across procedures.
-              </p>
-              <a href="/analytics" className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
-                View Analytics
-              </a>
-            </div>
-          </div>
-          
-          {/* Tax Analytics Card */}
-          <div className="bg-card border rounded-lg shadow-sm overflow-hidden">
-            <div className="p-6">
-              <div className="flex items-center gap-4 mb-4">
-                <Calendar className="h-8 w-8 text-primary" />
-                <h3 className="text-xl font-semibold">Tax Analytics</h3>
-              </div>
-              <p className="text-muted-foreground mb-4">
-                View and analyze all the taxes paid and distribution across procedures.
-              </p>
-              <a href="/taxreport" className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
-                View Taxes
-              </a>
-            </div>
-          </div>
-          
-          {/* Custom Reports Card */}
-          <div className="bg-card border rounded-lg shadow-sm overflow-hidden">
-            <div className="p-6">
-              <div className="flex items-center gap-4 mb-4">
-                <Search className="h-8 w-8 text-primary" />
-                <h3 className="text-xl font-semibold">Custom Reports</h3>
-              </div>
-              <p className="text-muted-foreground mb-4">
-                Build and save custom reports with specific metrics and filters.
-              </p>
-              <a href="/customreport" className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
-                Create Report
-              </a>
-            </div>
-          </div>
-        </div>
+    <PageLayout title="Reports">
+      <h1 className="text-3xl font-bold tracking-tight mb-6">Reports Dashboard</h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {reportCards.map(({ title, description, href, cta, icon: Icon }) => (
+          <Link key={href} href={href} aria-label={title}>
+            <Card className="group h-full cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <CardHeader>
+                <div className="flex items-center gap-4">
+                  <Icon className="h-8 w-8 text-primary" />
+                  <CardTitle className="text-xl">{title}</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="mb-4">{description}</CardDescription>
+                <span className={buttonVariants({ className: "group-hover:gap-3 transition-all" })}>
+                  {cta}
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
       </div>
     </PageLayout>
   )

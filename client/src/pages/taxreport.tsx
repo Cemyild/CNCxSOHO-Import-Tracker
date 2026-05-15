@@ -159,8 +159,6 @@ export default function TaxAnalyticsPage() {
     return `${year}-${month}-${day}`;
   };
 
-  // Sample tax data structure for now - this would be replaced by actual API calls
-  // Using the same structure as expenses but with tax-specific categories
   const { data: analyticsData, isLoading, error } = useQuery({
     queryKey: ['/api/taxes/analytics', date?.from, date?.to, selectedProcedures, aggregateView],
     queryFn: async () => {
@@ -184,7 +182,6 @@ export default function TaxAnalyticsPage() {
       
       params.append('aggregate', aggregateView ? 'true' : 'false');
       
-      // Connect to the tax data endpoint
       const response = await apiRequest('GET', `/api/taxes/analytics?${params.toString()}`);
       return response.json();
     },
@@ -196,10 +193,10 @@ export default function TaxAnalyticsPage() {
     queryKey: ['/api/procedures'],
   });
   
-  // Format data for charts - mapping expenses to taxes for demonstration
+  // Format tax categories for display (e.g. "customs_tax" → "Customs Tax")
   const formattedData = analyticsData?.data?.map((item: TaxAnalyticsData, index: number) => ({
     ...item,
-    name: formatCategoryName(item.category).replace('Fee', 'Tax'), // Replace 'Fee' with 'Tax' for demo
+    name: formatCategoryName(item.category),
     color: COLORS[index % COLORS.length]
   })) || [];
   
