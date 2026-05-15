@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
+import archiver from "archiver";
 import { db } from "./db";
 import { procedures, expenseDocuments } from "@shared/schema";
 import { inArray, eq } from "drizzle-orm";
@@ -362,5 +363,124 @@ export function registerBulkDownloadRoutes(app: Express): void {
       console.error("bulk-download/count error:", err);
       return res.status(500).json({ error: "Internal error", details: String(err) });
     }
+  });
+
+  app.post("/api/bulk-download", async (req: Request, res: Response) => {
+    const userId = (req.session as any)?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    const parsed = bulkDownloadRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Invalid request", details: parsed.error.issues });
+    }
+    const body = parsed.data;
+
+    let resolved: ResolvedProcedures;
+    try {
+      resolved = await resolveProcedureIds(body);
+    } catch (err) {
+      console.error("bulk-download resolve error:", err);
+      return res.status(500).json({ error: "Failed to resolve procedures", details: String(err) });
+    }
+
+    if (resolved.procedures.length === 0) {
+      return res.status(400).json({ error: "No procedures match the filter" });
+    }
+
+    // Fetch document metadata for all matched procedures in one query
+    const docs = await db
+      .select()
+      .from(expenseDocuments)
+      .where(inArray(expenseDocuments.procedureReference, resolved.procedures.map((p) => p.reference)));
+
+    if (docs.length === 0) {
+      return res.status(400).json({ error: "No documents found for the selected procedures" });
+    }
+
+    // Index procedures by reference for fast folder-name lookup
+    const procByRef = new Map(resolved.procedures.map((p) => [p.reference, p]));
+
+    // Group documents by (procedureReference, expenseType) and dedup names inside each bucket
+    interface PlannedFile {
+      doc: typeof docs[number];
+      pathInZip: string;
+    }
+    const planned: PlannedFile[] = [];
+
+    const grouped = new Map<string, typeof docs>();
+    for (const d of docs) {
+      const key = `${d.procedureReference}::${d.expenseType}`;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(d);
+    }
+
+    for (const [key, group] of grouped) {
+      const [ref, expenseType] = key.split("::");
+      const proc = procByRef.get(ref);
+      if (!proc) continue;
+      const folder = buildProcedureFolderName({
+        reference: proc.reference,
+        importDecNumber: proc.importDecNumber,
+        importDecDate: proc.importDecDate,
+      });
+      const subfolder = subfolderForExpenseType(expenseType);
+      const deduped = dedupFilenames(group);
+      for (const d of deduped) {
+        planned.push({ doc: d, pathInZip: `${folder}/${subfolder}/${d.name}` });
+      }
+    }
+
+    // Compute filename and headers
+    const today = new Date();
+    const zipFilename = buildZipFilename({
+      mode: body.mode,
+      singleReference: body.mode === "single" ? procByRef.get(resolved.procedures[0].reference)?.reference : undefined,
+      dateFrom: body.dateFrom,
+      dateTo: body.dateTo,
+      today,
+    });
+
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${zipFilename}"`);
+    res.setHeader("Cache-Control", "no-store");
+
+    const archive = archiver("zip", { zlib: { level: 1 } });
+    archive.on("warning", (err) => console.warn("archiver warning:", err));
+    archive.on("error", (err) => {
+      console.error("archiver error:", err);
+      // Once we've started piping we can't change the status code; just end the stream.
+      try { res.end(); } catch {}
+    });
+    archive.pipe(res);
+
+    // Sequentially fetch each file from S3 object storage and append to the archive.
+    const manifestRows: ManifestRow[] = [];
+    for (const p of planned) {
+      const proc = procByRef.get(p.doc.procedureReference);
+      const baseRow: ManifestRow = {
+        procedureReference: p.doc.procedureReference,
+        importDecNumber: proc?.importDecNumber ?? null,
+        importDecDate: proc?.importDecDate ?? null,
+        shipper: proc?.shipper ?? null,
+        category: subfolderForExpenseType(p.doc.expenseType),
+        originalFilename: p.doc.originalFilename,
+        pathInZip: p.pathInZip,
+        fileSizeBytes: p.doc.fileSize ?? 0,
+        status: "OK",
+      };
+      try {
+        const { buffer } = await getFile(p.doc.objectKey);
+        archive.append(buffer, { name: p.pathInZip });
+        manifestRows.push(baseRow);
+      } catch (err) {
+        console.warn(`bulk-download: failed to fetch ${p.doc.objectKey}: ${err}`);
+        manifestRows.push({ ...baseRow, status: `ERROR: ${err instanceof Error ? err.message : String(err)}` });
+      }
+    }
+
+    // Append manifest as the very last entry, then finalize
+    archive.append(buildManifestCsv(manifestRows), { name: "manifest.csv" });
+    await archive.finalize();
   });
 }
