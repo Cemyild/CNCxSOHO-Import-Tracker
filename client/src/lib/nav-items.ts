@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import {
+  Archive,
   BarChart2,
   Calculator,
   Calendar,
@@ -25,6 +26,7 @@ export const defaultNavItems: NavItem[] = [
   { title: "Tax Calculation", url: "/tax-calculation", icon: Calculator },
   { title: "Storage Calculator", url: "/storage-calculator", icon: Warehouse },
   { title: "Reports", url: "/reports", icon: BarChart2 },
+  { title: "Bulk Download", url: "/bulk-download", icon: Archive },
   { title: "Ask CNC?", url: "/ask", icon: Sparkles },
   { title: "Settings", url: "/settings", icon: Settings },
 ];

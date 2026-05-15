@@ -29,6 +29,7 @@ import TaxCalculationEditPage from "@/pages/tax-calculation-edit";
 import TaxCalculationResultsPage from "@/pages/tax-calculation-results";
 import AskPage from "@/pages/ask";
 import StorageCalculatorPage from "@/pages/storage-calculator";
+import BulkDownloadPage from "@/pages/bulk-download";
 
 function Router() {
   return (
@@ -195,6 +196,13 @@ function Router() {
         {() => (
           <ProtectedRoute>
             <StorageCalculatorPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/bulk-download">
+        {() => (
+          <ProtectedRoute>
+            <BulkDownloadPage />
           </ProtectedRoute>
         )}
       </Route>
