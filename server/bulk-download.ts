@@ -326,6 +326,10 @@ export async function resolveProcedureIds(req: BulkDownloadRequest): Promise<Res
 export function registerBulkDownloadRoutes(app: Express): void {
   app.post("/api/bulk-download/count", async (req: Request, res: Response) => {
     try {
+      const userId = (req.session as any)?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       const parsed = bulkDownloadRequestSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid request", details: parsed.error.issues });
