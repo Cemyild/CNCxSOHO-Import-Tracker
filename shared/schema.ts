@@ -102,7 +102,7 @@ export const sessions = pgTable("sessions", {
 export const procedures = pgTable("procedures", {
   // Primary fields as requested
   id: serial("id").primaryKey(),
-  reference: text("reference"),
+  reference: text("reference").unique(),
   shipper: text("shipper"),
   invoice_no: text("invoice_no"),
   invoice_date: text("invoice_date"),
@@ -137,17 +137,19 @@ export const procedures = pgTable("procedures", {
 
 export const taxes = pgTable("taxes", {
   id: serial("id").primaryKey(),
-  
-  // Foreign key linking to procedures table via reference
-  procedureReference: text("procedure_reference").notNull(),
-  
+
+  // FK → procedures.reference (ON DELETE/UPDATE CASCADE in production DB)
+  procedureReference: text("procedure_reference")
+    .notNull()
+    .references(() => procedures.reference, { onDelete: 'cascade', onUpdate: 'cascade' }),
+
   // Tax categories
   customsTax: decimal("customs_tax", { precision: 10, scale: 2 }).default('0'),
   additionalCustomsTax: decimal("additional_customs_tax", { precision: 10, scale: 2 }).default('0'),
   kkdf: decimal("kkdf", { precision: 10, scale: 2 }).default('0'),
   vat: decimal("vat", { precision: 10, scale: 2 }).default('0'),
   stampTax: decimal("stamp_tax", { precision: 10, scale: 2 }).default('0'),
-  
+
   // Metadata
   createdBy: integer("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
@@ -156,8 +158,6 @@ export const taxes = pgTable("taxes", {
   return {
     // Ensure each procedure reference can only have one tax record
     procedureReferenceUnique: unique().on(table.procedureReference),
-    // The foreign key constraint will be enforced at the application level
-    // since we're referencing a non-primary key field (reference) in procedures
   }
 });
 
@@ -198,9 +198,11 @@ export const procedureActivities = pgTable("procedure_activities", {
 
 export const importExpenses = pgTable("import_expenses", {
   id: serial("id").primaryKey(),
-  
-  // Foreign key linking to procedures table via reference
-  procedureReference: text("procedure_reference").notNull(),
+
+  // FK → procedures.reference (ON DELETE/UPDATE CASCADE in production DB)
+  procedureReference: text("procedure_reference")
+    .notNull()
+    .references(() => procedures.reference, { onDelete: 'cascade', onUpdate: 'cascade' }),
   
   // Expense details
   category: expenseCategoryEnum("category").notNull(),
@@ -232,9 +234,11 @@ export const insertProcedureActivitySchema = createInsertSchema(procedureActivit
 // Import Service Invoice table
 export const importServiceInvoices = pgTable("import_service_invoices", {
   id: serial("id").primaryKey(),
-  
-  // Foreign key linking to procedures table via reference
-  procedureReference: text("procedure_reference").notNull(),
+
+  // FK → procedures.reference (ON DELETE/UPDATE CASCADE in production DB)
+  procedureReference: text("procedure_reference")
+    .notNull()
+    .references(() => procedures.reference, { onDelete: 'cascade', onUpdate: 'cascade' }),
   
   // Required invoice details
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
