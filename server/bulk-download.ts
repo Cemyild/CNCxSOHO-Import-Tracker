@@ -54,27 +54,48 @@ export function formatDateSlash(d: Date): string {
 /**
  * Replace illegal filesystem/ZIP characters (/ \ : * ? " < > |) with _ and collapse runs of _.
  */
-export function sanitizePathSegment(_s: string): string {
-  throw new Error("not implemented");
+export function sanitizePathSegment(s: string): string {
+  return s
+    .replace(/[\/\\:\*\?"<>|]/g, "_")
+    .replace(/_+/g, "_")
+    .trim();
 }
 
 /**
  * Build the per-procedure folder name: "<reference> - <dec_no> - <dd.mm.yyyy>".
  * Missing fields are simply omitted (no placeholder), separator " - " collapses.
  */
-export function buildProcedureFolderName(_args: {
+export function buildProcedureFolderName(args: {
   reference: string;
   importDecNumber: string | null;
   importDecDate: string | null;
 }): string {
-  throw new Error("not implemented");
+  const parts: string[] = [sanitizePathSegment(args.reference)];
+
+  if (args.importDecNumber && args.importDecNumber.trim() !== "") {
+    parts.push(sanitizePathSegment(args.importDecNumber));
+  }
+
+  if (args.importDecDate && args.importDecDate.trim() !== "") {
+    const parsed = parseImportDecDate(args.importDecDate);
+    parts.push(parsed ? formatDateDot(parsed) : sanitizePathSegment(args.importDecDate));
+  }
+
+  return parts.join(" - ");
 }
+
+const SUBFOLDER_MAP: Record<string, string> = {
+  import_document: "01-Import-Documents",
+  import_expense: "02-Expense-Receipts",
+  service_invoice: "03-Service-Invoices",
+  tax: "04-Tax-Documents",
+};
 
 /**
  * Map expense_documents.expenseType to the subfolder name inside a procedure folder.
  */
-export function subfolderForExpenseType(_t: string): string {
-  throw new Error("not implemented");
+export function subfolderForExpenseType(t: string): string {
+  return SUBFOLDER_MAP[t] ?? "99-Other";
 }
 
 /**
