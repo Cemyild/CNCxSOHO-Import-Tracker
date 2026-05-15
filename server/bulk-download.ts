@@ -7,22 +7,48 @@ import type { Express, Request, Response } from "express";
  * Accepts: yyyy-mm-dd, dd/mm/yyyy, dd.mm.yyyy, dd-mm-yyyy.
  * Returns null for null/empty/unparseable input.
  */
-export function parseImportDecDate(_text: string | null | undefined): Date | null {
-  throw new Error("not implemented");
+export function parseImportDecDate(text: string | null | undefined): Date | null {
+  if (text == null) return null;
+  const t = String(text).trim();
+  if (t === "") return null;
+
+  // yyyy-mm-dd
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  if (m) return buildDate(+m[1], +m[2], +m[3]);
+
+  // dd/mm/yyyy, dd.mm.yyyy, dd-mm-yyyy
+  m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/.exec(t);
+  if (m) return buildDate(+m[3], +m[2], +m[1]);
+
+  return null;
+}
+
+function buildDate(y: number, mo: number, d: number): Date | null {
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  // Round-trip guard against e.g. 31 Feb → 2/Mar
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+  return dt;
 }
 
 /**
  * Format a Date as dd.mm.yyyy (used inside ZIP folder names — slash is illegal there).
  */
-export function formatDateDot(_d: Date): string {
-  throw new Error("not implemented");
+export function formatDateDot(d: Date): string {
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = d.getUTCFullYear();
+  return `${dd}.${mm}.${yyyy}`;
 }
 
 /**
  * Format a Date as dd/mm/yyyy (used in UI strings and the manifest CSV).
  */
-export function formatDateSlash(_d: Date): string {
-  throw new Error("not implemented");
+export function formatDateSlash(d: Date): string {
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = d.getUTCFullYear();
+  return `${dd}/${mm}/${yyyy}`;
 }
 
 /**
