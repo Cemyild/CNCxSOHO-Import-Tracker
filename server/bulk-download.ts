@@ -132,13 +132,66 @@ export interface ManifestRow {
   status: string;
 }
 
+const MANIFEST_COLUMNS: (keyof ManifestRow)[] = [
+  "procedureReference",
+  "importDecNumber",
+  "importDecDate",
+  "shipper",
+  "category",
+  "originalFilename",
+  "pathInZip",
+  "fileSizeBytes",
+  "status",
+];
+
+const MANIFEST_HEADER = [
+  "procedure_reference",
+  "import_dec_number",
+  "import_dec_date",
+  "shipper",
+  "category",
+  "original_filename",
+  "path_in_zip",
+  "file_size_bytes",
+  "status",
+].join(",");
+
+function csvCell(v: unknown): string {
+  if (v == null) return "";
+  const s = String(v);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
 /**
  * Render a list of manifest rows as a UTF-8 BOM-prefixed CSV Buffer.
  * Columns are listed in the spec. CSV escaping: wrap in "..." if the value
  * contains ',' '"' '\n' '\r'; escape internal '"' as '""'.
  */
-export function buildManifestCsv(_rows: ManifestRow[]): Buffer {
-  throw new Error("not implemented");
+export function buildManifestCsv(rows: ManifestRow[]): Buffer {
+  const formatted = rows.map((r) => {
+    const decDateOut = r.importDecDate
+      ? (() => {
+          const d = parseImportDecDate(r.importDecDate);
+          return d ? formatDateSlash(d) : r.importDecDate;
+        })()
+      : "";
+    return [
+      r.procedureReference,
+      r.importDecNumber ?? "",
+      decDateOut,
+      r.shipper ?? "",
+      r.category,
+      r.originalFilename,
+      r.pathInZip,
+      r.fileSizeBytes,
+      r.status,
+    ]
+      .map(csvCell)
+      .join(",");
+  });
+  const body = [MANIFEST_HEADER, ...formatted].join("\r\n") + "\r\n";
+  return Buffer.concat([Buffer.from([0xEF, 0xBB, 0xBF]), Buffer.from(body, "utf-8")]);
 }
 
 /** Build the downloaded ZIP filename per spec table. */
