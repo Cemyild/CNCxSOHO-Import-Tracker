@@ -295,8 +295,30 @@ export default function BulkDownloadPage() {
                 {multiIds.length} selected ({filteredForMulti.length} visible / {procedureList.length} total)
               </div>
             </TabsContent>
-            <TabsContent value="dateRange" className="pt-4">
-              <p className="text-sm text-muted-foreground">Date range tab — implemented in Task 14</p>
+            <TabsContent value="dateRange" className="pt-4 space-y-3">
+              <div className="flex gap-4 items-end">
+                <div className="flex-1">
+                  <label className="text-sm font-medium block mb-1">From (Import Declaration Date)</label>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    max={dateTo || undefined}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-sm font-medium block mb-1">To</label>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    min={dateFrom || undefined}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Procedures without an Import Declaration Date are excluded from this filter.
+              </p>
             </TabsContent>
             <TabsContent value="all" className="pt-4">
               <p className="text-sm">Download every procedure's documents in one ZIP.</p>
