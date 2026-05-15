@@ -194,15 +194,18 @@ export default function TaxAnalyticsPage() {
   });
   
   // Format tax categories for display (e.g. "customs_tax" → "Customs Tax")
+  // Coerce numeric fields defensively — pg-node returns SUM/COUNT as strings, which
+  // makes reduce() string-concat instead of add if the server forgets to convert.
   const formattedData = analyticsData?.data?.map((item: TaxAnalyticsData, index: number) => ({
     ...item,
+    totalAmount: Number(item.totalAmount) || 0,
+    count: Number(item.count) || 0,
     name: formatCategoryName(item.category),
     color: COLORS[index % COLORS.length]
   })) || [];
-  
-  // Get total tax amount
+
   const totalTaxAmount = formattedData.reduce(
-    (sum: number, item: {totalAmount: number}) => sum + item.totalAmount, 
+    (sum: number, item: {totalAmount: number}) => sum + item.totalAmount,
     0
   );
   

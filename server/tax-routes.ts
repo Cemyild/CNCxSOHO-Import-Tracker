@@ -107,7 +107,13 @@ router.get('/taxes/analytics', async (req, res) => {
 
     // The query references the IN list 5 times — pg reuses the same $N params, so we pass them once
     const taxResult = await pool.query(taxQuery, refsList);
-    res.json({ data: taxResult.rows || [] });
+    // pg returns numeric/bigint as strings; coerce so the client doesn't end up string-concatenating
+    const data = (taxResult.rows || []).map((row: any) => ({
+      category: row.category,
+      totalAmount: parseFloat(row.totalAmount ?? '0') || 0,
+      count: parseInt(row.count ?? '0', 10) || 0,
+    }));
+    res.json({ data });
   } catch (error) {
     console.error('[/api/taxes/analytics] Error:', error);
     res.status(500).json({

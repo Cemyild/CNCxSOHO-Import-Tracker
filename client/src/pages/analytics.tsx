@@ -198,8 +198,11 @@ export default function AnalyticsPage() {
   });
   
   // Format data for charts
+  // Coerce numeric fields defensively — pg-node returns SUM/COUNT as strings.
   const formattedData = analyticsData?.data?.map((item: ExpenseAnalyticsData, index: number) => ({
     ...item,
+    totalAmount: Number(item.totalAmount) || 0,
+    count: Number(item.count) || 0,
     name: formatCategoryName(item.category),
     color: COLORS[index % COLORS.length]
   })) || [];
