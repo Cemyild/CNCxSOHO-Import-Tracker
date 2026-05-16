@@ -3,25 +3,10 @@ import { registerTool } from "../registry";
 import { runQueryProcedures } from "../../ai-ask-tools";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { procedures as proceduresTable, users as usersTable } from "@shared/schema";
-import { asc, eq } from "drizzle-orm";
+import { procedures as proceduresTable } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { McpToolError } from "../errors";
-
-// procedures.created_by is NOT NULL → if caller didn't supply one (the typical
-// MCP write path), fall back to MCP_AGENT_USER_ID, else the lowest existing user id.
-let __cachedAgentUserId: number | null = null;
-async function resolveAgentUserId(tx: typeof db): Promise<number> {
-  if (__cachedAgentUserId != null) return __cachedAgentUserId;
-  const envId = process.env.MCP_AGENT_USER_ID;
-  if (envId && Number.isFinite(Number(envId))) {
-    __cachedAgentUserId = Number(envId);
-    return __cachedAgentUserId;
-  }
-  const [u] = await tx.select({ id: usersTable.id }).from(usersTable).orderBy(asc(usersTable.id)).limit(1);
-  if (!u) throw new McpToolError("Cannot resolve a created_by user id (users table is empty)");
-  __cachedAgentUserId = u.id;
-  return __cachedAgentUserId;
-}
+import { resolveAgentUserId } from "../audit-attribution";
 
 registerTool({
   name: "read_procedures",
