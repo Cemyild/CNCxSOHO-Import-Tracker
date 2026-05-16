@@ -618,6 +618,9 @@ export type AtrCustomsRate = typeof atrCustomsRates.$inferSelect;
 
 // === MCP / Agent audit log ===
 // Records every tool call made by an external agent (Cowork, future Claude Code, etc.)
+// Indexes applied via raw SQL (see migrations/000_agent_audit_log_indexes.sql or
+// runtime DDL): (ts DESC), (tool, ts), (transaction_id). The project convention
+// applies indexes outside the Drizzle schema; drizzle-kit will leave them alone.
 export const agentAuditLog = pgTable("agent_audit_log", {
   id: serial("id").primaryKey(),
   ts: timestamp("ts").defaultNow().notNull(),
