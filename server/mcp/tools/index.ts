@@ -14,4 +14,7 @@ export async function registerAllTools(): Promise<void> {
   await import("./reports");
   await import("./excel");
   await import("./attach");
+  // AI wrapper tools (Phase 5.1)
+  await import("./documents");
+  await import("./ai");
 }
