@@ -12,4 +12,6 @@ export async function registerAllTools(): Promise<void> {
   await import("./invoices");
   await import("./products");
   await import("./reports");
+  await import("./excel");
+  await import("./attach");
 }
