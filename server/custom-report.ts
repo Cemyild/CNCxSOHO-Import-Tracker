@@ -1135,24 +1135,24 @@ router.post('/export-excel', async (req, res) => {
     
     // Add outer border to the entire table
     const lastRow = dataRows.length + 4;
-    const lastCol = headers.length;
-    
+    const lastColIdx = headers.length;
+
     // Top border
-    for (let col = 1; col <= lastCol; col++) {
+    for (let col = 1; col <= lastColIdx; col++) {
       worksheet.getCell(1, col).border = {
         ...worksheet.getCell(1, col).border,
         top: { style: 'medium', color: { argb: 'FF374151' } }
       };
     }
     
-    // Bottom border  
-    for (let col = 1; col <= lastCol; col++) {
+    // Bottom border
+    for (let col = 1; col <= lastColIdx; col++) {
       worksheet.getCell(lastRow, col).border = {
         ...worksheet.getCell(lastRow, col).border,
         bottom: { style: 'medium', color: { argb: 'FF374151' } }
       };
     }
-    
+
     // Left border
     for (let row = 1; row <= lastRow; row++) {
       worksheet.getCell(row, 1).border = {
@@ -1160,11 +1160,11 @@ router.post('/export-excel', async (req, res) => {
         left: { style: 'medium', color: { argb: 'FF374151' } }
       };
     }
-    
+
     // Right border
     for (let row = 1; row <= lastRow; row++) {
-      worksheet.getCell(row, lastCol).border = {
-        ...worksheet.getCell(row, lastCol).border,
+      worksheet.getCell(row, lastColIdx).border = {
+        ...worksheet.getCell(row, lastColIdx).border,
         right: { style: 'medium', color: { argb: 'FF374151' } }
       };
     }
