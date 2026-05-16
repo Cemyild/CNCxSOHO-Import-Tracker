@@ -618,19 +618,22 @@ export type AtrCustomsRate = typeof atrCustomsRates.$inferSelect;
 
 // === MCP / Agent audit log ===
 // Records every tool call made by an external agent (Cowork, future Claude Code, etc.)
-// Indexes applied via raw SQL (see migrations/000_agent_audit_log_indexes.sql or
-// runtime DDL): (ts DESC), (tool, ts), (transaction_id). The project convention
-// applies indexes outside the Drizzle schema; drizzle-kit will leave them alone.
+// Indexes applied via raw SQL (see db/manual-ddl/000_agent_audit_log_indexes.sql):
+// (ts), (tool, ts), (transaction_id). The project convention applies indexes
+// outside the Drizzle schema; drizzle-kit will leave them alone.
+export const agentTierEnum = pgEnum('agent_tier', ['read', 'write', 'destructive', 'ai']);
+export const agentResultStatusEnum = pgEnum('agent_result_status', ['ok', 'error', 'dry_run']);
+
 export const agentAuditLog = pgTable("agent_audit_log", {
   id: serial("id").primaryKey(),
   ts: timestamp("ts").defaultNow().notNull(),
   agentId: text("agent_id").notNull(),
   tokenFingerprint: text("token_fingerprint").notNull(),
   tool: text("tool").notNull(),
-  tier: text("tier").notNull(), // 'read' | 'write' | 'destructive' | 'ai'
+  tier: agentTierEnum("tier").notNull(),
   argsJson: text("args_json").notNull(),
   beforeJson: text("before_json"),
-  resultStatus: text("result_status").notNull(), // 'ok' | 'error' | 'dry_run'
+  resultStatus: agentResultStatusEnum("result_status").notNull(),
   resultSummary: text("result_summary"),
   affectedTable: text("affected_table"),
   affectedIds: text("affected_ids"),
@@ -638,5 +641,6 @@ export const agentAuditLog = pgTable("agent_audit_log", {
   transactionId: text("transaction_id"),
 });
 
+export const insertAgentAuditLogSchema = createInsertSchema(agentAuditLog).omit({ id: true, ts: true });
 export type AgentAuditLog = typeof agentAuditLog.$inferSelect;
-export type InsertAgentAuditLog = typeof agentAuditLog.$inferInsert;
+export type InsertAgentAuditLog = z.infer<typeof insertAgentAuditLogSchema>;
