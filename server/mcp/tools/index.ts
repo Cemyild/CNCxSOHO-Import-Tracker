@@ -9,4 +9,7 @@ export async function registerAllTools(): Promise<void> {
   await import("./taxes");
   await import("./expenses");
   await import("./payments");
+  await import("./invoices");
+  await import("./products");
+  await import("./reports");
 }
