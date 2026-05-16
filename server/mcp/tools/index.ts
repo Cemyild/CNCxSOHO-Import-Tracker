@@ -17,4 +17,6 @@ export async function registerAllTools(): Promise<void> {
   // AI wrapper tools (Phase 5.1)
   await import("./documents");
   await import("./ai");
+  // Destructive tools (Phase 6.1) — default dry_run:true
+  await import("./destructive");
 }
