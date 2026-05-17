@@ -917,6 +917,41 @@ registerTool({
       totalTl += parseFloat(it.total_tax_tl ?? "0");
     }
 
+    // 10. POST /api/taxes — populate the procedure-details "Tax Details" panel.
+    // The React UI displays this panel with TL values (₺); a user would
+    // normally manually enter the TL amounts on the Expenses page after
+    // customs clearance. We compute them as USD per-category totals × TCMB rate.
+    let taxesRowId: number | null = null;
+    let taxesRowError: string | null = null;
+    if (resolvedCurrencyRate && resolvedCurrencyRate > 0 && calcOK > 0) {
+      const rate = resolvedCurrencyRate;
+      const taxBody = {
+        procedureReference: resolvedReference,
+        customsTax: (totalCustoms * rate).toFixed(2),
+        additionalCustomsTax: (totalAdditional * rate).toFixed(2),
+        kkdf: (totalKkdf * rate).toFixed(2),
+        vat: (totalVat * rate).toFixed(2),
+        stampTax: "0.00",
+      };
+      try {
+        const taxResp = await fetch(`${BASE}/api/taxes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(taxBody),
+        });
+        if (taxResp.ok) {
+          const tj: any = await taxResp.json();
+          taxesRowId = tj?.tax?.id ?? null;
+        } else {
+          taxesRowError = `${taxResp.status} ${(await taxResp.text()).slice(0, 200)}`;
+        }
+      } catch (e: any) {
+        taxesRowError = e?.message ?? String(e);
+      }
+    } else if (calcOK > 0 && (!resolvedCurrencyRate || resolvedCurrencyRate <= 0)) {
+      taxesRowError = "Skipped: no currency_rate, cannot convert USD totals to TL.";
+    }
+
     return {
       data: {
         reference: resolvedReference,
@@ -945,6 +980,8 @@ registerTool({
         currency_rate_used: resolvedCurrencyRate?.toFixed(4) ?? null,
         currency_rate_source: currencyRateSource,
         shipper_set: shipperSet,
+        taxes_row_id: taxesRowId,
+        taxes_row_error: taxesRowError,
         invoice_metadata: meta,
         summary_for_user:
           `${resolvedReference}${referenceWasAuto ? " (otomatik numara)" : ""} oluşturuldu. ` +
@@ -954,7 +991,8 @@ registerTool({
           `Fatura ${totalValue.toFixed(2)} USD. ` +
           `Gümrük ${totalCustoms.toFixed(2)} USD, Ek Gümrük ${totalAdditional.toFixed(2)} USD, ` +
           `KKDF ${totalKkdf.toFixed(2)} USD, KDV ${totalVat.toFixed(2)} USD. ` +
-          `Toplam ${totalUsd.toFixed(2)} USD = ${totalTl.toFixed(2)} TL (kur ${resolvedCurrencyRate?.toFixed(4) ?? "?"} via ${currencyRateSource}).`,
+          `Toplam ${totalUsd.toFixed(2)} USD = ${totalTl.toFixed(2)} TL (kur ${resolvedCurrencyRate?.toFixed(4) ?? "?"} via ${currencyRateSource}). ` +
+          (taxesRowId ? `Tax Details paneli dolduruldu (TL).` : (taxesRowError ? `⚠ Tax Details panel doldurulamadı: ${taxesRowError}` : "")),
       },
       meta: {
         affectedTable: "procedures",
