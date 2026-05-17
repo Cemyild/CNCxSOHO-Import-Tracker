@@ -653,14 +653,17 @@ registerTool({
       s3_key: {
         type: "string",
         description:
-          "PREFERRED for large files. S3 object key returned by POST /mcp/upload " +
-          "(multipart upload endpoint). Avoids putting the file content in your " +
-          "context. Workflow: bash → curl -F file=@<path> -H 'Authorization: Bearer <token>' " +
-          "https://cncsohoimportmanager.com/mcp/upload → response has s3_key. " +
-          "Pass that key here and the server downloads from S3 internally.",
+          "REQUIRED. S3 object key for the invoice file. " +
+          "To get it: run ONE bash curl command using the SAME ?token=... " +
+          "query string from your MCP connector URL (substitute in the same token):\n" +
+          "  curl -s -X POST -F \"file=@<absolute-path-to-xlsx-or-pdf>\" " +
+          "\"https://cncsohoimportmanager.com/mcp/upload?token=<SAME_TOKEN_AS_CONNECTOR>\"\n" +
+          "Response is JSON like {\"s3_key\":\"SOHO/mcp-uploads/...\",...} — pass " +
+          "the s3_key string value here. The server then downloads from S3 and " +
+          "processes it internally. " +
+          "DO NOT base64 the file. DO NOT cat the file. DO NOT chunk the file. " +
+          "ONE curl upload, ONE tool call. That's it.",
       },
-      pdf_base64: { type: "string", description: "Base64 PDF (NO data: prefix). Only use for files smaller than ~10KB — for anything bigger, upload via /mcp/upload first and pass s3_key instead." },
-      xlsx_base64: { type: "string", description: "Base64 .xlsx. Only use for files smaller than ~10KB — for anything bigger, upload via /mcp/upload first and pass s3_key instead." },
       transport_cost: { type: ["string", "number"], description: "Navlun bedeli (USD). Usually given by the freight invoice email; pass when known." },
       insurance_cost: { type: ["string", "number"], description: "Sigorta bedeli (USD). Omit to auto-calc as 0.2% of invoice total (CNCxSOHO standard)." },
       storage_cost: { type: ["string", "number"], description: "Antrepo/depo bedeli (USD). Default 0." },
@@ -675,30 +678,19 @@ registerTool({
     if (!args.procedure_reference && !args.auto_reference_prefix) {
       throw new McpToolError("Provide either procedure_reference OR auto_reference_prefix.");
     }
-    const fileSources = [args.s3_key, args.pdf_base64, args.xlsx_base64].filter(Boolean);
-    if (fileSources.length === 0) {
-      throw new McpToolError("Provide one of: s3_key (preferred — get from POST /mcp/upload), pdf_base64, or xlsx_base64.");
-    }
-    if (fileSources.length > 1) {
-      throw new McpToolError("Pass exactly ONE of s3_key, pdf_base64, or xlsx_base64.");
+    if (!args.s3_key) {
+      throw new McpToolError(
+        "s3_key is required. Upload the file first via:\n" +
+        "  curl -X POST -F \"file=@<path>\" -H \"Authorization: Bearer <token>\" https://cncsohoimportmanager.com/mcp/upload\n" +
+        "The response contains an s3_key — pass that here. Do NOT base64 the file."
+      );
     }
 
-    // 1. Get file buffer + extract (outside transaction — Claude API call is slow)
-    let buf: Buffer;
-    let isPdf = false;
-    if (args.s3_key) {
-      const { buffer, contentType } = await getFile(args.s3_key);
-      buf = buffer;
-      const key = String(args.s3_key).toLowerCase();
-      isPdf = (contentType ?? "").includes("pdf") || key.endsWith(".pdf");
-    } else if (args.pdf_base64) {
-      buf = Buffer.from(args.pdf_base64, "base64");
-      isPdf = true;
-    } else {
-      buf = Buffer.from(args.xlsx_base64, "base64");
-      isPdf = false;
-    }
-    if (buf.length === 0) throw new McpToolError("File buffer is empty");
+    // 1. Get file buffer from S3 + extract (outside transaction — Claude API call is slow)
+    const { buffer: buf, contentType } = await getFile(args.s3_key);
+    if (buf.length === 0) throw new McpToolError(`s3_key '${args.s3_key}' is empty or not found`);
+    const keyLower = String(args.s3_key).toLowerCase();
+    const isPdf = (contentType ?? "").includes("pdf") || keyLower.endsWith(".pdf");
 
     const extracted: any = isPdf ? await extractFromPdf(buf) : await extractFromExcel(buf);
     const products = extracted?.products ?? [];
@@ -1022,7 +1014,8 @@ registerTool({
           insurance_was_auto: args.insurance_cost === undefined || args.insurance_cost === null || args.insurance_cost === "",
           currency_rate_used: resolvedCurrencyRate?.toFixed(4) ?? null,
           currency_rate_source: currencyRateSource,
-          file_source: args.s3_key ? "s3" : (args.pdf_base64 ? "pdf_base64" : "xlsx_base64"),
+          file_source: "s3",
+          s3_key_used: args.s3_key,
           summary_for_user:
             (referenceWasAuto ? `${resolvedReference} olarak yeni kayıt oluşturuldu (otomatik numara). ` : `${resolvedReference}'a kaydedildi. `) +
             (procedureCreated ? `Procedure ve invoice_line_items oluşturuldu. ` : `Mevcut procedure'a eklendi. `) +
