@@ -564,482 +564,407 @@ registerTool({
   },
 });
 
+
 // ---------------------------------------------------------------------------
-// import_invoice_from_file — one-shot Cowork entry point. Mirrors the React
-// UI's full "Tax Calculation → Upload Excel/PDF → … → Create Procedure" flow.
+// import_invoice_from_file — one-shot Cowork entry point. Calls the SAME
+// HTTP endpoints the React UI's "Calculate Taxes" and "Create Procedure"
+// buttons call, in the same order. No direct DB writes from this tool —
+// everything goes through the app's existing services so the result is
+// identical to what a manual UI run would produce.
 //
-// Cowork's role here: transport an invoice file (from email or chat) into the
-// app and let the app's business logic do the rest. This tool delegates to the
-// SAME services the React UI uses (extractFromPdf/Excel, calculateItemTax,
-// the products.tr_hs_code lookup with HS-code fallback, the same procedure /
-// invoice_line_items shape).
+// React UI flow this mirrors:
+//   1. POST /api/tax-calculation/calculations             (create header)
+//   2. POST /api/tax-calculation/calculations/:id/items/batch (items with
+//      tr_hs_code pre-filled from products / HS suggestion)
+//   3. POST /api/tax-calculation/calculations/:id/calculate (runs
+//      calculateAllItems — fills per-item tax fields + status='calculated')
+//   4. POST /api/tax-calculation/calculations/:id/create-procedure
+//      (procedure row + invoice_line_items, tax_calc.procedure_id set)
+//   5. PUT  /api/procedures/:reference                    (shipper if known)
 //
-// Inputs (almost all optional — auto-handled by the app):
-//   - procedure_reference: pass if you know the exact reference. Otherwise
-//     leave blank and pass `auto_reference_prefix` (e.g. "CNCALO") — the tool
-//     calls read_next_invoice_reference logic and uses the suggested next.
-//   - pdf_base64 / xlsx_base64: file content. App's existing extractor reads it.
-//   - transport_cost: navlun bedeli (USD), comes from email body or user input.
-//   - currency_rate: TCMB USD→TL kuru. Cowork should fetch today's TCMB rate
-//     via web search before calling (Anthropic's web tool) — the app doesn't
-//     auto-fetch.
-//   - insurance_cost: omit to auto-set to 0.2% of invoice total (CNCxSOHO standard).
-//   - is_atr: pass true for ATR-eligible (EU/EFTA) invoices.
-//
-// What the tool does internally (mirrors React UI flow):
-//   1. Resolve reference (use given OR compute next from prefix)
-//   2. Extract products from PDF/Excel
-//   3. Insert tax_calculations header + items
-//   4. Match items: by style in products table; for unmatched, fall back to
-//      "most popular tr_hs_code for this US hts_code" (same rule the React UI
-//      shows as suggestions). Caller can review unmatched in the result.
-//   5. Calculate tax (per-item customs/KKDF/VAT/etc.)
-//   6. Upsert aggregated taxes row
-//   7. If the procedure doesn't exist yet, CREATE it from the tax_calculation
-//      data + create invoice_line_items rows (matches the React UI's "Create
-//      Procedure" button logic). Sets tax_calculations.procedure_id.
+// MCP-tool-specific helpers (computed BEFORE the HTTP chain):
+//   - Auto-resolve reference (auto_reference_prefix → next sequential)
+//   - Auto-fetch TCMB currency_rate if omitted
+//   - Auto-insurance = 0.2% of invoice total if omitted
+//   - HS-code suggestion fallback for items whose style is not in products
+//     (mirrors the React UI's MissingProductsForm suggestions-by-hts logic)
 // ---------------------------------------------------------------------------
 
 registerTool({
   name: "import_invoice_from_file",
   tier: "write",
   description:
-    "One-shot tax-calc pipeline. Takes a base64 PDF or Excel invoice file. " +
-    "Delegates to the app's existing services: extractFromPdf/Excel, products " +
-    "lookup with HS-code suggestion fallback, tax-calculation-service, the React " +
-    "UI's create-procedure logic. Cowork's role is just to transport the file in.\n\n" +
-    "REFERENCE PICKING — IMPORTANT: CNCxSOHO procedure references are ALWAYS " +
-    "in the format 'CNC<COMPANY>-<NUMBER>' (CNCALO-77, CNCAMIRI-21, CNCSOHO-50). " +
-    "For a NEW invoice you MUST:\n" +
-    "  • Pass auto_reference_prefix='CNCALO' / 'CNCAMIRI' / 'CNCSOHO' based on " +
-    "the shipper or user's words ('ALO Yoga' → CNCALO, 'AMIRI'/'Atelier' → CNCAMIRI, " +
-    "'SOHO' → CNCSOHO). The tool then scans BOTH procedures.reference AND " +
-    "tax_calculations.reference and assigns the next sequential number.\n" +
-    "  • DO NOT take a reference from the Excel/PDF filename — filenames are " +
-    "usually the supplier's own internal invoice numbers (TR00026, HK570957, " +
-    "INV-2024-001 etc.), NOT the procedure reference. The supplier's invoice no " +
-    "will be auto-extracted from the file content and stored in invoice_no " +
-    "(separately from the procedure reference).\n" +
-    "  • DO NOT pick from procedures listings — procedures may be missing " +
-    "some numbers (e.g. CNCALO-74, 75 may exist in tax_calculations but not " +
-    "yet in procedures because they haven't been promoted yet). Only the tool's " +
-    "internal scan-both-tables logic gives the correct next number.\n" +
-    "  • Only pass procedure_reference if the user explicitly names an existing " +
-    "CNC...-NN reference.\n\n" +
-    "Insurance auto-set to 0.2% of invoice total if insurance_cost omitted " +
-    "(CNCxSOHO standard sigorta rule).\n\n" +
-    "TCMB currency_rate: if you don't pass currency_rate, the tool auto-fetches " +
-    "today's TCMB USD/TRY ForexSelling rate via the app's existing /api/usdtl-rate " +
-    "endpoint (cached 30 min). You do NOT need to web-search for the rate.\n\n" +
-    "FILE INPUT: prefer s3_key (upload via POST /mcp/upload first) over base64. " +
-    "Do NOT run base64 bash commands to inline file content — just curl-upload " +
-    "the file to /mcp/upload and pass the returned s3_key.",
+    "Process an invoice file end-to-end via the app's existing HTTP routes: " +
+    "extract → tax_calc + items → calculate → create procedure. Cowork's role " +
+    "is just to transport the file in (via prepare_invoice_upload). " +
+    "No direct DB writes from this tool. Result is identical to a manual UI run.\n\n" +
+    "Inputs:\n" +
+    "  - s3_key (REQUIRED): file in S3, from prepare_invoice_upload.\n" +
+    "  - Either procedure_reference OR auto_reference_prefix " +
+    "(CNCALO / CNCAMIRI / CNCSOHO). Tool computes next sequential number.\n" +
+    "  - transport_cost (optional): navlun USD.\n" +
+    "  - currency_rate (optional): if omitted, auto-fetched from TCMB.\n" +
+    "  - insurance_cost (optional): if omitted, auto = 0.2% of invoice total.\n" +
+    "  - is_atr (optional): for ATR-eligible (EU/EFTA) invoices.\n\n" +
+    "DO NOT inline file content. Always call prepare_invoice_upload first " +
+    "and pass the resulting s3_key.",
   inputSchema: {
     type: "object",
     properties: {
+      s3_key: {
+        type: "string",
+        description: "S3 object key returned by prepare_invoice_upload. REQUIRED.",
+      },
       procedure_reference: {
         type: "string",
-        description: "Use this when you know the exact reference (e.g. 'CNCALO-72'). If omitted, auto_reference_prefix must be set.",
+        description: "Pass when the user named an EXISTING reference (e.g. 'CNCALO-72'). For a NEW invoice leave blank.",
       },
       auto_reference_prefix: {
         type: "string",
-        description: "Used when procedure_reference is not given. The tool computes the next sequential reference for this prefix and returns 'PREFIX-<next>'. " +
-          "Map company names to prefixes: " +
-          "'ALO' / 'Alo Yoga' / 'ALO HONG KONG LTD' / 'ALO, LLC' -> 'CNCALO'. " +
-          "'AMIRI' / 'Atelier' / 'Atelier Luxury Group' -> 'CNCAMIRI'. " +
-          "'SOHO' -> 'CNCSOHO'. " +
-          "When the user mentions a company in natural language, pick the prefix from this list directly — don't ask them to spell out 'CNC...'.",
+        description: "For a NEW invoice, pass 'CNCALO' (ALO Yoga / ALO HONG KONG LTD / ALO, LLC), 'CNCAMIRI' (AMIRI / Atelier Luxury Group), or 'CNCSOHO' (SOHO). The tool scans procedures AND tax_calculations for the highest existing numeric suffix.",
       },
-      s3_key: {
-        type: "string",
-        description:
-          "REQUIRED. S3 object key for the invoice file. " +
-          "To get it: run ONE bash curl command using the SAME ?token=... " +
-          "query string from your MCP connector URL (substitute in the same token):\n" +
-          "  curl -s -X POST -F \"file=@<absolute-path-to-xlsx-or-pdf>\" " +
-          "\"https://cncsohoimportmanager.com/mcp/upload?token=<SAME_TOKEN_AS_CONNECTOR>\"\n" +
-          "Response is JSON like {\"s3_key\":\"SOHO/mcp-uploads/...\",...} — pass " +
-          "the s3_key string value here. The server then downloads from S3 and " +
-          "processes it internally. " +
-          "DO NOT base64 the file. DO NOT cat the file. DO NOT chunk the file. " +
-          "ONE curl upload, ONE tool call. That's it.",
-      },
-      transport_cost: { type: ["string", "number"], description: "Navlun bedeli (USD). Usually given by the freight invoice email; pass when known." },
-      insurance_cost: { type: ["string", "number"], description: "Sigorta bedeli (USD). Omit to auto-calc as 0.2% of invoice total (CNCxSOHO standard)." },
-      storage_cost: { type: ["string", "number"], description: "Antrepo/depo bedeli (USD). Default 0." },
-      currency_rate: { type: ["string", "number"], description: "TCMB USD→TL rate at customs declaration date. Cowork should fetch today's rate via web search and pass it; otherwise TL totals will be 0." },
-      is_atr: { type: "boolean", default: false, description: "Set true for ATR (EU/EFTA preferential origin) invoices." },
-      shipper: { type: "string", description: "Optional shipper name. If procedure is auto-created and this is not given, the invoice metadata's shipper field is used." },
+      transport_cost: { type: ["string", "number"], description: "Navlun bedeli (USD). Usually from the freight invoice email." },
+      insurance_cost: { type: ["string", "number"], description: "Sigorta bedeli (USD). Omit to auto-set to 0.2% of invoice total." },
+      storage_cost: { type: ["string", "number"], description: "Antrepo/depo bedeli (USD). Default null." },
+      currency_rate: { type: ["string", "number"], description: "TCMB USD/TRY rate. Omit to auto-fetch from TCMB." },
+      is_atr: { type: "boolean", default: false, description: "True for ATR-eligible (EU/EFTA preferential origin) invoices." },
     },
     required: [],
     additionalProperties: false,
   },
-  handler: async (args: any, ctx: any) => {
+  handler: async (args: any, _ctx: any) => {
     if (!args.procedure_reference && !args.auto_reference_prefix) {
       throw new McpToolError("Provide either procedure_reference OR auto_reference_prefix.");
     }
     if (!args.s3_key) {
-      throw new McpToolError(
-        "s3_key is required. Upload the file first via:\n" +
-        "  curl -X POST -F \"file=@<path>\" -H \"Authorization: Bearer <token>\" https://cncsohoimportmanager.com/mcp/upload\n" +
-        "The response contains an s3_key — pass that here. Do NOT base64 the file."
-      );
+      throw new McpToolError("s3_key is required. Upload via prepare_invoice_upload first.");
     }
 
-    // 1. Get file buffer from S3 + extract (outside transaction — Claude API call is slow)
-    const { buffer: buf, contentType } = await getFile(args.s3_key);
-    if (buf.length === 0) throw new McpToolError(`s3_key '${args.s3_key}' is empty or not found`);
-    const keyLower = String(args.s3_key).toLowerCase();
-    const isPdf = (contentType ?? "").includes("pdf") || keyLower.endsWith(".pdf");
+    const PORT = process.env.PORT || "5000";
+    const BASE = `http://127.0.0.1:${PORT}`;
 
-    const extracted: any = isPdf ? await extractFromPdf(buf) : await extractFromExcel(buf);
-    const products = extracted?.products ?? [];
-    if (products.length === 0) throw new McpToolError("No products extracted from the file. Check that the file is a recognizable invoice.");
+    // 1. Download from S3 + extract products
+    const { buffer: fileBuf, contentType } = await getFile(args.s3_key);
+    if (fileBuf.length === 0) throw new McpToolError(`s3_key '${args.s3_key}' is empty or not found in S3`);
+    const isPdf = (contentType ?? "").includes("pdf") || /\.pdf$/i.test(args.s3_key);
+    const extracted: any = isPdf ? await extractFromPdf(fileBuf) : await extractFromExcel(fileBuf);
+    const products: any[] = Array.isArray(extracted?.products) ? extracted.products : [];
+    if (products.length === 0) throw new McpToolError("No products extracted from the file.");
 
-    // 1b. If currency_rate not provided, auto-fetch from TCMB (same source the
-    // React UI's /api/usdtl-rate endpoint uses). Cowork no longer needs to web-search.
+    // 2. Compute totals (we'll need these for auto-insurance and the user summary)
+    let totalValue = 0;
+    let totalQuantity = 0;
+    for (const p of products) {
+      const cost = parseFloat(String(p.cost));
+      const unitCount = parseInt(String(p.unit_count), 10);
+      if (!Number.isFinite(cost) || !Number.isInteger(unitCount)) {
+        throw new McpToolError(`Invalid cost/unit_count on product '${p.style ?? "(no style)"}'`);
+      }
+      const lineTotal = p.total_value !== undefined && p.total_value !== null && p.total_value !== ""
+        ? parseFloat(String(p.total_value))
+        : cost * unitCount;
+      totalValue += lineTotal;
+      totalQuantity += unitCount;
+    }
+
+    // 3. Resolve reference (auto-pick or given)
+    let resolvedReference: string = args.procedure_reference;
+    let referenceWasAuto = false;
+    if (!resolvedReference) {
+      const prefix = String(args.auto_reference_prefix).trim();
+      const refResult = await rawDb.query(
+        `
+        WITH refs AS (
+          SELECT reference FROM procedures WHERE reference ILIKE $1
+          UNION ALL
+          SELECT reference FROM tax_calculations WHERE reference ILIKE $1
+        )
+        SELECT MAX(
+          NULLIF(
+            regexp_replace(
+              substring(reference FROM (length($2::text) + 2)),
+              '[^0-9].*$', ''
+            ),
+            ''
+          )::int
+        ) AS max_num
+        FROM refs
+        WHERE substring(reference FROM (length($2::text) + 2)) ~ '^[0-9]+'
+        `,
+        [`${prefix}-%`, prefix]
+      );
+      const maxNum: number | null = refResult.rows?.[0]?.max_num ?? null;
+      resolvedReference = `${prefix}-${(maxNum ?? 0) + 1}`;
+      referenceWasAuto = true;
+    }
+
+    // 4. Auto-fetch TCMB rate if not provided
     let resolvedCurrencyRate: number | null = null;
-    let currencyRateSource: string = "none";
+    let currencyRateSource = "none";
     if (args.currency_rate !== undefined && args.currency_rate !== null && args.currency_rate !== "") {
       resolvedCurrencyRate = parseFloat(String(args.currency_rate));
       currencyRateSource = "caller";
     } else {
       try {
-        const port = process.env.PORT || "5000";
-        const response = await fetch(`http://127.0.0.1:${port}/api/usdtl-rate`);
-        if (response.ok) {
-          const j: any = await response.json();
+        const r = await fetch(`${BASE}/api/usdtl-rate`);
+        if (r.ok) {
+          const j: any = await r.json();
           if (typeof j?.rate === "number" && j.rate > 0) {
             resolvedCurrencyRate = j.rate;
             currencyRateSource = `TCMB(${j.date ?? "today"})`;
           }
         }
-      } catch (e: any) {
-        console.warn("[import_invoice_from_file] TCMB auto-fetch failed:", e?.message);
+      } catch (_e) {
+        // Silent — caller will see currency_rate_source='none' in result
       }
     }
 
-    // 2. Save + match + calc + (maybe) auto-create procedure — one transaction.
-    return await db.transaction(async (tx) => {
-      // 2a. Resolve reference.
-      let resolvedReference = args.procedure_reference;
-      let referenceWasAuto = false;
-      if (!resolvedReference) {
-        const prefix = String(args.auto_reference_prefix).trim();
-        const refResult = await rawDb.query(
-          `
-          WITH refs AS (
-            SELECT reference FROM procedures WHERE reference ILIKE $1
-            UNION ALL
-            SELECT reference FROM tax_calculations WHERE reference ILIKE $1
-          )
-          SELECT MAX(
-            NULLIF(
-              regexp_replace(
-                substring(reference FROM (length($2::text) + 2)),
-                '[^0-9].*$', ''
-              ),
-              ''
-            )::int
-          ) AS max_num
-          FROM refs
-          WHERE substring(reference FROM (length($2::text) + 2)) ~ '^[0-9]+'
-          `,
-          [`${prefix}-%`, prefix]
-        );
-        const maxNum: number | null = refResult.rows?.[0]?.max_num ?? null;
-        const nextNum = (maxNum ?? 0) + 1;
-        resolvedReference = `${prefix}-${nextNum}`;
-        referenceWasAuto = true;
+    // 5. Auto-insurance: 0.2% of invoice total
+    const insuranceWasAuto = args.insurance_cost === undefined || args.insurance_cost === null || args.insurance_cost === "";
+    const resolvedInsuranceCost: string = insuranceWasAuto
+      ? (totalValue * 0.002).toFixed(2)
+      : parseFloat(String(args.insurance_cost)).toFixed(2);
+
+    // 6. Pre-match: style → products.tr_hs_code; fallback to most-popular tr_hs_code
+    //    among other products with the same US hts_code (mirrors React UI's
+    //    /api/tax-calculation/products/suggestions-by-hts logic).
+    const styles = Array.from(new Set(products.map(p => p.style).filter(Boolean))) as string[];
+    const productRows = styles.length
+      ? await db.select().from(productsTable).where(inArray(productsTable.style, styles))
+      : [];
+    const productByStyle = new Map<string, any>(productRows.map((p: any) => [p.style, p]));
+
+    const htsCodesNeedingFallback = new Set<string>();
+    for (const p of products) {
+      const matchedProduct = productByStyle.get(p.style);
+      if ((!matchedProduct || !matchedProduct.tr_hs_code) && p.hts_code) {
+        htsCodesNeedingFallback.add(String(p.hts_code));
       }
+    }
+    const fallbackByHts = new Map<string, string>();
+    for (const hts of htsCodesNeedingFallback) {
+      const sug = await rawDb.query(
+        `
+        SELECT tr_hs_code FROM products
+        WHERE hts_code = $1 AND tr_hs_code IS NOT NULL AND tr_hs_code <> ''
+        GROUP BY tr_hs_code
+        ORDER BY COUNT(*) DESC
+        LIMIT 1
+        `,
+        [hts]
+      );
+      const top = sug.rows?.[0]?.tr_hs_code;
+      if (top) fallbackByHts.set(hts, top);
+    }
 
-      const [procedureMaybe] = await tx.select().from(proceduresTable).where(eq(proceduresTable.reference, resolvedReference));
-
-      const [existingCalc] = await tx.select().from(taxCalculations).where(eq(taxCalculations.reference, resolvedReference));
-      if (existingCalc) {
-        throw new McpToolError(`tax_calculations row already exists for ${resolvedReference} (id=${existingCalc.id}). Delete it via destructive_delete_record(table:'tax_calculations'...) first, or pick a different reference.`);
+    // 7. Build items for /items/batch with tr_hs_code pre-filled.
+    let matchedCount = 0;
+    let matchedViaSuggestion = 0;
+    const unmatched: { style: string; hts_code?: string; reason: string }[] = [];
+    const itemsForBatch = products.map((p: any, idx: number) => {
+      const cost = parseFloat(String(p.cost));
+      const unitCount = parseInt(String(p.unit_count), 10);
+      const lineTotal = p.total_value !== undefined && p.total_value !== null && p.total_value !== ""
+        ? parseFloat(String(p.total_value))
+        : cost * unitCount;
+      const matched = productByStyle.get(p.style);
+      let trCode: string | null = null;
+      let productId: number | null = null;
+      let viaSuggestion = false;
+      if (matched?.tr_hs_code) {
+        trCode = matched.tr_hs_code;
+        productId = matched.id;
+      } else if (p.hts_code && fallbackByHts.has(String(p.hts_code))) {
+        trCode = fallbackByHts.get(String(p.hts_code))!;
+        viaSuggestion = true;
       }
-
-      let totalValue = 0;
-      let totalQuantity = 0;
-      const itemsToInsert = (products as any[]).map((p, idx) => {
-        const cost = parseFloat(String(p.cost));
-        const unitCount = parseInt(String(p.unit_count), 10);
-        if (!Number.isFinite(cost)) throw new McpToolError(`products[${idx}].cost invalid: ${p.cost}`);
-        if (!Number.isInteger(unitCount)) throw new McpToolError(`products[${idx}].unit_count invalid: ${p.unit_count}`);
-        const lineTotal = p.total_value !== undefined && p.total_value !== null && p.total_value !== ""
-          ? parseFloat(String(p.total_value))
-          : cost * unitCount;
-        if (!Number.isFinite(lineTotal)) throw new McpToolError(`products[${idx}].total_value invalid`);
-        totalValue += lineTotal;
-        totalQuantity += unitCount;
-        if (!p.style) throw new McpToolError(`products[${idx}].style is required`);
-        return {
-          line_number: idx + 1,
-          style: String(p.style),
-          color: p.color ?? null,
-          category: p.category ?? null,
-          description: p.description ?? null,
-          fabric_content: p.fabric_content ?? null,
-          country_of_origin: p.country_of_origin ?? null,
-          hts_code: p.hts_code ?? null,
-          tr_hs_code: p.tr_hs_code ?? null,
-          cost: cost.toFixed(2),
-          unit_count: unitCount,
-          total_value: lineTotal.toFixed(2),
-        };
-      });
-
-      const meta = extracted?.invoiceMetadata ?? {};
-      const headerData: any = {
-        reference: resolvedReference,
-        invoice_no: meta.invoice_no ?? null,
-        invoice_date: meta.invoice_date ?? null,
-        total_value: totalValue.toFixed(2),
-        total_quantity: totalQuantity,
-        is_prepaid: false,
-        is_atr: !!args.is_atr,
-        status: "draft",
-        procedure_id: procedureMaybe?.id ?? null,
-      };
-      if (args.transport_cost !== undefined && args.transport_cost !== null && args.transport_cost !== "") {
-        headerData.transport_cost = parseFloat(String(args.transport_cost)).toFixed(2);
-      }
-      // Insurance auto-rule: 0.2% of total_value
-      if (args.insurance_cost !== undefined && args.insurance_cost !== null && args.insurance_cost !== "") {
-        headerData.insurance_cost = parseFloat(String(args.insurance_cost)).toFixed(2);
-      } else {
-        headerData.insurance_cost = (totalValue * 0.002).toFixed(2);
-      }
-      if (args.storage_cost !== undefined && args.storage_cost !== null && args.storage_cost !== "") {
-        headerData.storage_cost = parseFloat(String(args.storage_cost)).toFixed(2);
-      }
-      if (resolvedCurrencyRate !== null && resolvedCurrencyRate > 0) {
-        headerData.currency_rate = resolvedCurrencyRate.toFixed(4);
-      }
-
-      const [calc] = await tx.insert(taxCalculations).values(headerData).returning();
-      if (!calc) throw new McpToolError("tax_calculations insert returned no row");
-      const itemsWithFk = itemsToInsert.map(it => ({ ...it, tax_calculation_id: calc.id }));
-      const insertedItems = await tx.insert(taxCalculationItems).values(itemsWithFk).returning();
-
-      // 3. Match: look up tr_hs_code from products table by style. If a style
-      // has no exact match, fall back to the React UI's "suggestions-by-hts"
-      // logic: query other products with the same US hts_code and use the
-      // most-popular tr_hs_code (highest product_count). Mirrors
-      // /api/tax-calculation/products/suggestions-by-hts.
-      const styles = Array.from(new Set(insertedItems.map((i: any) => i.style).filter(Boolean))) as string[];
-      const productRows = styles.length ? await tx.select().from(productsTable).where(inArray(productsTable.style, styles)) : [];
-      const productByStyle = new Map<string, any>(productRows.map(p => [p.style, p]));
-
-      // Pre-cache HS suggestions per unique hts_code seen on unmatched items.
-      const htsCodesNeedingFallback = new Set<string>();
-      for (const item of insertedItems as any[]) {
-        const product = productByStyle.get(item.style);
-        if ((!product || !product.tr_hs_code) && item.hts_code) {
-          htsCodesNeedingFallback.add(String(item.hts_code));
-        }
-      }
-      const fallbackByHts = new Map<string, string>();
-      if (htsCodesNeedingFallback.size > 0) {
-        for (const hts of htsCodesNeedingFallback) {
-          const sugRes = await rawDb.query(
-            `
-            SELECT tr_hs_code, COUNT(*)::int as cnt
-            FROM products
-            WHERE hts_code = $1 AND tr_hs_code IS NOT NULL AND tr_hs_code <> ''
-            GROUP BY tr_hs_code
-            ORDER BY cnt DESC
-            LIMIT 1
-            `,
-            [hts]
-          );
-          const top = sugRes.rows?.[0];
-          if (top?.tr_hs_code) fallbackByHts.set(hts, top.tr_hs_code);
-        }
-      }
-
-      let matched = 0;
-      let matchedViaSuggestion = 0;
-      const unmatched: { style: string; reason: string; hts_code?: string }[] = [];
-      for (const item of insertedItems as any[]) {
-        const product = productByStyle.get(item.style);
-        let trCode: string | null = null;
-        let productId: number | null = null;
-        let viaSuggestion = false;
-
-        if (product?.tr_hs_code) {
-          trCode = product.tr_hs_code;
-          productId = product.id;
-        } else if (item.hts_code && fallbackByHts.has(String(item.hts_code))) {
-          trCode = fallbackByHts.get(String(item.hts_code))!;
-          viaSuggestion = true;
-        }
-
-        if (!trCode) {
-          unmatched.push({
-            style: item.style,
-            hts_code: item.hts_code ?? undefined,
-            reason: !product
-              ? (item.hts_code ? "no products row for style AND no HS-code suggestion available" : "no products row for style and no hts_code on item")
-              : "products row exists but tr_hs_code empty AND no HS-code suggestion available",
-          });
-          continue;
-        }
-
-        await tx.update(taxCalculationItems).set({ tr_hs_code: trCode, product_id: productId }).where(eq(taxCalculationItems.id, item.id));
-        matched++;
+      if (trCode) {
+        matchedCount++;
         if (viaSuggestion) matchedViaSuggestion++;
-      }
-
-      // 4. Calculate tax (re-fetch items with their new tr_hs_code).
-      const fullItems = await tx.select().from(taxCalculationItems).where(eq(taxCalculationItems.tax_calculation_id, calc.id));
-      const trCodesNeeded = Array.from(new Set(fullItems.map((i: any) => i.tr_hs_code).filter(Boolean))) as string[];
-      const hsRows = trCodesNeeded.length ? await tx.select().from(hsCodes).where(inArray((hsCodes as any).tr_hs_code, trCodesNeeded)) : [];
-      const hsByCode = new Map<string, any>(hsRows.map((r: any) => [r.tr_hs_code, r]));
-      const atrContext: AtrContext | undefined = (calc as any).is_atr ? { isAtr: true, atrRatesMap: new Map() } : undefined;
-
-      let totalCustoms = 0, totalAdditional = 0, totalKkdf = 0, totalVat = 0, totalUsd = 0, totalTl = 0;
-      const calcSkipped: { item_id: number; style: string; reason: string }[] = [];
-      let calcOK = 0;
-      for (const item of fullItems as any[]) {
-        if (!item.tr_hs_code) {
-          calcSkipped.push({ item_id: item.id, style: item.style, reason: "missing tr_hs_code" });
-          continue;
-        }
-        const hs = hsByCode.get(item.tr_hs_code);
-        if (!hs) {
-          calcSkipped.push({ item_id: item.id, style: item.style, reason: `tr_hs_code ${item.tr_hs_code} not in hsCodes table` });
-          continue;
-        }
-        const r = await calculateItemTax(item, calc as any, hs as any, atrContext);
-        totalCustoms += r.customs_tax;
-        totalAdditional += r.additional_customs_tax;
-        totalKkdf += r.kkdf;
-        totalVat += r.vat;
-        totalUsd += r.total_tax_usd;
-        totalTl += r.total_tax_tl;
-        calcOK++;
-      }
-
-      // 5. Upsert the aggregated taxes row.
-      const agentUserId = await resolveAgentUserId(tx as any);
-      const aggregate: any = {
-        procedureReference: resolvedReference,
-        customsTax: totalCustoms.toFixed(2),
-        additionalCustomsTax: totalAdditional.toFixed(2),
-        kkdf: totalKkdf.toFixed(2),
-        vat: totalVat.toFixed(2),
-        createdBy: agentUserId,
-      };
-      const [taxBefore] = await tx.select().from(taxesTable).where(eq((taxesTable as any).procedureReference, resolvedReference));
-      let taxesRow;
-      if (taxBefore) {
-        const [updated] = await tx.update(taxesTable).set(aggregate).where(eq(taxesTable.id, taxBefore.id)).returning();
-        taxesRow = updated;
       } else {
-        const [inserted] = await tx.insert(taxesTable).values(aggregate).returning();
-        taxesRow = inserted;
+        unmatched.push({
+          style: p.style,
+          hts_code: p.hts_code ?? undefined,
+          reason: matched
+            ? "products row has no tr_hs_code, and no HS-code suggestion available"
+            : "style not in products, and no HS-code suggestion available",
+        });
       }
-
-      // 6. If procedure didn't exist, auto-create it now — mirrors the React UI's
-      // POST /api/tax-calculation/calculations/:id/create-procedure endpoint:
-      // creates a procedures row + invoice_line_items rows from the tax_calc
-      // items, and updates tax_calculations.procedure_id back.
-      let procedureCreated = false;
-      let procedureForReturn = procedureMaybe;
-      if (!procedureMaybe) {
-        const procedureShipper = args.shipper ?? (extracted?.invoiceMetadata?.shipper) ?? null;
-        const procedureData: any = {
-          reference: resolvedReference,
-          amount: totalValue.toFixed(2),
-          currency: "USD",
-          piece: totalQuantity,
-          invoice_no: meta.invoice_no ?? null,
-          invoice_date: meta.invoice_date ?? null,
-          shipper: procedureShipper,
-          createdBy: agentUserId,
-        };
-        const [newProc] = await tx.insert(proceduresTable).values(procedureData).returning();
-        procedureForReturn = newProc;
-        procedureCreated = true;
-
-        // Update tax_calculations.procedure_id
-        await tx.update(taxCalculations).set({ procedure_id: newProc.id }).where(eq(taxCalculations.id, calc.id));
-
-        // Create invoice_line_items rows mirroring create-procedure route (line 6318+).
-        if (insertedItems.length > 0) {
-          const lineItemsData = insertedItems.map((item: any, idx: number) => ({
-            procedureReference: resolvedReference,
-            styleNo: item.style,
-            description: item.category,
-            quantity: item.unit_count,
-            unitPrice: item.cost,
-            totalPrice: item.total_value,
-            sortOrder: idx,
-            source: "tax_calculation",
-            createdBy: agentUserId,
-          }));
-          await tx.insert(invoiceLineItems).values(lineItemsData);
-        }
-      }
-
       return {
-        data: {
-          reference: resolvedReference,
-          reference_was_auto: referenceWasAuto,
-          procedure_id: procedureForReturn?.id ?? null,
-          procedure_was_created: procedureCreated,
-          tax_calculation_id: calc.id,
-          taxes_row_id: taxesRow.id,
-          extracted_products: products.length,
-          items_inserted: insertedItems.length,
-          items_matched_total: matched,
-          items_matched_via_products_style: matched - matchedViaSuggestion,
-          items_matched_via_hts_suggestion: matchedViaSuggestion,
-          items_unmatched: unmatched.length,
-          unmatched_sample: unmatched.slice(0, 5),
-          items_calculated: calcOK,
-          items_calc_skipped: calcSkipped.length,
-          calc_skipped_sample: calcSkipped.slice(0, 5),
-          totals_usd: {
-            customs_tax: totalCustoms.toFixed(2),
-            additional_customs_tax: totalAdditional.toFixed(2),
-            kkdf: totalKkdf.toFixed(2),
-            vat: totalVat.toFixed(2),
-            total: totalUsd.toFixed(2),
-          },
-          totals_tl: { total: totalTl.toFixed(2) },
-          insurance_cost_used: headerData.insurance_cost,
-          insurance_was_auto: args.insurance_cost === undefined || args.insurance_cost === null || args.insurance_cost === "",
-          currency_rate_used: resolvedCurrencyRate?.toFixed(4) ?? null,
-          currency_rate_source: currencyRateSource,
-          file_source: "s3",
-          s3_key_used: args.s3_key,
-          summary_for_user:
-            (referenceWasAuto ? `${resolvedReference} olarak yeni kayıt oluşturuldu (otomatik numara). ` : `${resolvedReference}'a kaydedildi. `) +
-            (procedureCreated ? `Procedure ve invoice_line_items oluşturuldu. ` : `Mevcut procedure'a eklendi. `) +
-            `${products.length} ürün, toplam fatura ${totalValue.toFixed(2)} USD. ` +
-            `Match: ${matched - matchedViaSuggestion} style üzerinden + ${matchedViaSuggestion} HS kodu önerisinden. ` +
-            (unmatched.length > 0 ? `${unmatched.length} eşleşmemiş. ` : "") +
-            `Vergi: ${calcOK}/${insertedItems.length} hesaplandı. ` +
-            `Toplam: Gümrük ${totalCustoms.toFixed(2)} USD, KKDF ${totalKkdf.toFixed(2)} USD, KDV ${totalVat.toFixed(2)} USD. ` +
-            (totalTl > 0 ? `TL: ${totalTl.toFixed(2)} (TCMB ${currencyRateSource === "TCMB(today)" ? "bugünkü" : currencyRateSource}).` : `(TL totals 0 — currency_rate alınamadı.)`),
-        },
-        meta: {
-          affectedTable: procedureCreated ? "procedures" : "tax_calculations",
-          affectedIds: [
-            ...(procedureCreated && procedureForReturn ? [procedureForReturn.id] : []),
-            calc.id,
-            taxesRow.id,
-            ...insertedItems.map(i => i.id),
-          ],
-          summary: `import_invoice_from_file → ${resolvedReference}${referenceWasAuto ? " (auto)" : ""}${procedureCreated ? ", procedure created" : ""}, ${calcOK}/${insertedItems.length} items calculated`,
-        },
+        product_id: productId,
+        line_number: idx + 1,
+        style: p.style,
+        color: p.color ?? null,
+        category: p.category ?? null,
+        description: p.description ?? null,
+        fabric_content: p.fabric_content ?? null,
+        country_of_origin: p.country_of_origin ?? null,
+        hts_code: p.hts_code ?? null,
+        cost: cost,
+        unit_count: unitCount,
+        total_value: lineTotal,
+        tr_hs_code: trCode,
       };
     });
+
+    // 8. HTTP self-call chain — same routes the React UI calls.
+    const meta = extracted?.invoiceMetadata ?? {};
+
+    // 8a. Create tax_calculations header
+    const headerBody: any = {
+      reference: resolvedReference,
+      invoice_no: meta.invoice_no ?? null,
+      invoice_date: meta.invoice_date ?? null,
+      total_value: totalValue.toFixed(2),
+      total_quantity: totalQuantity,
+      transport_cost: args.transport_cost !== undefined && args.transport_cost !== null && args.transport_cost !== ""
+        ? parseFloat(String(args.transport_cost)).toFixed(2)
+        : null,
+      insurance_cost: resolvedInsuranceCost,
+      storage_cost: args.storage_cost !== undefined && args.storage_cost !== null && args.storage_cost !== ""
+        ? parseFloat(String(args.storage_cost)).toFixed(2)
+        : null,
+      currency_rate: resolvedCurrencyRate !== null ? resolvedCurrencyRate.toFixed(4) : null,
+      is_prepaid: false,
+      is_atr: !!args.is_atr,
+      status: "draft",
+    };
+    const headerResp = await fetch(`${BASE}/api/tax-calculation/calculations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(headerBody),
+    });
+    if (!headerResp.ok) {
+      const errText = await headerResp.text();
+      throw new McpToolError(`Failed to create tax_calculations: ${headerResp.status} ${errText.slice(0, 300)}`);
+    }
+    const headerData: any = await headerResp.json();
+    const calcId: number | undefined = headerData?.calculation?.id;
+    if (!calcId) throw new McpToolError("Tax calculation create response did not include calculation.id");
+
+    // 8b. Batch insert items
+    const batchResp = await fetch(`${BASE}/api/tax-calculation/calculations/${calcId}/items/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: itemsForBatch }),
+    });
+    if (!batchResp.ok) {
+      const errText = await batchResp.text();
+      throw new McpToolError(`Failed to batch-insert items: ${batchResp.status} ${errText.slice(0, 300)}`);
+    }
+    const batchData: any = await batchResp.json();
+    const insertedCount: number = batchData?.count ?? batchData?.items?.length ?? 0;
+
+    // 8c. Run /calculate (calculateAllItems) — fills per-item tax fields + status
+    const calcResp = await fetch(`${BASE}/api/tax-calculation/calculations/${calcId}/calculate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    if (!calcResp.ok) {
+      const errText = await calcResp.text();
+      throw new McpToolError(`Failed to run /calculate: ${calcResp.status} ${errText.slice(0, 300)}`);
+    }
+    const calcResult: any = await calcResp.json();
+    const calculatedItems: any[] = Array.isArray(calcResult?.items) ? calcResult.items : [];
+
+    // 8d. Create procedure (+ invoice_line_items) from the calculation
+    const agentUserId = await resolveAgentUserId(db as any);
+    const createProcResp = await fetch(`${BASE}/api/tax-calculation/calculations/${calcId}/create-procedure`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: agentUserId }),
+    });
+    if (!createProcResp.ok) {
+      const errText = await createProcResp.text();
+      throw new McpToolError(`Failed to create-procedure: ${createProcResp.status} ${errText.slice(0, 300)}`);
+    }
+    const procResult: any = await createProcResp.json();
+    const procedureId: number | undefined = procResult?.procedure?.id;
+
+    // 8e. Optionally fill shipper on the procedure (React UI doesn't auto-fill it)
+    let shipperSet = false;
+    if (meta?.shipper && procedureId) {
+      try {
+        const updResp = await fetch(`${BASE}/api/procedures/${encodeURIComponent(resolvedReference)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ shipper: meta.shipper }),
+        });
+        shipperSet = updResp.ok;
+      } catch (_e) {
+        // non-fatal
+      }
+    }
+
+    // 9. Aggregate per-item totals for the user summary
+    let totalCustoms = 0, totalAdditional = 0, totalKkdf = 0, totalVat = 0, totalUsd = 0, totalTl = 0;
+    let calcOK = 0;
+    let calcSkipped = 0;
+    for (const it of calculatedItems) {
+      const cVal = parseFloat(it.customs_tax ?? "0");
+      const vVal = parseFloat(it.vat ?? "0");
+      if (cVal > 0 || vVal > 0 || parseFloat(it.kkdf ?? "0") > 0) {
+        calcOK++;
+      } else if (!it.tr_hs_code) {
+        calcSkipped++;
+      }
+      totalCustoms += cVal;
+      totalAdditional += parseFloat(it.additional_customs_tax ?? "0");
+      totalKkdf += parseFloat(it.kkdf ?? "0");
+      totalVat += vVal;
+      totalUsd += parseFloat(it.total_tax_usd ?? "0");
+      totalTl += parseFloat(it.total_tax_tl ?? "0");
+    }
+
+    return {
+      data: {
+        reference: resolvedReference,
+        reference_was_auto: referenceWasAuto,
+        procedure_id: procedureId,
+        tax_calculation_id: calcId,
+        extracted_products: products.length,
+        items_inserted: insertedCount,
+        items_matched_total: matchedCount,
+        items_matched_via_products_style: matchedCount - matchedViaSuggestion,
+        items_matched_via_hts_suggestion: matchedViaSuggestion,
+        items_unmatched: unmatched.length,
+        unmatched_sample: unmatched.slice(0, 5),
+        items_calculated: calcOK,
+        items_calc_skipped: calcSkipped,
+        totals_usd: {
+          customs_tax: totalCustoms.toFixed(2),
+          additional_customs_tax: totalAdditional.toFixed(2),
+          kkdf: totalKkdf.toFixed(2),
+          vat: totalVat.toFixed(2),
+          total: totalUsd.toFixed(2),
+        },
+        totals_tl: { total: totalTl.toFixed(2) },
+        insurance_cost_used: resolvedInsuranceCost,
+        insurance_was_auto: insuranceWasAuto,
+        currency_rate_used: resolvedCurrencyRate?.toFixed(4) ?? null,
+        currency_rate_source: currencyRateSource,
+        shipper_set: shipperSet,
+        invoice_metadata: meta,
+        summary_for_user:
+          `${resolvedReference}${referenceWasAuto ? " (otomatik numara)" : ""} oluşturuldu. ` +
+          (procedureId ? `Procedure id=${procedureId} React UI'da görünüyor. ` : "") +
+          `${products.length} ürün, ${insertedCount} item kaydedildi, ${calcOK} vergi hesaplandı` +
+          (unmatched.length > 0 ? `, ⚠ ${unmatched.length} eşleşmemiş style (manuel kontrol gerekebilir). ` : ". ") +
+          `Fatura ${totalValue.toFixed(2)} USD. ` +
+          `Gümrük ${totalCustoms.toFixed(2)} USD, Ek Gümrük ${totalAdditional.toFixed(2)} USD, ` +
+          `KKDF ${totalKkdf.toFixed(2)} USD, KDV ${totalVat.toFixed(2)} USD. ` +
+          `Toplam ${totalUsd.toFixed(2)} USD = ${totalTl.toFixed(2)} TL (kur ${resolvedCurrencyRate?.toFixed(4) ?? "?"} via ${currencyRateSource}).`,
+      },
+      meta: {
+        affectedTable: "procedures",
+        affectedIds: [procedureId, calcId].filter((x): x is number => typeof x === "number"),
+        summary: `import_invoice_from_file → ${resolvedReference}${referenceWasAuto ? " (auto)" : ""}, ${calcOK}/${insertedCount} items calculated, procedure id=${procedureId ?? "?"}`,
+      },
+    };
   },
 });
+
 
 
 // ---------------------------------------------------------------------------
