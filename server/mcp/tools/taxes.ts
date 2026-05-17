@@ -17,6 +17,7 @@ import { extractFromPdf, extractFromExcel } from "../../document-extraction";
 import { McpToolError } from "../errors";
 import { resolveAgentUserId } from "../audit-attribution";
 import { rawDb } from "../../db";
+import { getFile } from "../../object-storage";
 
 registerTool({
   name: "read_taxes",
@@ -627,9 +628,12 @@ registerTool({
     "CNC...-NN reference.\n\n" +
     "Insurance auto-set to 0.2% of invoice total if insurance_cost omitted " +
     "(CNCxSOHO standard sigorta rule).\n\n" +
-    "TCMB currency_rate is NOT auto-fetched — you should web-search today's " +
-    "USD/TRY rate (e.g. tcmb.gov.tr or kur.doviz.com) and pass it before calling, " +
-    "otherwise TL totals will be 0.",
+    "TCMB currency_rate: if you don't pass currency_rate, the tool auto-fetches " +
+    "today's TCMB USD/TRY ForexSelling rate via the app's existing /api/usdtl-rate " +
+    "endpoint (cached 30 min). You do NOT need to web-search for the rate.\n\n" +
+    "FILE INPUT: prefer s3_key (upload via POST /mcp/upload first) over base64. " +
+    "Do NOT run base64 bash commands to inline file content — just curl-upload " +
+    "the file to /mcp/upload and pass the returned s3_key.",
   inputSchema: {
     type: "object",
     properties: {
@@ -646,8 +650,17 @@ registerTool({
           "'SOHO' -> 'CNCSOHO'. " +
           "When the user mentions a company in natural language, pick the prefix from this list directly — don't ask them to spell out 'CNC...'.",
       },
-      pdf_base64: { type: "string", description: "Base64 PDF (NO data: prefix). Provide either this or xlsx_base64." },
-      xlsx_base64: { type: "string", description: "Base64 .xlsx. Provide either this or pdf_base64." },
+      s3_key: {
+        type: "string",
+        description:
+          "PREFERRED for large files. S3 object key returned by POST /mcp/upload " +
+          "(multipart upload endpoint). Avoids putting the file content in your " +
+          "context. Workflow: bash → curl -F file=@<path> -H 'Authorization: Bearer <token>' " +
+          "https://cncsohoimportmanager.com/mcp/upload → response has s3_key. " +
+          "Pass that key here and the server downloads from S3 internally.",
+      },
+      pdf_base64: { type: "string", description: "Base64 PDF (NO data: prefix). Only use for files smaller than ~10KB — for anything bigger, upload via /mcp/upload first and pass s3_key instead." },
+      xlsx_base64: { type: "string", description: "Base64 .xlsx. Only use for files smaller than ~10KB — for anything bigger, upload via /mcp/upload first and pass s3_key instead." },
       transport_cost: { type: ["string", "number"], description: "Navlun bedeli (USD). Usually given by the freight invoice email; pass when known." },
       insurance_cost: { type: ["string", "number"], description: "Sigorta bedeli (USD). Omit to auto-calc as 0.2% of invoice total (CNCxSOHO standard)." },
       storage_cost: { type: ["string", "number"], description: "Antrepo/depo bedeli (USD). Default 0." },
@@ -662,26 +675,57 @@ registerTool({
     if (!args.procedure_reference && !args.auto_reference_prefix) {
       throw new McpToolError("Provide either procedure_reference OR auto_reference_prefix.");
     }
-    if (!args.pdf_base64 && !args.xlsx_base64) {
-      throw new McpToolError("Either pdf_base64 or xlsx_base64 is required.");
+    const fileSources = [args.s3_key, args.pdf_base64, args.xlsx_base64].filter(Boolean);
+    if (fileSources.length === 0) {
+      throw new McpToolError("Provide one of: s3_key (preferred — get from POST /mcp/upload), pdf_base64, or xlsx_base64.");
     }
-    if (args.pdf_base64 && args.xlsx_base64) {
-      throw new McpToolError("Pass either pdf_base64 OR xlsx_base64, not both.");
+    if (fileSources.length > 1) {
+      throw new McpToolError("Pass exactly ONE of s3_key, pdf_base64, or xlsx_base64.");
     }
 
-    // 1. Extract (outside transaction — Claude API call is slow, no DB lock needed yet)
-    let extracted: any;
-    if (args.pdf_base64) {
-      const buf = Buffer.from(args.pdf_base64, "base64");
-      if (buf.length === 0) throw new McpToolError("pdf_base64 decoded to empty buffer");
-      extracted = await extractFromPdf(buf);
+    // 1. Get file buffer + extract (outside transaction — Claude API call is slow)
+    let buf: Buffer;
+    let isPdf = false;
+    if (args.s3_key) {
+      const { buffer, contentType } = await getFile(args.s3_key);
+      buf = buffer;
+      const key = String(args.s3_key).toLowerCase();
+      isPdf = (contentType ?? "").includes("pdf") || key.endsWith(".pdf");
+    } else if (args.pdf_base64) {
+      buf = Buffer.from(args.pdf_base64, "base64");
+      isPdf = true;
     } else {
-      const buf = Buffer.from(args.xlsx_base64, "base64");
-      if (buf.length === 0) throw new McpToolError("xlsx_base64 decoded to empty buffer");
-      extracted = await extractFromExcel(buf);
+      buf = Buffer.from(args.xlsx_base64, "base64");
+      isPdf = false;
     }
+    if (buf.length === 0) throw new McpToolError("File buffer is empty");
+
+    const extracted: any = isPdf ? await extractFromPdf(buf) : await extractFromExcel(buf);
     const products = extracted?.products ?? [];
     if (products.length === 0) throw new McpToolError("No products extracted from the file. Check that the file is a recognizable invoice.");
+
+    // 1b. If currency_rate not provided, auto-fetch from TCMB (same source the
+    // React UI's /api/usdtl-rate endpoint uses). Cowork no longer needs to web-search.
+    let resolvedCurrencyRate: number | null = null;
+    let currencyRateSource: string = "none";
+    if (args.currency_rate !== undefined && args.currency_rate !== null && args.currency_rate !== "") {
+      resolvedCurrencyRate = parseFloat(String(args.currency_rate));
+      currencyRateSource = "caller";
+    } else {
+      try {
+        const port = process.env.PORT || "5000";
+        const response = await fetch(`http://127.0.0.1:${port}/api/usdtl-rate`);
+        if (response.ok) {
+          const j: any = await response.json();
+          if (typeof j?.rate === "number" && j.rate > 0) {
+            resolvedCurrencyRate = j.rate;
+            currencyRateSource = `TCMB(${j.date ?? "today"})`;
+          }
+        }
+      } catch (e: any) {
+        console.warn("[import_invoice_from_file] TCMB auto-fetch failed:", e?.message);
+      }
+    }
 
     // 2. Save + match + calc + (maybe) auto-create procedure — one transaction.
     return await db.transaction(async (tx) => {
@@ -778,8 +822,8 @@ registerTool({
       if (args.storage_cost !== undefined && args.storage_cost !== null && args.storage_cost !== "") {
         headerData.storage_cost = parseFloat(String(args.storage_cost)).toFixed(2);
       }
-      if (args.currency_rate !== undefined && args.currency_rate !== null && args.currency_rate !== "") {
-        headerData.currency_rate = parseFloat(String(args.currency_rate)).toFixed(4);
+      if (resolvedCurrencyRate !== null && resolvedCurrencyRate > 0) {
+        headerData.currency_rate = resolvedCurrencyRate.toFixed(4);
       }
 
       const [calc] = await tx.insert(taxCalculations).values(headerData).returning();
@@ -976,6 +1020,9 @@ registerTool({
           totals_tl: { total: totalTl.toFixed(2) },
           insurance_cost_used: headerData.insurance_cost,
           insurance_was_auto: args.insurance_cost === undefined || args.insurance_cost === null || args.insurance_cost === "",
+          currency_rate_used: resolvedCurrencyRate?.toFixed(4) ?? null,
+          currency_rate_source: currencyRateSource,
+          file_source: args.s3_key ? "s3" : (args.pdf_base64 ? "pdf_base64" : "xlsx_base64"),
           summary_for_user:
             (referenceWasAuto ? `${resolvedReference} olarak yeni kayıt oluşturuldu (otomatik numara). ` : `${resolvedReference}'a kaydedildi. `) +
             (procedureCreated ? `Procedure ve invoice_line_items oluşturuldu. ` : `Mevcut procedure'a eklendi. `) +
@@ -984,7 +1031,7 @@ registerTool({
             (unmatched.length > 0 ? `${unmatched.length} eşleşmemiş. ` : "") +
             `Vergi: ${calcOK}/${insertedItems.length} hesaplandı. ` +
             `Toplam: Gümrük ${totalCustoms.toFixed(2)} USD, KKDF ${totalKkdf.toFixed(2)} USD, KDV ${totalVat.toFixed(2)} USD. ` +
-            (totalTl > 0 ? `TL: ${totalTl.toFixed(2)}.` : `(TCMB rate verilmediği için TL totals 0.)`),
+            (totalTl > 0 ? `TL: ${totalTl.toFixed(2)} (TCMB ${currencyRateSource === "TCMB(today)" ? "bugünkü" : currencyRateSource}).` : `(TL totals 0 — currency_rate alınamadı.)`),
         },
         meta: {
           affectedTable: procedureCreated ? "procedures" : "tax_calculations",
@@ -1001,3 +1048,32 @@ registerTool({
   },
 });
 
+
+// ---------------------------------------------------------------------------
+// read_usdtl_rate — wrapper around the app's existing /api/usdtl-rate route.
+// Cached 30 min server-side. Returns the official TCMB USD/TRY ForexSelling
+// rate published daily.
+// ---------------------------------------------------------------------------
+registerTool({
+  name: "read_usdtl_rate",
+  tier: "read",
+  description:
+    "Returns today's official TCMB USD/TRY ForexSelling rate (cached 30 min). " +
+    "Use whenever you need to display or use the TL conversion rate. " +
+    "Note: import_invoice_from_file auto-fetches this internally — you only " +
+    "need to call this tool explicitly when displaying the rate to the user " +
+    "(e.g. 'Bugünkü TCMB kuru kaç?').",
+  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  handler: async () => {
+    const port = process.env.PORT || "5000";
+    const r = await fetch(`http://127.0.0.1:${port}/api/usdtl-rate`);
+    if (!r.ok) {
+      throw new McpToolError(`TCMB rate fetch failed (HTTP ${r.status})`);
+    }
+    const data = (await r.json()) as { rate: number; source: string; date: string | null; fetchedAt: number };
+    return {
+      data,
+      meta: { summary: `TCMB USD/TRY ForexSelling = ${data.rate} (date: ${data.date ?? "today"})` },
+    };
+  },
+});
