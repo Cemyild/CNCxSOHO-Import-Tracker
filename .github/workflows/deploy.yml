@@ -12,29 +12,125 @@ jobs:
     steps:
       - name: SSH and Deploy
         uses: appleboy/ssh-action@master
+        env:
+          MCP_BEARER_TOKEN: ${{ secrets.MCP_BEARER_TOKEN }}
+          MCP_AGENT_ID: ${{ secrets.MCP_AGENT_ID }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
+          envs: MCP_BEARER_TOKEN,MCP_AGENT_ID
           script: |
-            # 1. Navigate to the project directory
+            set -e
             cd /root/CNCxSOHO-Import-Tracker
 
-            # 2. Checkout the branch that triggered this workflow
-            # ${{ github.ref_name }} will be 'main' or 'cem'
+            echo "[deploy] === 1. Code update ==="
             git checkout ${{ github.ref_name }}
-
-            # 3. Pull the latest changes for this branch
             git pull origin ${{ github.ref_name }}
 
-            # 4. Install new dependencies
+            echo "[deploy] === 2. Install + build ==="
             npm install
-
-            # 5. Rebuild the application
             npm run build
 
-            # 6. Restart the application
-            # We use 'pm2 restart all' assuming you have started the app with pm2.
-            # If not, you might need to start it first manually on the VPS.
-            pm2 restart all || pm2 start dist/index.js --name "soho-app"
+            echo "[deploy] === 3. MCP env vars (idempotent) ==="
+            if [ -n "$MCP_BEARER_TOKEN" ] && ! grep -q '^MCP_BEARER_TOKEN=' .env; then
+              printf "\n# MCP server - auto-injected by deploy workflow\nMCP_BEARER_TOKEN=%s\nMCP_AGENT_ID=%s\nMCP_AGENT_USER_ID=\n" "$MCP_BEARER_TOKEN" "${MCP_AGENT_ID:-cowork}" >> .env
+              echo "[deploy] MCP env vars added to .env"
+            elif grep -q '^MCP_BEARER_TOKEN=' .env; then
+              echo "[deploy] MCP_BEARER_TOKEN already in .env, leaving as-is"
+            else
+              echo "[deploy] WARNING: MCP_BEARER_TOKEN secret not set in GitHub. Add it via Settings -> Secrets and re-run the workflow."
+            fi
+
+            echo "[deploy] === 4. Apply DB DDL for agent_audit_log (idempotent) ==="
+            DDL_FILE="db/manual-ddl/000_agent_audit_log_indexes.sql"
+            if [ -f "$DDL_FILE" ]; then
+              if command -v psql >/dev/null 2>&1; then
+                DB_URL=$(grep '^DATABASE_URL=' .env | head -1 | cut -d= -f2-)
+                if [ -n "$DB_URL" ]; then
+                  psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$DDL_FILE" && echo "[deploy] DDL applied" || echo "[deploy] WARN: DDL apply non-zero exit (may be already applied)"
+                else
+                  echo "[deploy] WARN: DATABASE_URL not found in .env, skipping DDL"
+                fi
+              else
+                echo "[deploy] WARN: psql not installed on VPS - install with: apt install postgresql-client"
+              fi
+            fi
+
+            echo "[deploy] === 5. nginx /mcp location (idempotent) ==="
+            NGINX_CONF=""
+            for candidate in /etc/nginx/sites-available/cncsohoimportmanager.com /etc/nginx/sites-enabled/cncsohoimportmanager.com /etc/nginx/sites-available/default /etc/nginx/conf.d/cncsohoimportmanager.com.conf; do
+              if [ -f "$candidate" ]; then
+                NGINX_CONF="$candidate"
+                break
+              fi
+            done
+
+            SNIPPET_FILE="nginx/cncsoho.mcp.conf.snippet"
+            if [ -z "$NGINX_CONF" ]; then
+              echo "[deploy] WARN: could not find nginx config for cncsohoimportmanager.com - skipping /mcp injection"
+            elif [ ! -f "$SNIPPET_FILE" ]; then
+              echo "[deploy] WARN: snippet file $SNIPPET_FILE missing - skipping"
+            elif grep -q 'location /mcp' "$NGINX_CONF"; then
+              echo "[deploy] nginx /mcp already configured in $NGINX_CONF"
+            else
+              echo "[deploy] Injecting /mcp into $NGINX_CONF (backup at $NGINX_CONF.bak)"
+              cp "$NGINX_CONF" "$NGINX_CONF.bak"
+              # Insert snippet content right after the FIRST `server {` line that is followed by `listen 443` or `listen .* ssl`.
+              # Strategy: find the line number of the LAST `}` before the first `listen 443/ssl` doesn't help; easier:
+              # Insert after the first `server {` line. If multiple server blocks exist (HTTP+HTTPS), the snippet ends up in the FIRST one, which is usually the HTTP redirect block - that still works but isn't optimal. Manual review recommended for split configs.
+              SERVER_LINE=$(grep -n '^[[:space:]]*server[[:space:]]*{' "$NGINX_CONF.bak" | head -1 | cut -d: -f1)
+              if [ -z "$SERVER_LINE" ]; then
+                echo "[deploy] WARN: no 'server {' block found in $NGINX_CONF - skipping injection"
+              else
+                # Try to find the HTTPS server block (the one with 'listen 443' or 'ssl' after it)
+                HTTPS_LINE=""
+                for line in $(grep -n '^[[:space:]]*server[[:space:]]*{' "$NGINX_CONF.bak" | cut -d: -f1); do
+                  # Look at next 10 lines for a listen 443 or ssl
+                  if sed -n "$line,$((line+10))p" "$NGINX_CONF.bak" | grep -qE 'listen[[:space:]]+(443|.*ssl)'; then
+                    HTTPS_LINE=$line
+                    break
+                  fi
+                done
+                TARGET_LINE=${HTTPS_LINE:-$SERVER_LINE}
+                echo "[deploy] Inserting snippet after line $TARGET_LINE of $NGINX_CONF"
+                # head up to and including TARGET_LINE, then snippet, then the rest
+                {
+                  head -n "$TARGET_LINE" "$NGINX_CONF.bak"
+                  cat "$SNIPPET_FILE"
+                  tail -n +$((TARGET_LINE + 1)) "$NGINX_CONF.bak"
+                } > /tmp/nginx-new.conf
+
+                if [ -s /tmp/nginx-new.conf ]; then
+                  cp /tmp/nginx-new.conf "$NGINX_CONF"
+                  if nginx -t 2>&1; then
+                    nginx -s reload
+                    echo "[deploy] nginx /mcp injected and reloaded"
+                  else
+                    echo "[deploy] WARN: nginx -t failed after injection, restoring backup"
+                    cp "$NGINX_CONF.bak" "$NGINX_CONF"
+                  fi
+                else
+                  echo "[deploy] WARN: produced empty config, keeping original"
+                fi
+              fi
+            fi
+
+            echo "[deploy] === 6. PM2 reload (with --update-env) ==="
+            if pm2 list 2>&1 | grep -q "CNCxSOHO"; then
+              pm2 reload ecosystem.config.cjs --update-env
+            else
+              pm2 start ecosystem.config.cjs
+            fi
+
+            echo "[deploy] === 7. Health check ==="
+            sleep 3
+            if curl -sf http://127.0.0.1:5000/mcp/health > /dev/null; then
+              echo "[deploy] OK /mcp/health"
+            else
+              echo "[deploy] WARN: /mcp/health failed - check PM2 logs"
+              pm2 logs CNCxSOHO --lines 30 --nostream || true
+            fi
+
+            echo "[deploy] === DONE ==="
