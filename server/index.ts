@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
+import { mcpRouter } from "./mcp/index";
 import { setupVite, serveStatic, log } from "./vite";
 import fs from "fs";
 import path from "path";
@@ -31,6 +32,10 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+
+// MCP server has its own bearer-token auth; mount BEFORE session middleware
+// so MCP requests never touch the session store.
+app.use("/mcp", mcpRouter);
 
 // Session configuration with PostgreSQL store
 const PgSession = connectPgSimple(session);
