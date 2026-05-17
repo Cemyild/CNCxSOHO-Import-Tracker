@@ -603,15 +603,22 @@ registerTool({
   name: "import_invoice_from_file",
   tier: "write",
   description:
-    "One-shot tax-calc pipeline: takes a base64 PDF or Excel invoice file and " +
-    "delegates to the app's existing services (extractFromPdf/Excel, products " +
-    "lookup with HS-code fallback, tax-calculation-service, the React UI's " +
-    "create-procedure logic). Cowork's role is just to transport the file in. " +
-    "Either provide procedure_reference (existing procedure) OR auto_reference_prefix " +
-    "(e.g. 'CNCALO') and the tool will compute the next sequential reference and " +
-    "auto-create the procedure at the end. Insurance auto-set to 0.2% if omitted. " +
-    "TCMB currency_rate is NOT auto-fetched — Cowork should web-search today's USD/TRY " +
-    "rate and pass it before calling, otherwise TL totals will be 0.",
+    "One-shot tax-calc pipeline. Takes a base64 PDF or Excel invoice file. " +
+    "Delegates to the app's existing services: extractFromPdf/Excel, products " +
+    "lookup with HS-code suggestion fallback, tax-calculation-service, the React " +
+    "UI's create-procedure logic. Cowork's role is just to transport the file in.\n\n" +
+    "REFERENCE PICKING — IMPORTANT: For a NEW invoice you MUST NOT make up a " +
+    "reference yourself or read it from procedures/tax_calculations listings. " +
+    "Pass auto_reference_prefix='CNCALO' (or CNCAMIRI / CNCSOHO) and this tool " +
+    "computes the next sequential number itself by scanning BOTH procedures.reference " +
+    "AND tax_calculations.reference, taking max(numeric_suffix) + 1. " +
+    "Only pass procedure_reference if the user explicitly named an existing one. " +
+    "Never invent a format like 'TR00026' or similar.\n\n" +
+    "Insurance auto-set to 0.2% of invoice total if insurance_cost omitted " +
+    "(CNCxSOHO standard sigorta rule).\n\n" +
+    "TCMB currency_rate is NOT auto-fetched — you should web-search today's " +
+    "USD/TRY rate (e.g. tcmb.gov.tr or kur.doviz.com) and pass it before calling, " +
+    "otherwise TL totals will be 0.",
   inputSchema: {
     type: "object",
     properties: {
