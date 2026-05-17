@@ -17,7 +17,7 @@ import { extractFromPdf, extractFromExcel } from "../../document-extraction";
 import { McpToolError } from "../errors";
 import { resolveAgentUserId } from "../audit-attribution";
 import { rawDb } from "../../db";
-import { getFile } from "../../object-storage";
+import { getFile, createPresignedUploadUrl } from "../../object-storage";
 
 registerTool({
   name: "read_taxes",
@@ -1067,6 +1067,63 @@ registerTool({
     return {
       data,
       meta: { summary: `TCMB USD/TRY ForexSelling = ${data.rate} (date: ${data.date ?? "today"})` },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// prepare_invoice_upload — returns a short-lived presigned S3 PUT URL plus
+// the resulting s3_key. Cowork (or any MCP client) calls this tool first,
+// PUTs the file content to the returned URL via bash curl (no auth header
+// needed — the URL itself is signed), then calls import_invoice_from_file
+// with the s3_key.
+//
+// Solves the chicken-and-egg of: "Cowork is authenticated to MCP but not
+// to /mcp/upload's bash-side curl because it can't read its own bearer
+// token out to bash."
+// ---------------------------------------------------------------------------
+registerTool({
+  name: "prepare_invoice_upload",
+  tier: "write",
+  description:
+    "Get a 15-minute presigned S3 PUT URL for uploading an invoice file. " +
+    "Workflow:\n" +
+    "  1. Call this tool with the filename + content_type.\n" +
+    "  2. From the response, take `presigned_put_url` and `s3_key`.\n" +
+    "  3. Bash: curl -X PUT --data-binary @<file path> '<presigned_put_url>' " +
+    "-H 'Content-Type: <same content_type>'\n" +
+    "  4. Then call import_invoice_from_file with s3_key set to the returned value.\n" +
+    "No bearer token needed on the PUT — the URL is signed. " +
+    "Use this whenever a user attaches an invoice file (Excel or PDF) and you need " +
+    "to feed it to import_invoice_from_file. This is the SUPPORTED path for any file " +
+    "larger than what fits in a tool argument.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      filename: {
+        type: "string",
+        description: "Original filename including extension, e.g. 'TR00026.xlsx' or 'invoice.pdf'. Used only to produce a recognizable s3_key — does not affect the procedure reference.",
+      },
+      content_type: {
+        type: "string",
+        description: "MIME type of the file. Common values: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' for .xlsx, 'application/pdf' for .pdf, 'application/vnd.ms-excel' for .xls.",
+      },
+    },
+    required: ["filename", "content_type"],
+    additionalProperties: false,
+  },
+  handler: async (args: any) => {
+    const result = await createPresignedUploadUrl(args.filename, args.content_type);
+    return {
+      data: {
+        ...result,
+        next_step:
+          `Now run on your sandbox: ` +
+          `curl -X PUT --data-binary @<file path> '${result.presigned_put_url}' ` +
+          `-H 'Content-Type: ${args.content_type}'  ` +
+          `(no auth header needed). On success (HTTP 200) call import_invoice_from_file with s3_key='${result.s3_key}'.`,
+      },
+      meta: { summary: `Presigned PUT URL ready for ${args.filename} (s3_key=${result.s3_key}, TTL ${result.expires_in_seconds}s)` },
     };
   },
 });

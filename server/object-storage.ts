@@ -238,6 +238,30 @@ export async function deleteFile(objectKey: string): Promise<boolean> {
   }
 }
 
+// Generate a short-lived presigned S3 PUT URL for direct client uploads.
+// Used by Cowork (which can't pass its MCP bearer token through to bash curl):
+// MCP tool calls createPresignedUploadUrl() → returns a signed URL → Cowork
+// PUTs file content to that URL (no auth header needed) → file lands in S3
+// under the returned s3_key → Cowork passes s3_key to import_invoice_from_file.
+export async function createPresignedUploadUrl(
+  filename: string,
+  mimeType: string,
+  ttlSeconds: number = 900,
+): Promise<{ presigned_put_url: string; s3_key: string; expires_in_seconds: number }> {
+  if (!s3Client || !S3_BUCKET) {
+    throw new Error("S3 not configured; presigned upload requires S3 env vars.");
+  }
+  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const s3_key = `${BUCKET_PREFIX}mcp-uploads/${Date.now()}-${safeName}`;
+  const command = new PutObjectCommand({
+    Bucket: S3_BUCKET,
+    Key: s3_key,
+    ContentType: mimeType,
+  });
+  const presigned_put_url = await getSignedUrl(s3Client, command, { expiresIn: ttlSeconds });
+  return { presigned_put_url, s3_key, expires_in_seconds: ttlSeconds };
+}
+
 // Create a URL for accessing a file directly
 export async function createSignedUrl(objectKey: string): Promise<string> {
   // Check if we can generate a real signed URL for S3
