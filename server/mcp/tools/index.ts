@@ -19,4 +19,6 @@ export async function registerAllTools(): Promise<void> {
   await import("./ai");
   // Destructive tools (Phase 6.1) — default dry_run:true
   await import("./destructive");
+  // Export tools — Excel + Adv. Taxletter PDF
+  await import("./exports");
 }

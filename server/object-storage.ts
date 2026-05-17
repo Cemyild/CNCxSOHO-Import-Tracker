@@ -238,6 +238,24 @@ export async function deleteFile(objectKey: string): Promise<boolean> {
   }
 }
 
+// Generate a short-lived presigned S3 GET URL for direct client downloads.
+// Used by MCP export tools so Cowork can attach exported files to email
+// replies without needing the server's bearer token.
+export async function createPresignedDownloadUrl(
+  objectKey: string,
+  ttlSeconds: number = 3600,
+): Promise<{ presigned_get_url: string; expires_in_seconds: number }> {
+  if (!s3Client || !S3_BUCKET) {
+    throw new Error("S3 not configured; presigned download requires S3 env vars.");
+  }
+  const command = new GetObjectCommand({
+    Bucket: S3_BUCKET,
+    Key: objectKey,
+  });
+  const presigned_get_url = await getSignedUrl(s3Client, command, { expiresIn: ttlSeconds });
+  return { presigned_get_url, expires_in_seconds: ttlSeconds };
+}
+
 // Generate a short-lived presigned S3 PUT URL for direct client uploads.
 // Used by Cowork (which can't pass its MCP bearer token through to bash curl):
 // MCP tool calls createPresignedUploadUrl() → returns a signed URL → Cowork
