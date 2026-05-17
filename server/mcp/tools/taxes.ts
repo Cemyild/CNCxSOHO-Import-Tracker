@@ -8,6 +8,7 @@ import {
   taxCalculationItems,
   hsCodes,
   procedures as proceduresTable,
+  products as productsTable,
 } from "@shared/schema";
 import { eq, inArray } from "drizzle-orm";
 import { calculateItemTax, type AtrContext } from "../../tax-calculation-service";
@@ -381,12 +382,93 @@ registerTool({
           calculation: calc,
           item_count: insertedItems.length,
           items: insertedItems.map(i => ({ id: i.id, style: i.style, line_number: i.line_number })),
-          next_step: `Pass tax_calculation_id=${calc.id} (and procedure_reference='${args.procedure_reference}') to write_calculate_tax to compute customs/VAT/KKDF.`,
+          next_step: `Pass tax_calculation_id=${calc.id} to write_match_invoice_items to look up tr_hs_code from the products table, THEN to write_calculate_tax.`,
         },
         meta: {
           affectedTable: "tax_calculations",
           affectedIds: [calc.id, ...insertedItems.map(i => i.id)],
           summary: `Saved invoice for ${args.procedure_reference}: ${insertedItems.length} items, total ${totalValue.toFixed(2)}, ${totalQuantity} pcs`,
+        },
+      };
+    });
+  },
+});
+
+// ---------------------------------------------------------------------------
+// write_match_invoice_items — for each tax_calculation_item, look up the
+// products table by style and copy product.tr_hs_code onto the item. Mirrors
+// the React UI's per-item /api/tax-calculation/items/:id/match endpoint, but
+// in batch and inside a transaction.
+// ---------------------------------------------------------------------------
+
+registerTool({
+  name: "write_match_invoice_items",
+  tier: "write",
+  description:
+    "Match every item in a tax_calculations row against the products table by style, filling tr_hs_code and product_id. Required before write_calculate_tax because customs rate lookup uses tr_hs_code (not the US hts_code that PDFs typically contain). Reports per-style match success/miss.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      tax_calculation_id: { type: "integer" },
+      overwrite_existing: { type: "boolean", default: false, description: "If true, replace any tr_hs_code already on the item. If false (default), only fill missing values." },
+    },
+    required: ["tax_calculation_id"],
+    additionalProperties: false,
+  },
+  handler: async (args: any) => {
+    return await db.transaction(async (tx) => {
+      // 1. Load items.
+      const items = await tx.select().from(taxCalculationItems).where(eq(taxCalculationItems.tax_calculation_id, args.tax_calculation_id));
+      if (items.length === 0) throw new McpToolError(`No items found for tax_calculation_id ${args.tax_calculation_id}`);
+
+      // 2. Look up products in one query.
+      const styles = Array.from(new Set(items.map(i => i.style).filter(Boolean))) as string[];
+      const productRows = styles.length
+        ? await tx.select().from(productsTable).where(inArray(productsTable.style, styles))
+        : [];
+      const productByStyle = new Map<string, any>(productRows.map(p => [p.style, p]));
+
+      // 3. Update items where appropriate.
+      let matched = 0;
+      let skipped = 0;
+      const misses: { style: string; reason: string }[] = [];
+
+      for (const item of items as any[]) {
+        const product = productByStyle.get(item.style);
+        if (!product) {
+          misses.push({ style: item.style, reason: "no products row with this style" });
+          continue;
+        }
+        const trCode = product.tr_hs_code ?? null;
+        if (!trCode) {
+          misses.push({ style: item.style, reason: "products row exists but tr_hs_code is empty" });
+          continue;
+        }
+        const shouldUpdate = args.overwrite_existing || !item.tr_hs_code;
+        if (!shouldUpdate) {
+          skipped++;
+          continue;
+        }
+        await tx
+          .update(taxCalculationItems)
+          .set({ tr_hs_code: trCode, product_id: product.id })
+          .where(eq(taxCalculationItems.id, item.id));
+        matched++;
+      }
+
+      return {
+        data: {
+          total_items: items.length,
+          matched,
+          skipped_existing: skipped,
+          unmatched_count: misses.length,
+          unmatched_sample: misses.slice(0, 10),
+          ready_for_calc: misses.length === 0,
+        },
+        meta: {
+          affectedTable: "tax_calculation_items",
+          affectedIds: items.filter((i: any) => productByStyle.get(i.style)?.tr_hs_code && (args.overwrite_existing || !i.tr_hs_code)).map((i: any) => i.id),
+          summary: `Matched ${matched}/${items.length} items (skipped ${skipped} already-set, ${misses.length} unmatched).`,
         },
       };
     });
