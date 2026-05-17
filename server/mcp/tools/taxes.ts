@@ -607,13 +607,24 @@ registerTool({
     "Delegates to the app's existing services: extractFromPdf/Excel, products " +
     "lookup with HS-code suggestion fallback, tax-calculation-service, the React " +
     "UI's create-procedure logic. Cowork's role is just to transport the file in.\n\n" +
-    "REFERENCE PICKING — IMPORTANT: For a NEW invoice you MUST NOT make up a " +
-    "reference yourself or read it from procedures/tax_calculations listings. " +
-    "Pass auto_reference_prefix='CNCALO' (or CNCAMIRI / CNCSOHO) and this tool " +
-    "computes the next sequential number itself by scanning BOTH procedures.reference " +
-    "AND tax_calculations.reference, taking max(numeric_suffix) + 1. " +
-    "Only pass procedure_reference if the user explicitly named an existing one. " +
-    "Never invent a format like 'TR00026' or similar.\n\n" +
+    "REFERENCE PICKING — IMPORTANT: CNCxSOHO procedure references are ALWAYS " +
+    "in the format 'CNC<COMPANY>-<NUMBER>' (CNCALO-77, CNCAMIRI-21, CNCSOHO-50). " +
+    "For a NEW invoice you MUST:\n" +
+    "  • Pass auto_reference_prefix='CNCALO' / 'CNCAMIRI' / 'CNCSOHO' based on " +
+    "the shipper or user's words ('ALO Yoga' → CNCALO, 'AMIRI'/'Atelier' → CNCAMIRI, " +
+    "'SOHO' → CNCSOHO). The tool then scans BOTH procedures.reference AND " +
+    "tax_calculations.reference and assigns the next sequential number.\n" +
+    "  • DO NOT take a reference from the Excel/PDF filename — filenames are " +
+    "usually the supplier's own internal invoice numbers (TR00026, HK570957, " +
+    "INV-2024-001 etc.), NOT the procedure reference. The supplier's invoice no " +
+    "will be auto-extracted from the file content and stored in invoice_no " +
+    "(separately from the procedure reference).\n" +
+    "  • DO NOT pick from procedures listings — procedures may be missing " +
+    "some numbers (e.g. CNCALO-74, 75 may exist in tax_calculations but not " +
+    "yet in procedures because they haven't been promoted yet). Only the tool's " +
+    "internal scan-both-tables logic gives the correct next number.\n" +
+    "  • Only pass procedure_reference if the user explicitly names an existing " +
+    "CNC...-NN reference.\n\n" +
     "Insurance auto-set to 0.2% of invoice total if insurance_cost omitted " +
     "(CNCxSOHO standard sigorta rule).\n\n" +
     "TCMB currency_rate is NOT auto-fetched — you should web-search today's " +
