@@ -34,13 +34,27 @@ export function mcpAuth(req: Request, res: Response, next: NextFunction): void {
     res.status(503).json({ error: "MCP server not configured: MCP_BEARER_TOKEN missing" });
     return;
   }
+
+  // Accept the token from EITHER `Authorization: Bearer <token>` header (preferred,
+  // used by API consumers and by clients that support custom auth headers) OR a
+  // `?token=<token>` query-string parameter (used by Claude Desktop's Cowork
+  // connector form, which currently only exposes OAuth fields in the UI and has
+  // no built-in slot for a static bearer token).
+  let providedRaw: string | null = null;
   const header = req.header("authorization") ?? "";
   const m = /^Bearer (.+)$/.exec(header);
-  if (!m) {
-    res.status(401).json({ error: "Missing or malformed Authorization header" });
+  if (m) {
+    providedRaw = m[1];
+  } else if (typeof req.query.token === "string" && req.query.token.length > 0) {
+    providedRaw = req.query.token;
+  }
+
+  if (!providedRaw) {
+    res.status(401).json({ error: "Missing token: send Authorization: Bearer <token> header OR ?token=<token> query param" });
     return;
   }
-  const provided = Buffer.from(m[1], "utf8");
+
+  const provided = Buffer.from(providedRaw, "utf8");
   if (provided.length !== EXPECTED_BUF.length) {
     res.status(401).json({ error: "Invalid token" });
     return;
