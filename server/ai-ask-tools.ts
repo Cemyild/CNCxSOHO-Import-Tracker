@@ -43,7 +43,8 @@ export const TOOL_SCHEMAS = [
           description: 'Which date column to filter on. Default: arrival_date.',
         },
         shipper_contains: { type: 'string', description: 'Case-insensitive substring match on shipper name.' },
-        reference_prefix: { type: 'string', description: 'e.g. "CNCALO" or "CNCSOHO".' },
+        reference_prefix: { type: 'string', description: 'Match procedure references starting with this (e.g. "CNCALO" → all ALO procedures).' },
+        reference_contains: { type: 'string', description: 'Case-insensitive substring match anywhere in the procedure reference.' },
         shipment_status: { type: 'string' },
         payment_status: { type: 'string' },
         document_status: { type: 'string' },
@@ -66,7 +67,8 @@ export const TOOL_SCHEMAS = [
         end_date: DATE,
         date_field: { type: 'string', enum: ['invoice_date', 'arrival_date', 'import_dec_date'] },
         shipper_contains: { type: 'string' },
-        reference_prefix: { type: 'string' },
+        reference_prefix: { type: 'string', description: 'Match procedure references starting with this prefix.' },
+        reference_contains: { type: 'string', description: 'Case-insensitive substring match anywhere in the procedure reference.' },
         group_by: { type: 'string', enum: ['shipper', 'month', 'year'] },
         list_limit: { type: 'integer', description: 'If set, also return up to N per-procedure tax rows (max 200).' },
       },
@@ -91,7 +93,8 @@ export const TOOL_SCHEMAS = [
                  'transportation','international_transportation','tareks_fee','customs_inspection','azo_test','other'],
         },
         issuer_contains: { type: 'string', description: 'Vendor name substring. Matched case-insensitively against the issuer column ONLY (not notes). If 0 rows match, do NOT silently retry without this filter — report 0 to the user, optionally call group_by:"issuer" to show what issuer values exist.' },
-        reference_prefix: { type: 'string' },
+        reference_prefix: { type: 'string', description: 'Match procedure references starting with this prefix.' },
+        reference_contains: { type: 'string', description: 'Case-insensitive substring match anywhere in the procedure reference.' },
         currency: { type: 'string', description: 'Filter to a single currency (e.g. TL, USD, EUR). Recommended whenever you report a total.' },
         include_service_invoices: { type: 'boolean', description: 'Also include CNC service-invoice totals. Default false.' },
         group_by: { type: 'string', enum: ['category', 'issuer', 'month', 'year', 'currency'] },
@@ -112,7 +115,8 @@ export const TOOL_SCHEMAS = [
         start_date: DATE,
         end_date: DATE,
         payment_type: { type: 'string', enum: ['advance', 'balance'] },
-        reference_prefix: { type: 'string' },
+        reference_prefix: { type: 'string', description: 'Match procedure references starting with this prefix.' },
+        reference_contains: { type: 'string', description: 'Case-insensitive substring match anywhere in the procedure reference.' },
         group_by: { type: 'string', enum: ['type', 'month', 'year'] },
         list_limit: { type: 'integer', description: 'If set, return up to N payment rows (max 200) with date, amount, type, procedure reference, notes.' },
       },
@@ -172,7 +176,8 @@ export const TOOL_SCHEMAS = [
         end_date: DATE,
         date_field: { type: 'string', enum: ['invoice_date', 'arrival_date', 'import_dec_date', 'invoiceDate', 'paymentDate'] },
         shipper_contains: { type: 'string' },
-        reference_prefix: { type: 'string' },
+        reference_prefix: { type: 'string', description: 'Match procedure references starting with this prefix.' },
+        reference_contains: { type: 'string', description: 'Case-insensitive substring match anywhere in the procedure reference.' },
       },
     },
   },
@@ -269,6 +274,7 @@ export async function runQueryProcedures(input: any): Promise<any> {
     ...dateBetweenSql(dateField, input.start_date, input.end_date),
     input.shipper_contains ? ilike(procedures.shipper, `%${input.shipper_contains}%`) : undefined,
     input.reference_prefix ? ilike(procedures.reference, `${input.reference_prefix}%`) : undefined,
+    input.reference_contains ? ilike(procedures.reference, `%${input.reference_contains}%`) : undefined,
     input.shipment_status ? eq((procedures as any).shipment_status, input.shipment_status) : undefined,
     input.payment_status ? eq((procedures as any).payment_status, input.payment_status) : undefined,
     input.document_status ? eq((procedures as any).document_status, input.document_status) : undefined,
@@ -352,6 +358,7 @@ export async function runQueryTaxes(input: any): Promise<any> {
     ...dateBetweenSql(procDate, input.start_date, input.end_date),
     input.shipper_contains ? ilike(procedures.shipper, `%${input.shipper_contains}%`) : undefined,
     input.reference_prefix ? ilike(procedures.reference, `${input.reference_prefix}%`) : undefined,
+    input.reference_contains ? ilike(procedures.reference, `%${input.reference_contains}%`) : undefined,
   );
 
   const aggRow = await db
@@ -450,6 +457,7 @@ export async function runQueryExpenses(input: any): Promise<any> {
     input.category ? eq(importExpenses.category, input.category as any) : undefined,
     input.issuer_contains ? ilike((importExpenses as any).issuer, `%${input.issuer_contains}%`) : undefined,
     input.reference_prefix ? ilike((importExpenses as any).procedureReference, `${input.reference_prefix}%`) : undefined,
+    input.reference_contains ? ilike((importExpenses as any).procedureReference, `%${input.reference_contains}%`) : undefined,
     input.currency ? eq((importExpenses as any).currency, input.currency) : undefined,
   );
 
@@ -483,6 +491,7 @@ export async function runQueryExpenses(input: any): Promise<any> {
     const svcWhere = and(
       ...dateBetweenSql(svcDateField, input.start_date, input.end_date),
       input.reference_prefix ? ilike((importServiceInvoices as any).procedureReference, `${input.reference_prefix}%`) : undefined,
+      input.reference_contains ? ilike((importServiceInvoices as any).procedureReference, `%${input.reference_contains}%`) : undefined,
       input.currency ? eq((importServiceInvoices as any).currency, input.currency) : undefined,
     );
     const svcRow = await db.select({
@@ -546,6 +555,7 @@ export async function runQueryPayments(input: any): Promise<any> {
     ...dateBetweenSql(payDateField, input.start_date, input.end_date),
     input.payment_type ? eq((payments as any).paymentType, input.payment_type as any) : undefined,
     input.reference_prefix ? ilike((payments as any).procedureReference, `${input.reference_prefix}%`) : undefined,
+    input.reference_contains ? ilike((payments as any).procedureReference, `%${input.reference_contains}%`) : undefined,
   );
 
   const aggRow = await db.select({
@@ -560,6 +570,7 @@ export async function runQueryPayments(input: any): Promise<any> {
   }).from(paymentDistributions).where(and(
     input.payment_type ? eq((paymentDistributions as any).paymentType, input.payment_type as any) : undefined,
     input.reference_prefix ? ilike((paymentDistributions as any).procedureReference, `${input.reference_prefix}%`) : undefined,
+    input.reference_contains ? ilike((paymentDistributions as any).procedureReference, `%${input.reference_contains}%`) : undefined,
   ));
 
   const result: any = {
@@ -650,6 +661,7 @@ export async function runQueryTimeSeries(input: any): Promise<any> {
       ...dateBetweenSql(dateField, start_date, end_date),
       input.shipper_contains ? ilike(procedures.shipper, `%${input.shipper_contains}%`) : undefined,
       input.reference_prefix ? ilike(procedures.reference, `${input.reference_prefix}%`) : undefined,
+    input.reference_contains ? ilike(procedures.reference, `%${input.reference_contains}%`) : undefined,
     );
     const valueExpr =
       metric === 'count'
@@ -668,6 +680,7 @@ export async function runQueryTimeSeries(input: any): Promise<any> {
       ...dateBetweenSql(dateField, start_date, end_date),
       input.shipper_contains ? ilike(procedures.shipper, `%${input.shipper_contains}%`) : undefined,
       input.reference_prefix ? ilike(procedures.reference, `${input.reference_prefix}%`) : undefined,
+    input.reference_contains ? ilike(procedures.reference, `%${input.reference_contains}%`) : undefined,
     );
     const valueCol =
       metric === 'customs_tax' ? (taxes as any).customsTax
@@ -691,6 +704,7 @@ export async function runQueryTimeSeries(input: any): Promise<any> {
     const where = and(
       ...dateBetweenSql(dateField, start_date, end_date),
       input.reference_prefix ? ilike((importExpenses as any).procedureReference, `${input.reference_prefix}%`) : undefined,
+    input.reference_contains ? ilike((importExpenses as any).procedureReference, `%${input.reference_contains}%`) : undefined,
     );
     const rows = await db.select({
       period: granularityFn(dateField),
@@ -704,6 +718,7 @@ export async function runQueryTimeSeries(input: any): Promise<any> {
     const where = and(
       ...dateBetweenSql(dateField, start_date, end_date),
       input.reference_prefix ? ilike((payments as any).procedureReference, `${input.reference_prefix}%`) : undefined,
+    input.reference_contains ? ilike((payments as any).procedureReference, `%${input.reference_contains}%`) : undefined,
     );
     const rows = await db.select({
       period: granularityFn(dateField),

@@ -14,6 +14,7 @@ import {
   importServiceInvoices,
   taxes as taxesTable,
   payments as paymentsTable,
+  products as productsTable,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { McpToolError } from "../errors";
@@ -25,6 +26,7 @@ const TABLE_MAP: Record<string, { table: any; pkColumn: any; sqlName: string }> 
   import_service_invoices:  { table: importServiceInvoices, pkColumn: importServiceInvoices.id, sqlName: "import_service_invoices" },
   taxes:                    { table: taxesTable,            pkColumn: taxesTable.id,            sqlName: "taxes" },
   payments:                 { table: paymentsTable,         pkColumn: paymentsTable.id,         sqlName: "payments" },
+  products:                 { table: productsTable,         pkColumn: productsTable.id,         sqlName: "products" },
 };
 
 registerTool({
