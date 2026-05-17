@@ -12,7 +12,7 @@
 // analyzePdfWithClaude under the hood.
 import { registerTool } from "../registry";
 import { McpToolError } from "../errors";
-import { extractFromPdf } from "../../document-extraction";
+import { extractFromPdf, extractFromExcel } from "../../document-extraction";
 
 registerTool({
   name: "ai_extract_pdf",
@@ -56,6 +56,49 @@ registerTool({
       data: result,
       meta: {
         summary: `Extracted ${productCount} products from PDF${hasMeta ? " (with invoice metadata)" : ""}`,
+      },
+    };
+  },
+});
+
+// ai_extract_excel — symmetric to ai_extract_pdf but for .xlsx invoices.
+// Uses the same ExtractedProduct/InvoiceMetadata shape so downstream tools
+// (write_save_extracted_invoice etc.) accept the output unchanged.
+registerTool({
+  name: "ai_extract_excel",
+  tier: "ai",
+  description:
+    "Extract structured invoice/product data from a base64-encoded .xlsx file. " +
+    "Returns the same { products, invoiceMetadata } shape as ai_extract_pdf, " +
+    "so its output can be piped directly into write_save_extracted_invoice.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      xlsx_base64: {
+        type: "string",
+        description: "Base64-encoded .xlsx (NO data: prefix).",
+      },
+    },
+    required: ["xlsx_base64"],
+    additionalProperties: false,
+  },
+  handler: async (args: any) => {
+    let buf: Buffer;
+    try {
+      buf = Buffer.from(args.xlsx_base64, "base64");
+    } catch {
+      throw new McpToolError("xlsx_base64 is not valid base64");
+    }
+    if (buf.length === 0) {
+      throw new McpToolError("xlsx_base64 decoded to an empty buffer");
+    }
+    const result = await extractFromExcel(buf);
+    const productCount = result?.products?.length ?? 0;
+    const hasMeta = !!result?.invoiceMetadata;
+    return {
+      data: result,
+      meta: {
+        summary: `Extracted ${productCount} products from Excel${hasMeta ? " (with invoice metadata)" : ""}`,
       },
     };
   },

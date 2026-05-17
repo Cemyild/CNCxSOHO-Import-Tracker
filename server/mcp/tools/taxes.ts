@@ -12,6 +12,7 @@ import {
 } from "@shared/schema";
 import { eq, inArray } from "drizzle-orm";
 import { calculateItemTax, type AtrContext } from "../../tax-calculation-service";
+import { extractFromPdf, extractFromExcel } from "../../document-extraction";
 import { McpToolError } from "../errors";
 import { resolveAgentUserId } from "../audit-attribution";
 
@@ -276,12 +277,12 @@ registerTool({
       },
       costs: {
         type: "object",
-        description: "Header-level cost inputs (entered by user, NOT in the invoice). All optional; default 0.",
+        description: "Header-level cost inputs (entered by user, NOT in the invoice itself). All optional.",
         properties: {
-          transport_cost: { type: ["string", "number"] },
-          insurance_cost: { type: ["string", "number"] },
-          storage_cost: { type: ["string", "number"] },
-          currency_rate: { type: ["string", "number"], description: "TCMB rate at customs declaration date" },
+          transport_cost: { type: ["string", "number"], description: "Navlun bedeli (USD). Comes from the email body or user input." },
+          insurance_cost: { type: ["string", "number"], description: "Sigorta bedeli (USD). If omitted, auto-calculated as 0.2% of total invoice value (CNCxSOHO standard). Pass 0 to opt out." },
+          storage_cost: { type: ["string", "number"], description: "Antrepo/depo bedeli (USD), if any." },
+          currency_rate: { type: ["string", "number"], description: "TCMB rate at customs declaration date (USD→TL)." },
         },
         additionalProperties: false,
       },
@@ -359,8 +360,14 @@ registerTool({
       if (costs.transport_cost !== undefined && costs.transport_cost !== null && costs.transport_cost !== "") {
         headerData.transport_cost = String(parseFloat(String(costs.transport_cost)).toFixed(2));
       }
+      // Insurance auto-rule: if caller didn't specify, default to 0.2% of total_value
+      // (CNCxSOHO standard sigorta = fatura bedeli * 0.002). Caller can override by
+      // passing costs.insurance_cost explicitly OR by setting costs.insurance_cost
+      // to 0 / "0" to opt out of the default.
       if (costs.insurance_cost !== undefined && costs.insurance_cost !== null && costs.insurance_cost !== "") {
         headerData.insurance_cost = String(parseFloat(String(costs.insurance_cost)).toFixed(2));
+      } else {
+        headerData.insurance_cost = (totalValue * 0.002).toFixed(2);
       }
       if (costs.storage_cost !== undefined && costs.storage_cost !== null && costs.storage_cost !== "") {
         headerData.storage_cost = String(parseFloat(String(costs.storage_cost)).toFixed(2));
@@ -469,6 +476,248 @@ registerTool({
           affectedTable: "tax_calculation_items",
           affectedIds: items.filter((i: any) => productByStyle.get(i.style)?.tr_hs_code && (args.overwrite_existing || !i.tr_hs_code)).map((i: any) => i.id),
           summary: `Matched ${matched}/${items.length} items (skipped ${skipped} already-set, ${misses.length} unmatched).`,
+        },
+      };
+    });
+  },
+});
+
+// ---------------------------------------------------------------------------
+// import_invoice_from_file — one-shot wrapper: extract -> save -> match -> calc.
+// This is the natural Cowork entry point when a user pastes/uploads an invoice
+// file. It mirrors what the React UI's "Tax Calculation → Upload Excel/PDF →
+// Calculate" flow does end-to-end, so the LLM doesn't need to orchestrate four
+// separate tool calls.
+//
+// The caller passes EITHER pdf_base64 OR xlsx_base64 (exactly one). All other
+// header inputs are optional with CNCxSOHO defaults:
+//   - insurance_cost: auto-calculated as 0.2% of invoice total if omitted
+//   - currency_rate: omitted (left as DB default 0) if not provided — caller
+//     must provide it later or the tax calc TL totals will be 0
+//   - transport_cost: typically from the freight invoice email; pass when known
+// ---------------------------------------------------------------------------
+
+registerTool({
+  name: "import_invoice_from_file",
+  tier: "write",
+  description:
+    "One-shot tax-calc pipeline: takes a base64 PDF or Excel invoice file, " +
+    "extracts the products, saves them as a tax_calculations + items, matches " +
+    "tr_hs_code from the products table, runs tax calc, returns the totals. " +
+    "Mirrors the React UI's 'upload invoice -> calculate' button. Use this " +
+    "whenever a user attaches an invoice and wants taxes computed; only fall " +
+    "back to the individual write_* tools if this one-shot path fails or you " +
+    "need fine-grained control.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      procedure_reference: {
+        type: "string",
+        description: "Existing procedure to attach this invoice to (e.g. 'CNCALO-72').",
+      },
+      pdf_base64: { type: "string", description: "Base64 PDF (NO data: prefix). Provide either this or xlsx_base64." },
+      xlsx_base64: { type: "string", description: "Base64 .xlsx. Provide either this or pdf_base64." },
+      transport_cost: { type: ["string", "number"], description: "Navlun bedeli (USD). Usually given by the freight invoice email; pass when known." },
+      insurance_cost: { type: ["string", "number"], description: "Sigorta bedeli (USD). Omit to auto-calc as 0.2% of invoice total (CNCxSOHO standard)." },
+      storage_cost: { type: ["string", "number"], description: "Antrepo/depo bedeli (USD). Default 0." },
+      currency_rate: { type: ["string", "number"], description: "TCMB USD→TL rate at customs declaration date. If omitted, TL totals will be 0." },
+      is_atr: { type: "boolean", default: false, description: "Set true for ATR (EU/EFTA preferential origin) invoices." },
+    },
+    required: ["procedure_reference"],
+    additionalProperties: false,
+  },
+  handler: async (args: any, ctx: any) => {
+    if (!args.pdf_base64 && !args.xlsx_base64) {
+      throw new McpToolError("Either pdf_base64 or xlsx_base64 is required.");
+    }
+    if (args.pdf_base64 && args.xlsx_base64) {
+      throw new McpToolError("Pass either pdf_base64 OR xlsx_base64, not both.");
+    }
+
+    // 1. Extract
+    let extracted: any;
+    if (args.pdf_base64) {
+      const buf = Buffer.from(args.pdf_base64, "base64");
+      if (buf.length === 0) throw new McpToolError("pdf_base64 decoded to empty buffer");
+      extracted = await extractFromPdf(buf);
+    } else {
+      const buf = Buffer.from(args.xlsx_base64, "base64");
+      if (buf.length === 0) throw new McpToolError("xlsx_base64 decoded to empty buffer");
+      extracted = await extractFromExcel(buf);
+    }
+    const products = extracted?.products ?? [];
+    if (products.length === 0) throw new McpToolError("No products extracted from the file. Check that the file is a recognizable invoice.");
+
+    // 2. Save (delegate to write_save_extracted_invoice logic via direct DB write — same transaction).
+    return await db.transaction(async (tx) => {
+      const [procedure] = await tx.select().from(proceduresTable).where(eq(proceduresTable.reference, args.procedure_reference));
+      if (!procedure) throw new McpToolError(`Procedure '${args.procedure_reference}' not found`);
+
+      const [existingCalc] = await tx.select().from(taxCalculations).where(eq(taxCalculations.reference, args.procedure_reference));
+      if (existingCalc) {
+        throw new McpToolError(`tax_calculations row already exists for ${args.procedure_reference} (id=${existingCalc.id}). Delete it via destructive_delete_record(table:'tax_calculations'...) first.`);
+      }
+
+      let totalValue = 0;
+      let totalQuantity = 0;
+      const itemsToInsert = (products as any[]).map((p, idx) => {
+        const cost = parseFloat(String(p.cost));
+        const unitCount = parseInt(String(p.unit_count), 10);
+        if (!Number.isFinite(cost)) throw new McpToolError(`products[${idx}].cost invalid: ${p.cost}`);
+        if (!Number.isInteger(unitCount)) throw new McpToolError(`products[${idx}].unit_count invalid: ${p.unit_count}`);
+        const lineTotal = p.total_value !== undefined && p.total_value !== null && p.total_value !== ""
+          ? parseFloat(String(p.total_value))
+          : cost * unitCount;
+        if (!Number.isFinite(lineTotal)) throw new McpToolError(`products[${idx}].total_value invalid`);
+        totalValue += lineTotal;
+        totalQuantity += unitCount;
+        if (!p.style) throw new McpToolError(`products[${idx}].style is required`);
+        return {
+          line_number: idx + 1,
+          style: String(p.style),
+          color: p.color ?? null,
+          category: p.category ?? null,
+          description: p.description ?? null,
+          fabric_content: p.fabric_content ?? null,
+          country_of_origin: p.country_of_origin ?? null,
+          hts_code: p.hts_code ?? null,
+          tr_hs_code: p.tr_hs_code ?? null,
+          cost: cost.toFixed(2),
+          unit_count: unitCount,
+          total_value: lineTotal.toFixed(2),
+        };
+      });
+
+      const meta = extracted?.invoiceMetadata ?? {};
+      const headerData: any = {
+        reference: args.procedure_reference,
+        invoice_no: meta.invoice_no ?? null,
+        invoice_date: meta.invoice_date ?? null,
+        total_value: totalValue.toFixed(2),
+        total_quantity: totalQuantity,
+        is_prepaid: false,
+        is_atr: !!args.is_atr,
+        status: "draft",
+        procedure_id: procedure.id,
+      };
+      if (args.transport_cost !== undefined && args.transport_cost !== null && args.transport_cost !== "") {
+        headerData.transport_cost = parseFloat(String(args.transport_cost)).toFixed(2);
+      }
+      // Insurance auto-rule: 0.2% of total_value
+      if (args.insurance_cost !== undefined && args.insurance_cost !== null && args.insurance_cost !== "") {
+        headerData.insurance_cost = parseFloat(String(args.insurance_cost)).toFixed(2);
+      } else {
+        headerData.insurance_cost = (totalValue * 0.002).toFixed(2);
+      }
+      if (args.storage_cost !== undefined && args.storage_cost !== null && args.storage_cost !== "") {
+        headerData.storage_cost = parseFloat(String(args.storage_cost)).toFixed(2);
+      }
+      if (args.currency_rate !== undefined && args.currency_rate !== null && args.currency_rate !== "") {
+        headerData.currency_rate = parseFloat(String(args.currency_rate)).toFixed(4);
+      }
+
+      const [calc] = await tx.insert(taxCalculations).values(headerData).returning();
+      if (!calc) throw new McpToolError("tax_calculations insert returned no row");
+      const itemsWithFk = itemsToInsert.map(it => ({ ...it, tax_calculation_id: calc.id }));
+      const insertedItems = await tx.insert(taxCalculationItems).values(itemsWithFk).returning();
+
+      // 3. Match: look up tr_hs_code from products table by style.
+      const styles = Array.from(new Set(insertedItems.map((i: any) => i.style).filter(Boolean))) as string[];
+      const productRows = styles.length ? await tx.select().from(productsTable).where(inArray(productsTable.style, styles)) : [];
+      const productByStyle = new Map<string, any>(productRows.map(p => [p.style, p]));
+      let matched = 0;
+      const unmatched: { style: string; reason: string }[] = [];
+      for (const item of insertedItems as any[]) {
+        const product = productByStyle.get(item.style);
+        if (!product) { unmatched.push({ style: item.style, reason: "no products row" }); continue; }
+        const trCode = product.tr_hs_code ?? null;
+        if (!trCode) { unmatched.push({ style: item.style, reason: "products row has empty tr_hs_code" }); continue; }
+        await tx.update(taxCalculationItems).set({ tr_hs_code: trCode, product_id: product.id }).where(eq(taxCalculationItems.id, item.id));
+        matched++;
+      }
+
+      // 4. Calculate tax (re-fetch items with their new tr_hs_code).
+      const fullItems = await tx.select().from(taxCalculationItems).where(eq(taxCalculationItems.tax_calculation_id, calc.id));
+      const trCodesNeeded = Array.from(new Set(fullItems.map((i: any) => i.tr_hs_code).filter(Boolean))) as string[];
+      const hsRows = trCodesNeeded.length ? await tx.select().from(hsCodes).where(inArray((hsCodes as any).tr_hs_code, trCodesNeeded)) : [];
+      const hsByCode = new Map<string, any>(hsRows.map((r: any) => [r.tr_hs_code, r]));
+      const atrContext: AtrContext | undefined = (calc as any).is_atr ? { isAtr: true, atrRatesMap: new Map() } : undefined;
+
+      let totalCustoms = 0, totalAdditional = 0, totalKkdf = 0, totalVat = 0, totalUsd = 0, totalTl = 0;
+      const calcSkipped: { item_id: number; style: string; reason: string }[] = [];
+      let calcOK = 0;
+      for (const item of fullItems as any[]) {
+        if (!item.tr_hs_code) {
+          calcSkipped.push({ item_id: item.id, style: item.style, reason: "missing tr_hs_code" });
+          continue;
+        }
+        const hs = hsByCode.get(item.tr_hs_code);
+        if (!hs) {
+          calcSkipped.push({ item_id: item.id, style: item.style, reason: `tr_hs_code ${item.tr_hs_code} not in hsCodes table` });
+          continue;
+        }
+        const r = await calculateItemTax(item, calc as any, hs as any, atrContext);
+        totalCustoms += r.customs_tax;
+        totalAdditional += r.additional_customs_tax;
+        totalKkdf += r.kkdf;
+        totalVat += r.vat;
+        totalUsd += r.total_tax_usd;
+        totalTl += r.total_tax_tl;
+        calcOK++;
+      }
+
+      // Upsert the aggregated taxes row.
+      const aggregate: any = {
+        procedureReference: args.procedure_reference,
+        customsTax: totalCustoms.toFixed(2),
+        additionalCustomsTax: totalAdditional.toFixed(2),
+        kkdf: totalKkdf.toFixed(2),
+        vat: totalVat.toFixed(2),
+        createdBy: await resolveAgentUserId(tx as any),
+      };
+      const [taxBefore] = await tx.select().from(taxesTable).where(eq((taxesTable as any).procedureReference, args.procedure_reference));
+      let taxesRow;
+      if (taxBefore) {
+        const [updated] = await tx.update(taxesTable).set(aggregate).where(eq(taxesTable.id, taxBefore.id)).returning();
+        taxesRow = updated;
+      } else {
+        const [inserted] = await tx.insert(taxesTable).values(aggregate).returning();
+        taxesRow = inserted;
+      }
+
+      return {
+        data: {
+          tax_calculation_id: calc.id,
+          taxes_row_id: taxesRow.id,
+          extracted_products: products.length,
+          items_inserted: insertedItems.length,
+          items_matched: matched,
+          items_unmatched: unmatched.length,
+          unmatched_sample: unmatched.slice(0, 5),
+          items_calculated: calcOK,
+          items_calc_skipped: calcSkipped.length,
+          calc_skipped_sample: calcSkipped.slice(0, 5),
+          totals_usd: {
+            customs_tax: totalCustoms.toFixed(2),
+            additional_customs_tax: totalAdditional.toFixed(2),
+            kkdf: totalKkdf.toFixed(2),
+            vat: totalVat.toFixed(2),
+            total: totalUsd.toFixed(2),
+          },
+          totals_tl: { total: totalTl.toFixed(2) },
+          insurance_cost_used: headerData.insurance_cost,
+          insurance_was_auto: args.insurance_cost === undefined || args.insurance_cost === null || args.insurance_cost === "",
+          summary_for_user:
+            `Invoice attached to ${args.procedure_reference}: ${products.length} ürün, toplam fatura ${totalValue.toFixed(2)} USD. ` +
+            `Vergi hesaplandı: ${calcOK}/${insertedItems.length} item başarılı. ` +
+            `Toplam: Gümrük ${totalCustoms.toFixed(2)} USD, KKDF ${totalKkdf.toFixed(2)} USD, KDV ${totalVat.toFixed(2)} USD. ` +
+            (totalTl > 0 ? `TL karşılığı: ${totalTl.toFixed(2)} TL.` : `(TCMB rate verilmediği için TL totals 0.)`) +
+            (unmatched.length > 0 ? ` ⚠ ${unmatched.length} style products tablosunda yok.` : ""),
+        },
+        meta: {
+          affectedTable: "tax_calculations",
+          affectedIds: [calc.id, taxesRow.id, ...insertedItems.map(i => i.id)],
+          summary: `import_invoice_from_file: ${args.procedure_reference}, ${calcOK}/${insertedItems.length} items calculated`,
         },
       };
     });
