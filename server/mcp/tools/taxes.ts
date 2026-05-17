@@ -222,3 +222,173 @@ registerTool({
     });
   },
 });
+
+// ---------------------------------------------------------------------------
+// write_save_extracted_invoice — bridges ai_extract_pdf output into the
+// tax_calculations + tax_calculation_items tables. After this runs, the
+// caller can invoke write_calculate_tax to compute taxes.
+// ---------------------------------------------------------------------------
+
+registerTool({
+  name: "write_save_extracted_invoice",
+  tier: "write",
+  description:
+    "Save the output of ai_extract_pdf (or ai_extract_excel) into the tax_calculations + tax_calculation_items tables for a procedure. Creates one header row and N item rows in a single transaction. Returns the new tax_calculation_id, which can then be passed to write_calculate_tax.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      procedure_reference: {
+        type: "string",
+        description: "Procedure reference (e.g. 'CNCALO-72'). Must already exist. tax_calculations.reference is UNIQUE, so this errors if an invoice is already saved.",
+      },
+      invoice_metadata: {
+        type: "object",
+        description: "From ai_extract_pdf result.invoiceMetadata.",
+        properties: {
+          invoice_no: { type: "string" },
+          invoice_date: { type: "string", description: "YYYY-MM-DD" },
+          shipper: { type: "string", description: "Informational only — not stored on tax_calculations" },
+        },
+        additionalProperties: true,
+      },
+      products: {
+        type: "array",
+        description: "From ai_extract_pdf result.products. Each item becomes one tax_calculation_items row.",
+        items: {
+          type: "object",
+          properties: {
+            style: { type: "string" },
+            color: { type: "string" },
+            category: { type: "string" },
+            description: { type: "string" },
+            fabric_content: { type: "string" },
+            country_of_origin: { type: "string" },
+            hts_code: { type: "string" },
+            tr_hs_code: { type: "string" },
+            cost: { type: ["string", "number"] },
+            unit_count: { type: ["string", "integer"] },
+            total_value: { type: ["string", "number"] },
+          },
+          required: ["style", "cost", "unit_count"],
+          additionalProperties: true,
+        },
+      },
+      costs: {
+        type: "object",
+        description: "Header-level cost inputs (entered by user, NOT in the invoice). All optional; default 0.",
+        properties: {
+          transport_cost: { type: ["string", "number"] },
+          insurance_cost: { type: ["string", "number"] },
+          storage_cost: { type: ["string", "number"] },
+          currency_rate: { type: ["string", "number"], description: "TCMB rate at customs declaration date" },
+        },
+        additionalProperties: false,
+      },
+      is_prepaid: { type: "boolean", default: false },
+      is_atr: { type: "boolean", default: false, description: "Set true if this invoice qualifies for ATR (EU/EFTA preferential origin)" },
+    },
+    required: ["procedure_reference", "products"],
+    additionalProperties: false,
+  },
+  handler: async (args: any) => {
+    return await db.transaction(async (tx) => {
+      // 1. Find procedure to attach to + check reference is free.
+      const [procedure] = await tx.select().from(proceduresTable).where(eq(proceduresTable.reference, args.procedure_reference));
+      if (!procedure) throw new McpToolError(`Procedure '${args.procedure_reference}' not found`);
+
+      const [existingCalc] = await tx.select().from(taxCalculations).where(eq(taxCalculations.reference, args.procedure_reference));
+      if (existingCalc) {
+        throw new McpToolError(
+          `tax_calculations row already exists for ${args.procedure_reference} (id=${existingCalc.id}). ` +
+          `Delete it first via destructive_delete_record(table:'tax_calculations'...) or use a future update tool.`
+        );
+      }
+
+      // 2. Coerce products into the schema's expected shape.
+      const products = Array.isArray(args.products) ? args.products : [];
+      if (products.length === 0) throw new McpToolError("products[] is empty — nothing to save");
+
+      let totalValue = 0;
+      let totalQuantity = 0;
+      const itemsToInsert = products.map((p: any, idx: number) => {
+        const cost = parseFloat(String(p.cost));
+        const unitCount = parseInt(String(p.unit_count), 10);
+        if (!Number.isFinite(cost)) throw new McpToolError(`products[${idx}].cost is not a number: ${p.cost}`);
+        if (!Number.isInteger(unitCount)) throw new McpToolError(`products[${idx}].unit_count is not an integer: ${p.unit_count}`);
+        const lineTotal = p.total_value !== undefined && p.total_value !== null && p.total_value !== ""
+          ? parseFloat(String(p.total_value))
+          : cost * unitCount;
+        if (!Number.isFinite(lineTotal)) throw new McpToolError(`products[${idx}].total_value invalid`);
+
+        totalValue += lineTotal;
+        totalQuantity += unitCount;
+
+        if (!p.style) throw new McpToolError(`products[${idx}].style is required`);
+
+        return {
+          line_number: idx + 1,
+          style: String(p.style),
+          color: p.color ?? null,
+          category: p.category ?? null,
+          description: p.description ?? null,
+          fabric_content: p.fabric_content ?? null,
+          country_of_origin: p.country_of_origin ?? null,
+          hts_code: p.hts_code ?? null,
+          tr_hs_code: p.tr_hs_code ?? null,
+          cost: cost.toFixed(2),
+          unit_count: unitCount,
+          total_value: lineTotal.toFixed(2),
+        };
+      });
+
+      // 3. Header row.
+      const meta = args.invoice_metadata ?? {};
+      const costs = args.costs ?? {};
+      const headerData: any = {
+        reference: args.procedure_reference,
+        invoice_no: meta.invoice_no ?? null,
+        invoice_date: meta.invoice_date ?? null,
+        total_value: totalValue.toFixed(2),
+        total_quantity: totalQuantity,
+        is_prepaid: !!args.is_prepaid,
+        is_atr: !!args.is_atr,
+        status: "draft",
+        procedure_id: procedure.id,
+      };
+      if (costs.transport_cost !== undefined && costs.transport_cost !== null && costs.transport_cost !== "") {
+        headerData.transport_cost = String(parseFloat(String(costs.transport_cost)).toFixed(2));
+      }
+      if (costs.insurance_cost !== undefined && costs.insurance_cost !== null && costs.insurance_cost !== "") {
+        headerData.insurance_cost = String(parseFloat(String(costs.insurance_cost)).toFixed(2));
+      }
+      if (costs.storage_cost !== undefined && costs.storage_cost !== null && costs.storage_cost !== "") {
+        headerData.storage_cost = String(parseFloat(String(costs.storage_cost)).toFixed(2));
+      }
+      if (costs.currency_rate !== undefined && costs.currency_rate !== null && costs.currency_rate !== "") {
+        headerData.currency_rate = String(parseFloat(String(costs.currency_rate)).toFixed(4));
+      }
+
+      const [calc] = await tx.insert(taxCalculations).values(headerData).returning();
+      if (!calc) throw new McpToolError("tax_calculations insert returned no row");
+
+      // 4. Item rows.
+      const itemsWithFk = itemsToInsert.map(it => ({ ...it, tax_calculation_id: calc.id }));
+      const insertedItems = await tx.insert(taxCalculationItems).values(itemsWithFk).returning();
+
+      return {
+        data: {
+          tax_calculation_id: calc.id,
+          calculation: calc,
+          item_count: insertedItems.length,
+          items: insertedItems.map(i => ({ id: i.id, style: i.style, line_number: i.line_number })),
+          next_step: `Pass tax_calculation_id=${calc.id} (and procedure_reference='${args.procedure_reference}') to write_calculate_tax to compute customs/VAT/KKDF.`,
+        },
+        meta: {
+          affectedTable: "tax_calculations",
+          affectedIds: [calc.id, ...insertedItems.map(i => i.id)],
+          summary: `Saved invoice for ${args.procedure_reference}: ${insertedItems.length} items, total ${totalValue.toFixed(2)}, ${totalQuantity} pcs`,
+        },
+      };
+    });
+  },
+});
