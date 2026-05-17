@@ -621,7 +621,12 @@ registerTool({
       },
       auto_reference_prefix: {
         type: "string",
-        description: "Used when procedure_reference is not given. The tool computes the next sequential reference for this prefix (e.g. 'CNCALO' → 'CNCALO-77' if 76 is the highest). If neither is given, the tool errors.",
+        description: "Used when procedure_reference is not given. The tool computes the next sequential reference for this prefix and returns 'PREFIX-<next>'. " +
+          "Map company names to prefixes: " +
+          "'ALO' / 'Alo Yoga' / 'ALO HONG KONG LTD' / 'ALO, LLC' -> 'CNCALO'. " +
+          "'AMIRI' / 'Atelier' / 'Atelier Luxury Group' -> 'CNCAMIRI'. " +
+          "'SOHO' -> 'CNCSOHO'. " +
+          "When the user mentions a company in natural language, pick the prefix from this list directly — don't ask them to spell out 'CNC...'.",
       },
       pdf_base64: { type: "string", description: "Base64 PDF (NO data: prefix). Provide either this or xlsx_base64." },
       xlsx_base64: { type: "string", description: "Base64 .xlsx. Provide either this or pdf_base64." },
