@@ -62,47 +62,71 @@ async function getHistoricalRate(
     return { rate: cached.rate, sampleSize: cached.sampleSize, fromCache: true };
   }
 
+  // IMPORTANT: aggregate expense rows to one row per procedure FIRST in the CTE,
+  // THEN sum invoice + expense. A naive single-level JOIN double-counts the
+  // procedure's `amount` whenever it has multiple expense rows for the same
+  // category, which under-estimates the rate (rate's denominator was inflated).
   let query: string;
   let params: any[];
   if (source.kind === "expense") {
     query = `
-      SELECT
-        COUNT(DISTINCT p.reference) AS proc_count,
-        SUM(p.amount::numeric) AS total_invoice_usd,
-        SUM(
-          CASE
-            WHEN ie.currency IN ('TL','TRY') OR ie.currency IS NULL THEN ie.amount::numeric
-            WHEN ie.currency = 'USD' THEN ie.amount::numeric * COALESCE(p.usdtl_rate::numeric, 0)
-            ELSE 0
-          END
-        ) AS total_expense_tl
-      FROM procedures p
-      JOIN import_expenses ie ON ie.procedure_reference = p.reference
-      WHERE p.shipment_status = 'closed'
-        AND p.currency = 'USD'
-        AND p.amount::numeric > 0
-        AND EXTRACT(YEAR FROM p.arrival_date::date) = $1
-        AND ie.category = $2
+      WITH closed_procs AS (
+        SELECT reference, amount, usdtl_rate
+        FROM procedures
+        WHERE shipment_status = 'closed'
+          AND currency = 'USD'
+          AND amount::numeric > 0
+          AND EXTRACT(YEAR FROM arrival_date::date) = $1
+      ),
+      per_proc AS (
+        SELECT cp.reference,
+               cp.amount::numeric AS invoice_usd,
+               SUM(
+                 CASE
+                   WHEN ie.currency IN ('TL','TRY') OR ie.currency IS NULL THEN ie.amount::numeric
+                   WHEN ie.currency = 'USD' THEN ie.amount::numeric * COALESCE(cp.usdtl_rate::numeric, 0)
+                   ELSE 0
+                 END
+               ) AS expense_tl
+        FROM closed_procs cp
+        JOIN import_expenses ie ON ie.procedure_reference = cp.reference
+        WHERE ie.category = $2
+        GROUP BY cp.reference, cp.amount, cp.usdtl_rate
+      )
+      SELECT COUNT(*) AS proc_count,
+             SUM(invoice_usd) AS total_invoice_usd,
+             SUM(expense_tl) AS total_expense_tl
+      FROM per_proc
     `;
     params = [year, source.category];
   } else {
     query = `
-      SELECT
-        COUNT(DISTINCT p.reference) AS proc_count,
-        SUM(p.amount::numeric) AS total_invoice_usd,
-        SUM(
-          CASE
-            WHEN isi.currency IN ('TL','TRY') THEN isi.amount::numeric
-            WHEN isi.currency = 'USD' THEN isi.amount::numeric * COALESCE(p.usdtl_rate::numeric, 0)
-            ELSE 0
-          END
-        ) AS total_expense_tl
-      FROM procedures p
-      JOIN import_service_invoices isi ON isi.procedure_reference = p.reference
-      WHERE p.shipment_status = 'closed'
-        AND p.currency = 'USD'
-        AND p.amount::numeric > 0
-        AND EXTRACT(YEAR FROM p.arrival_date::date) = $1
+      WITH closed_procs AS (
+        SELECT reference, amount, usdtl_rate
+        FROM procedures
+        WHERE shipment_status = 'closed'
+          AND currency = 'USD'
+          AND amount::numeric > 0
+          AND EXTRACT(YEAR FROM arrival_date::date) = $1
+      ),
+      per_proc AS (
+        SELECT cp.reference,
+               cp.amount::numeric AS invoice_usd,
+               SUM(
+                 CASE
+                   WHEN isi.currency IN ('TL','TRY') THEN isi.amount::numeric
+                   WHEN isi.currency = 'USD' THEN isi.amount::numeric * COALESCE(cp.usdtl_rate::numeric, 0)
+                   ELSE 0
+                 END
+               ) AS expense_tl
+        FROM closed_procs cp
+        JOIN import_service_invoices isi ON isi.procedure_reference = cp.reference
+        GROUP BY cp.reference, cp.amount, cp.usdtl_rate
+      )
+      SELECT COUNT(*) AS proc_count,
+             SUM(invoice_usd) AS total_invoice_usd,
+             SUM(expense_tl) AS total_expense_tl
+      FROM per_proc
     `;
     params = [year];
   }
