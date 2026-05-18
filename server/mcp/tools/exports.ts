@@ -106,13 +106,12 @@ registerTool({
   tier: "ai",
   description:
     "Generate the Advance Taxletter PDF (same as the React UI's 'Adv. Taxletter' " +
-    "button modal). Auto-fills tax values (TL) and applies CNCxSOHO's standard " +
-    "expense defaults: 4 fixed (Export Registry, AWB, Bonded Warehouse, Tareks), " +
-    "Insurance auto-computed (rounded up to 500 TL), and Airport Storage / " +
-    "Transportation / Service Invoice from historical per-USD-of-invoice " +
-    "ratios across closed procedures this year. International Transportation " +
-    "(navlun) is NOT included by default — pass " +
-    "include_international_transportation:true ONLY when the user explicitly " +
+    "button modal). Auto-fills both TAXES (USD totals × rate, rounded UP to next " +
+    "5,000 TL; stamp tax fixed at 5,000 TL) and EXPENSES (4 fixed, insurance " +
+    "computed with 500 TL ceiling, 3 historical with 5,000 TL ceiling). Calls the " +
+    "app's GET /default-expenses endpoint so React UI and Cowork use identical " +
+    "rules. International Transportation (navlun) is NOT included by default — " +
+    "pass include_international_transportation:true ONLY when the user explicitly " +
     "asks for navlun on the taxletter. Returns a 1-hour presigned download URL.",
   inputSchema: {
     type: "object",
@@ -171,7 +170,11 @@ registerTool({
       );
     }
 
-    // 1. Compute taxes_tl (caller override OR per-item × rate)
+    // 1. Compute taxes_tl
+    //    Caller override path: use values as-is (no ceil).
+    //    Auto path: sum per-item × rate, then CEIL each to next 5,000 TL.
+    //    Stamp tax is FIXED at 5,000 TL (CNCxSOHO convention).
+    const ceil5k = (n: number) => (n > 0 ? Math.ceil(n / 5000) * 5000 : 0);
     let taxesTl: any;
     if (args.taxes_tl) {
       taxesTl = {
@@ -191,11 +194,11 @@ registerTool({
         va += parseFloat(it.vat ?? "0");
       }
       taxesTl = {
-        customsTax: +(cu * rate).toFixed(2),
-        additionalTax: +(ad * rate).toFixed(2),
-        kkdf: +(kk * rate).toFixed(2),
-        vat: +(va * rate).toFixed(2),
-        stampTax: 0,
+        customsTax: ceil5k(cu * rate),
+        additionalTax: ceil5k(ad * rate),
+        kkdf: ceil5k(kk * rate),
+        vat: ceil5k(va * rate),
+        stampTax: 5000,
       };
     }
 

@@ -81,12 +81,15 @@ export function AdvTaxletterModal({
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expensesList, setExpensesList] = useState<ExpenseItem[]>([]);
 
+  // Round UP to next 5,000 TL — CNCxSOHO convention for taxletter taxes.
+  // Stamp tax is fixed at 5,000 TL.
+  const ceil5k = (n: number) => (n > 0 ? Math.ceil(n / 5000) * 5000 : 0);
   const referenceValues = {
-    customsTax: (calculatedData.customsTax * calculatedData.currencyRate).toFixed(2),
-    additionalTax: (calculatedData.additionalTax * calculatedData.currencyRate).toFixed(2),
-    kkdf: (calculatedData.kkdf * calculatedData.currencyRate).toFixed(2),
-    vat: (calculatedData.vat * calculatedData.currencyRate).toFixed(2),
-    stampTax: '0.00',
+    customsTax: ceil5k(calculatedData.customsTax * calculatedData.currencyRate).toFixed(2),
+    additionalTax: ceil5k(calculatedData.additionalTax * calculatedData.currencyRate).toFixed(2),
+    kkdf: ceil5k(calculatedData.kkdf * calculatedData.currencyRate).toFixed(2),
+    vat: ceil5k(calculatedData.vat * calculatedData.currencyRate).toFixed(2),
+    stampTax: '5000.00',
   };
 
   useEffect(() => {
@@ -96,7 +99,7 @@ export function AdvTaxletterModal({
         additionalTax: referenceValues.additionalTax,
         kkdf: referenceValues.kkdf,
         vat: referenceValues.vat,
-        stampTax: '0.00',
+        stampTax: referenceValues.stampTax,
       });
       setExpensesList([]);
       setSelectedExpenseType('');
