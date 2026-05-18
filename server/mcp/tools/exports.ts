@@ -7,88 +7,12 @@
 import { registerTool } from "../registry";
 import { McpToolError } from "../errors";
 import { uploadFile, createPresignedDownloadUrl } from "../../object-storage";
-import { db, rawDb } from "../../db";
+import { db } from "../../db";
 import {
   taxCalculations,
   taxCalculationItems,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
-
-// Historical rate cache (in-memory, ~1 hour TTL). Avoids recomputing the same
-// SQL on every export_adv_taxletter call.
-const RATE_CACHE_TTL_MS = 60 * 60 * 1000;
-const rateCache = new Map<string, { rate: number; sampleSize: number; fetchedAt: number }>();
-
-/**
- * Compute the historical "TL paid per 1 USD of invoice value" rate for one
- * expense category in a given year, based on closed USD-currency procedures
- * with their import_expenses (or import_service_invoices) entries.
- *
- * source.kind = "expense": rate from import_expenses filtered by category.
- * source.kind = "service": rate from import_service_invoices (no category).
- */
-async function getHistoricalExpenseRate(
-  source: { kind: "expense"; category: string } | { kind: "service" },
-  year: number,
-): Promise<{ rate: number; sampleSize: number; fromCache: boolean }> {
-  const cacheKey = source.kind === "expense" ? `exp:${source.category}:${year}` : `svc:${year}`;
-  const cached = rateCache.get(cacheKey);
-  if (cached && Date.now() - cached.fetchedAt < RATE_CACHE_TTL_MS) {
-    return { rate: cached.rate, sampleSize: cached.sampleSize, fromCache: true };
-  }
-
-  let query: string;
-  let params: any[];
-  if (source.kind === "expense") {
-    query = `
-      SELECT
-        COUNT(DISTINCT p.reference) AS proc_count,
-        SUM(p.amount::numeric) AS total_invoice_usd,
-        SUM(
-          CASE
-            WHEN ie.currency IN ('TL','TRY') OR ie.currency IS NULL THEN ie.amount::numeric
-            WHEN ie.currency = 'USD' THEN ie.amount::numeric * COALESCE(p.usdtl_rate::numeric, 0)
-            ELSE 0
-          END
-        ) AS total_expense_tl
-      FROM procedures p
-      JOIN import_expenses ie ON ie.procedure_reference = p.reference
-      WHERE p.shipment_status = 'closed'
-        AND p.currency = 'USD'
-        AND p.amount::numeric > 0
-        AND EXTRACT(YEAR FROM p.arrival_date::date) = $1
-        AND ie.category = $2
-    `;
-    params = [year, source.category];
-  } else {
-    query = `
-      SELECT
-        COUNT(DISTINCT p.reference) AS proc_count,
-        SUM(p.amount::numeric) AS total_invoice_usd,
-        SUM(
-          CASE
-            WHEN isi.currency IN ('TL','TRY') THEN isi.amount::numeric
-            WHEN isi.currency = 'USD' THEN isi.amount::numeric * COALESCE(p.usdtl_rate::numeric, 0)
-            ELSE 0
-          END
-        ) AS total_expense_tl
-      FROM procedures p
-      JOIN import_service_invoices isi ON isi.procedure_reference = p.reference
-      WHERE p.shipment_status = 'closed'
-        AND p.currency = 'USD'
-        AND p.amount::numeric > 0
-        AND EXTRACT(YEAR FROM p.arrival_date::date) = $1
-    `;
-    params = [year];
-  }
-  const r = await rawDb.query(query, params);
-  const invoiceUsd = parseFloat(r.rows?.[0]?.total_invoice_usd ?? "0");
-  const expenseTl = parseFloat(r.rows?.[0]?.total_expense_tl ?? "0");
-  const procCount = parseInt(r.rows?.[0]?.proc_count ?? "0", 10);
-  const rate = invoiceUsd > 0 ? expenseTl / invoiceUsd : 0;
-  rateCache.set(cacheKey, { rate, sampleSize: procCount, fetchedAt: Date.now() });
-  return { rate, sampleSize: procCount, fromCache: false };
-}
 
 const PORT = process.env.PORT || "5000";
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -277,17 +201,12 @@ registerTool({
 
     // 2. Resolve expenses.
     //    If caller passes `expenses`, that's a full override (replaces auto rules).
-    //    Otherwise we apply CNCxSOHO's standard default rules:
-    //      • Export Registry Fee:           1,500 TL (fixed)
-    //      • Insurance:                     ceil(calc.insurance_cost * rate / 500) * 500
-    //      • Awb Fee:                       5,000 TL (fixed)
-    //      • Bonded Warehouse Storage Fee:  40,000 TL (fixed)
-    //      • Tareks Fee:                    2,500 TL (fixed)
-    //    Airport Storage Fee, Transportation, International Transportation,
-    //    Customs Inspection, Azo Test, Service Invoice, Other — TBD (omitted
-    //    from the auto-generated list; caller must pass via `expenses` to include).
+    //    Otherwise we fetch from the app's GET /default-expenses endpoint —
+    //    SINGLE SOURCE OF TRUTH for the standard CNCxSOHO rules. Both this MCP
+    //    tool AND the React modal call the same endpoint.
     let expensesList: { type: string; amount: number; id?: string }[];
     let expensesSource: "caller_override" | "auto_defaults" = "auto_defaults";
+    let historicalMetadata: any = null;
     if (Array.isArray(args.expenses)) {
       expensesSource = "caller_override";
       expensesList = args.expenses.map((e: any, i: number) => ({
@@ -296,71 +215,25 @@ registerTool({
         id: String(i + 1),
       }));
     } else {
-      // === Auto-defaults: CNCxSOHO standard expense rules ===
-      // FIXED:
-      //   Export Registry Fee 1500, AWB Fee 5000, Bonded Warehouse 40000, Tareks 2500
-      // INSURANCE (computed):
-      //   ceil(calc.insurance_cost * rate / 500) * 500
-      // INTERNATIONAL TRANSPORTATION (navlun):
-      //   calc.transport_cost * rate (if > 0)
-      // HISTORICAL (per-USD-of-invoice rate from closed procedures this year):
-      //   Airport Storage Fee, Transportation, Service Invoice
-
-      const invoiceUsd = parseFloat((calc as any).total_value ?? "0");
-
-      // Insurance
-      const insuranceUsd = parseFloat((calc as any).insurance_cost ?? "0");
-      const insuranceTlRaw = insuranceUsd * rate;
-      const insuranceTl = insuranceTlRaw > 0
-        ? Math.ceil(insuranceTlRaw / 500) * 500
-        : 0;
-
-      // International Transportation (navlun) — OPT-IN only. Default: skipped.
-      // Per CNCxSOHO convention navlun is NOT on the taxletter unless caller
-      // explicitly says so via include_international_transportation:true.
       const includeNavlun = args.include_international_transportation === true;
-      const navlunUsd = parseFloat((calc as any).transport_cost ?? "0");
-      const intlTransportTl = includeNavlun && navlunUsd > 0 && rate > 0
-        ? Math.round(navlunUsd * rate)
-        : 0;
-
-      // Historical per-USD rates for the current year (cached 1h)
-      const year = new Date().getFullYear();
-      const [airportRate, transportRate, serviceRate] = await Promise.all([
-        getHistoricalExpenseRate({ kind: "expense", category: "airport_storage_fee" }, year),
-        getHistoricalExpenseRate({ kind: "expense", category: "transportation" }, year),
-        getHistoricalExpenseRate({ kind: "service" }, year),
-      ]);
-      const airportTl = invoiceUsd > 0 ? Math.round(invoiceUsd * airportRate.rate) : 0;
-      const transportTl = invoiceUsd > 0 ? Math.round(invoiceUsd * transportRate.rate) : 0;
-      const serviceTl = invoiceUsd > 0 ? Math.round(invoiceUsd * serviceRate.rate) : 0;
-
-      expensesList = [
-        { id: "1", type: "Export Registry Fee", amount: 1500 },
-        { id: "2", type: "Insurance", amount: insuranceTl },
-        { id: "3", type: "Awb Fee", amount: 5000 },
-        { id: "4", type: "Bonded Warehouse Storage Fee", amount: 40000 },
-        { id: "5", type: "Tareks Fee", amount: 2500 },
-        { id: "6", type: "Airport Storage Fee", amount: airportTl },
-        { id: "7", type: "Transportation", amount: transportTl },
-      ];
-      if (intlTransportTl > 0) {
-        expensesList.push({ id: "8", type: "International Transportation", amount: intlTransportTl });
+      const defaultsResp = await fetch(
+        `${BASE}/api/tax-calculation/calculations/${id}/default-expenses` +
+          (includeNavlun ? "?include_international_transportation=true" : ""),
+      );
+      if (!defaultsResp.ok) {
+        throw new McpToolError(
+          `Failed to fetch default expenses: HTTP ${defaultsResp.status} ${(await defaultsResp.text()).slice(0, 200)}`,
+        );
       }
-      if (serviceTl > 0) {
-        expensesList.push({ id: String(expensesList.length + 1), type: "Service Invoice", amount: serviceTl });
-      }
-
-      // Attach rate metadata so callers can audit which historical sample produced each line.
-      (expensesList as any).__historicalRates = {
-        year,
-        airport_storage_fee: { rate_tl_per_usd: airportRate.rate, sample_procedures: airportRate.sampleSize, from_cache: airportRate.fromCache },
-        transportation: { rate_tl_per_usd: transportRate.rate, sample_procedures: transportRate.sampleSize, from_cache: transportRate.fromCache },
-        service_invoice: { rate_tl_per_usd: serviceRate.rate, sample_procedures: serviceRate.sampleSize, from_cache: serviceRate.fromCache },
-        international_transportation: includeNavlun
-          ? { source: navlunUsd > 0 ? "calc.transport_cost * rate (opt-in)" : "opt-in but navlun=0" }
-          : { source: "skipped — set include_international_transportation:true to include" },
-      };
+      const defaultsData: any = await defaultsResp.json();
+      expensesList = (defaultsData?.expenses ?? [])
+        .filter((e: any) => parseFloat(String(e.amount ?? 0)) > 0)
+        .map((e: any, i: number) => ({
+          id: String(i + 1),
+          type: String(e.type),
+          amount: parseFloat(String(e.amount)),
+        }));
+      historicalMetadata = defaultsData?.metadata ?? null;
     }
 
     const totalExpenses = expensesList.reduce((s, e) => s + e.amount, 0);
@@ -400,7 +273,7 @@ registerTool({
         taxes_used_tl: taxesTl,
         expenses_used: expensesList,
         expenses_source: expensesSource,
-        historical_rates: (expensesList as any).__historicalRates ?? null,
+        defaults_metadata: historicalMetadata,
         total_tax_tl: totalTax,
         total_expenses_tl: totalExpenses,
         grand_total_tl: grandTotal,

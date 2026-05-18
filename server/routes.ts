@@ -5974,6 +5974,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET default expenses for the Adv. Taxletter modal.
+  // Implements CNCxSOHO's standard expense rules (4 fixed, 1 insurance with 500 TL ceiling,
+  // 3 historical with 5,000 TL ceiling, 1 opt-in for navlun). See
+  // server/expense-defaults-service.ts for the rule definitions.
+  app.get(
+    "/api/tax-calculation/calculations/:id/default-expenses",
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        if (!Number.isFinite(id)) {
+          return res.status(400).json({ error: "Invalid calculation id" });
+        }
+        const includeNavlun = String(req.query.include_international_transportation ?? "")
+          .toLowerCase()
+          === "true";
+        const { computeDefaultExpenses } = await import("./expense-defaults-service");
+        const result = await computeDefaultExpenses(id, {
+          includeInternationalTransportation: includeNavlun,
+        });
+        res.json(result);
+      } catch (error) {
+        console.error("[/default-expenses]", error);
+        res.status(500).json({
+          message: "Failed to compute default expenses",
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+  );
+
   app.post(
     "/api/tax-calculation/calculations/:id/calculate",
     async (req, res) => {

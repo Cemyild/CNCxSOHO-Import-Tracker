@@ -479,6 +479,7 @@ export default function TaxCalculationResultsPage() {
         onGenerate={handleAdvTaxletterGenerate}
         calculatedData={calculatedTaxData}
         reference={calculation?.reference || ''}
+        calculationId={id ? Number(id) : undefined}
         isLoading={isExportingAdvTaxletter}
       />
 

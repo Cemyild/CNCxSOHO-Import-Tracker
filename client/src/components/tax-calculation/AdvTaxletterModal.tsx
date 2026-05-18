@@ -56,6 +56,7 @@ interface AdvTaxletterModalProps {
   onGenerate: (data: any) => void;
   calculatedData: TaxCalculationData;
   reference: string;
+  calculationId?: number;
   isLoading?: boolean;
 }
 
@@ -65,6 +66,7 @@ export function AdvTaxletterModal({
   onGenerate,
   calculatedData,
   reference,
+  calculationId,
   isLoading = false,
 }: AdvTaxletterModalProps) {
   const [taxInputs, setTaxInputs] = useState({
@@ -99,8 +101,29 @@ export function AdvTaxletterModal({
       setExpensesList([]);
       setSelectedExpenseType('');
       setExpenseAmount('');
+
+      // Pre-fill expenses with CNCxSOHO standard defaults.
+      // The server applies: 4 fixed values, insurance computed (ceil to 500 TL),
+      // 3 historical-rate-based (ceil to 5000 TL). User can still edit / remove.
+      if (calculationId) {
+        fetch(`/api/tax-calculation/calculations/${calculationId}/default-expenses`)
+          .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+          .then((data: any) => {
+            const items: ExpenseItem[] = (data?.expenses ?? [])
+              .filter((e: any) => e.amount > 0)
+              .map((e: any, idx: number) => ({
+                id: `default-${idx + 1}-${Date.now()}`,
+                type: String(e.type),
+                amount: Number(e.amount),
+              }));
+            setExpensesList(items);
+          })
+          .catch(err => {
+            console.warn('[AdvTaxletterModal] default-expenses fetch failed:', err);
+          });
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, calculationId]);
 
   const handleTaxInputChange = (field: string, value: string) => {
     const sanitized = value.replace(/[^0-9.]/g, '');
