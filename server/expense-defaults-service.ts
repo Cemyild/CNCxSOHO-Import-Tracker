@@ -62,10 +62,13 @@ async function getHistoricalRate(
     return { rate: cached.rate, sampleSize: cached.sampleSize, fromCache: true };
   }
 
-  // IMPORTANT: aggregate expense rows to one row per procedure FIRST in the CTE,
-  // THEN sum invoice + expense. A naive single-level JOIN double-counts the
-  // procedure's `amount` whenever it has multiple expense rows for the same
-  // category, which under-estimates the rate (rate's denominator was inflated).
+  // CTE strategy:
+  //   1. closed_procs: ALL closed USD procedures in the year (the denominator universe).
+  //   2. per_proc: LEFT JOIN with import_expenses/import_service_invoices so
+  //      procedures WITHOUT the category still appear (with expense_tl = 0).
+  //      This is critical for the rate to mean "TL per 1 USD of ALL imports"
+  //      and not "TL per 1 USD of imports-that-happened-to-have-this-category"
+  //      (the latter would over-estimate the rate for sparse categories).
   let query: string;
   let params: any[];
   if (source.kind === "expense") {
@@ -81,16 +84,17 @@ async function getHistoricalRate(
       per_proc AS (
         SELECT cp.reference,
                cp.amount::numeric AS invoice_usd,
-               SUM(
+               COALESCE(SUM(
                  CASE
                    WHEN ie.currency IN ('TL','TRY') OR ie.currency IS NULL THEN ie.amount::numeric
                    WHEN ie.currency = 'USD' THEN ie.amount::numeric * COALESCE(cp.usdtl_rate::numeric, 0)
                    ELSE 0
                  END
-               ) AS expense_tl
+               ), 0) AS expense_tl
         FROM closed_procs cp
-        JOIN import_expenses ie ON ie.procedure_reference = cp.reference
-        WHERE ie.category = $2
+        LEFT JOIN import_expenses ie
+          ON ie.procedure_reference = cp.reference
+          AND ie.category = $2
         GROUP BY cp.reference, cp.amount, cp.usdtl_rate
       )
       SELECT COUNT(*) AS proc_count,
@@ -112,15 +116,16 @@ async function getHistoricalRate(
       per_proc AS (
         SELECT cp.reference,
                cp.amount::numeric AS invoice_usd,
-               SUM(
+               COALESCE(SUM(
                  CASE
                    WHEN isi.currency IN ('TL','TRY') THEN isi.amount::numeric
                    WHEN isi.currency = 'USD' THEN isi.amount::numeric * COALESCE(cp.usdtl_rate::numeric, 0)
                    ELSE 0
                  END
-               ) AS expense_tl
+               ), 0) AS expense_tl
         FROM closed_procs cp
-        JOIN import_service_invoices isi ON isi.procedure_reference = cp.reference
+        LEFT JOIN import_service_invoices isi
+          ON isi.procedure_reference = cp.reference
         GROUP BY cp.reference, cp.amount, cp.usdtl_rate
       )
       SELECT COUNT(*) AS proc_count,
