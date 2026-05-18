@@ -165,7 +165,9 @@ registerTool({
 //     • Tareks Fee:                    2,500 TL
 //   COMPUTED FROM CALC:
 //     • Insurance:                     ceil(calc.insurance_cost * rate / 500) * 500
-//     • International Transportation:  calc.transport_cost * rate (if > 0)
+//     • International Transportation:  OPT-IN. Only included when
+//                                      include_international_transportation:true.
+//                                      Default behavior: SKIP (per CNCxSOHO convention).
 //   HISTORICAL (per-USD-of-invoice rate from closed USD procedures this year):
 //     • Airport Storage Fee
 //     • Transportation
@@ -182,10 +184,12 @@ registerTool({
     "Generate the Advance Taxletter PDF (same as the React UI's 'Adv. Taxletter' " +
     "button modal). Auto-fills tax values (TL) and applies CNCxSOHO's standard " +
     "expense defaults: 4 fixed (Export Registry, AWB, Bonded Warehouse, Tareks), " +
-    "Insurance auto-computed (rounded up to 500 TL), International Transportation " +
-    "from the calc's navlun, and Airport Storage / Transportation / Service Invoice " +
-    "from historical per-USD-of-invoice ratios across closed procedures this year. " +
-    "Returns a 1-hour presigned download URL.",
+    "Insurance auto-computed (rounded up to 500 TL), and Airport Storage / " +
+    "Transportation / Service Invoice from historical per-USD-of-invoice " +
+    "ratios across closed procedures this year. International Transportation " +
+    "(navlun) is NOT included by default — pass " +
+    "include_international_transportation:true ONLY when the user explicitly " +
+    "asks for navlun on the taxletter. Returns a 1-hour presigned download URL.",
   inputSchema: {
     type: "object",
     properties: {
@@ -201,6 +205,16 @@ registerTool({
           stampTax: { type: "number" },
         },
         additionalProperties: false,
+      },
+      include_international_transportation: {
+        type: "boolean",
+        default: false,
+        description:
+          "Default false. Set true ONLY when the user explicitly says navlun " +
+          "should be on the taxletter. When true, the tool adds an " +
+          "'International Transportation' line = calc.transport_cost × currency_rate. " +
+          "When false (default), navlun is NEVER on the taxletter, even if " +
+          "calc.transport_cost > 0.",
       },
       expenses: {
         type: "array",
@@ -301,9 +315,12 @@ registerTool({
         ? Math.ceil(insuranceTlRaw / 500) * 500
         : 0;
 
-      // International Transportation (navlun)
+      // International Transportation (navlun) — OPT-IN only. Default: skipped.
+      // Per CNCxSOHO convention navlun is NOT on the taxletter unless caller
+      // explicitly says so via include_international_transportation:true.
+      const includeNavlun = args.include_international_transportation === true;
       const navlunUsd = parseFloat((calc as any).transport_cost ?? "0");
-      const intlTransportTl = navlunUsd > 0 && rate > 0
+      const intlTransportTl = includeNavlun && navlunUsd > 0 && rate > 0
         ? Math.round(navlunUsd * rate)
         : 0;
 
@@ -340,7 +357,9 @@ registerTool({
         airport_storage_fee: { rate_tl_per_usd: airportRate.rate, sample_procedures: airportRate.sampleSize, from_cache: airportRate.fromCache },
         transportation: { rate_tl_per_usd: transportRate.rate, sample_procedures: transportRate.sampleSize, from_cache: transportRate.fromCache },
         service_invoice: { rate_tl_per_usd: serviceRate.rate, sample_procedures: serviceRate.sampleSize, from_cache: serviceRate.fromCache },
-        international_transportation: { source: navlunUsd > 0 ? "calc.transport_cost * rate" : "none (navlun=0)" },
+        international_transportation: includeNavlun
+          ? { source: navlunUsd > 0 ? "calc.transport_cost * rate (opt-in)" : "opt-in but navlun=0" }
+          : { source: "skipped — set include_international_transportation:true to include" },
       };
     }
 
