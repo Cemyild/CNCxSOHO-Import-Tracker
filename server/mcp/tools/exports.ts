@@ -11,29 +11,11 @@ import { db } from "../../db";
 import {
   taxCalculations,
   taxCalculationItems,
-  importExpenses,
-  importServiceInvoices,
-  procedures as proceduresTable,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 const PORT = process.env.PORT || "5000";
 const BASE = `http://127.0.0.1:${PORT}`;
-
-// Map expense_category enum → display labels used by the Adv. Taxletter modal.
-const EXPENSE_TYPE_LABEL: Record<string, string> = {
-  export_registry_fee: "Export Registry Fee",
-  insurance: "Insurance",
-  awb_fee: "Awb Fee",
-  airport_storage_fee: "Airport Storage Fee",
-  bonded_warehouse_storage_fee: "Bonded Warehouse Storage Fee",
-  transportation: "Transportation",
-  international_transportation: "International Transportation",
-  tareks_fee: "Tareks Fee",
-  customs_inspection: "Customs Inspection",
-  azo_test: "Azo Test",
-  other: "Other",
-};
 
 // ---------------------------------------------------------------------------
 // export_calculation_excel — wraps GET /api/tax-calculation/calculations/:id/export/excel
@@ -98,21 +80,27 @@ registerTool({
 
 // ---------------------------------------------------------------------------
 // export_adv_taxletter — wraps POST /api/tax-calculation/calculations/:id/export/adv-taxletter
-// Auto-aggregates the procedure's importExpenses + importServiceInvoices if
-// the caller doesn't pass an explicit `expenses` array. Auto-computes the
-// taxes_tl from per-item calculation totals × currency_rate if not given.
+// Auto-applies CNCxSOHO's standard expense defaults when caller doesn't pass
+// an explicit `expenses` array:
+//   • Export Registry Fee:           1,500 TL (fixed)
+//   • Insurance:                     ceil(calc.insurance_cost * rate / 500) * 500
+//   • Awb Fee:                       5,000 TL (fixed)
+//   • Bonded Warehouse Storage Fee:  40,000 TL (fixed)
+//   • Tareks Fee:                    2,500 TL (fixed)
+// Airport Storage Fee, Transportation, Service Invoice, etc. are not yet
+// rule-driven — pass via `expenses` to include.
+// Taxes (TL) auto-computed from per-item totals × currency_rate unless
+// caller passes taxes_tl.
 // ---------------------------------------------------------------------------
 registerTool({
   name: "export_adv_taxletter",
   tier: "ai",
   description:
     "Generate the Advance Taxletter PDF (same as the React UI's 'Adv. Taxletter' " +
-    "button modal). Auto-fills tax values from the calculation (TL) and pulls " +
-    "import expenses from the procedure unless the caller overrides. Returns a " +
-    "1-hour presigned download URL for Cowork to attach. " +
-    "PREREQUISITE: the procedure must have all import expenses (transport, " +
-    "insurance, customs broker fees etc.) already recorded — use " +
-    "write_create_import_expense to add any missing ones first.",
+    "button modal). Auto-fills tax values from the calculation (TL) and applies " +
+    "CNCxSOHO's standard expense defaults (Export Registry Fee 1500, AWB Fee " +
+    "5000, Bonded Warehouse 40000, Tareks 2500, Insurance auto-computed and " +
+    "rounded up to nearest 500). Returns a 1-hour presigned download URL.",
   inputSchema: {
     type: "object",
     properties: {
@@ -131,7 +119,7 @@ registerTool({
       },
       expenses: {
         type: "array",
-        description: "Override expense list. If omitted, auto-pulled from importExpenses + importServiceInvoices for the procedure.",
+        description: "Override expense list (full replacement, not merge). If omitted, the 5 standard CNCxSOHO defaults are auto-applied.",
         items: {
           type: "object",
           properties: {
@@ -188,42 +176,41 @@ registerTool({
       };
     }
 
-    // 2. Resolve expenses (caller override OR auto-pull from procedure)
+    // 2. Resolve expenses.
+    //    If caller passes `expenses`, that's a full override (replaces auto rules).
+    //    Otherwise we apply CNCxSOHO's standard default rules:
+    //      • Export Registry Fee:           1,500 TL (fixed)
+    //      • Insurance:                     ceil(calc.insurance_cost * rate / 500) * 500
+    //      • Awb Fee:                       5,000 TL (fixed)
+    //      • Bonded Warehouse Storage Fee:  40,000 TL (fixed)
+    //      • Tareks Fee:                    2,500 TL (fixed)
+    //    Airport Storage Fee, Transportation, International Transportation,
+    //    Customs Inspection, Azo Test, Service Invoice, Other — TBD (omitted
+    //    from the auto-generated list; caller must pass via `expenses` to include).
     let expensesList: { type: string; amount: number; id?: string }[];
+    let expensesSource: "caller_override" | "auto_defaults" = "auto_defaults";
     if (Array.isArray(args.expenses)) {
+      expensesSource = "caller_override";
       expensesList = args.expenses.map((e: any, i: number) => ({
         type: String(e.type),
         amount: parseFloat(String(e.amount ?? 0)),
         id: String(i + 1),
       }));
-    } else if (calc.reference) {
-      // Pull all importExpenses + importServiceInvoices for the procedure reference.
-      const expRows = await db
-        .select()
-        .from(importExpenses)
-        .where(eq((importExpenses as any).procedureReference, calc.reference));
-      const svcRows = await db
-        .select()
-        .from(importServiceInvoices)
-        .where(eq((importServiceInvoices as any).procedureReference, calc.reference));
-
-      expensesList = [];
-      let idx = 0;
-      for (const e of expRows as any[]) {
-        const label = EXPENSE_TYPE_LABEL[String(e.category ?? "other")] ?? "Other";
-        const amount = parseFloat(e.amount ?? "0");
-        if (amount > 0) {
-          expensesList.push({ id: String(++idx), type: label, amount });
-        }
-      }
-      for (const s of svcRows as any[]) {
-        const amount = parseFloat(s.amount ?? "0");
-        if (amount > 0) {
-          expensesList.push({ id: String(++idx), type: "Service Invoice", amount });
-        }
-      }
     } else {
-      expensesList = [];
+      // Auto-defaults
+      const insuranceUsd = parseFloat((calc as any).insurance_cost ?? "0");
+      const insuranceTlRaw = insuranceUsd * rate;
+      const insuranceTl = insuranceTlRaw > 0
+        ? Math.ceil(insuranceTlRaw / 500) * 500
+        : 0;
+
+      expensesList = [
+        { id: "1", type: "Export Registry Fee", amount: 1500 },
+        { id: "2", type: "Insurance", amount: insuranceTl },
+        { id: "3", type: "Awb Fee", amount: 5000 },
+        { id: "4", type: "Bonded Warehouse Storage Fee", amount: 40000 },
+        { id: "5", type: "Tareks Fee", amount: 2500 },
+      ];
     }
 
     const totalExpenses = expensesList.reduce((s, e) => s + e.amount, 0);
@@ -262,6 +249,7 @@ registerTool({
         reference: calc.reference,
         taxes_used_tl: taxesTl,
         expenses_used: expensesList,
+        expenses_source: expensesSource,
         total_tax_tl: totalTax,
         total_expenses_tl: totalExpenses,
         grand_total_tl: grandTotal,
