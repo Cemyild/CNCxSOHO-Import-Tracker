@@ -81,10 +81,20 @@ export function AdvTaxletterModal({
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expensesList, setExpensesList] = useState<ExpenseItem[]>([]);
 
-  // Round UP to next 5,000 TL — CNCxSOHO convention for taxletter taxes.
-  // Stamp tax is fixed at 5,000 TL.
-  const ceil5k = (n: number) => (n > 0 ? Math.ceil(n / 5000) * 5000 : 0);
+  // Right-column "Calculated Reference (TL)" — exact USD × rate, no rounding.
+  // This is the source of truth shown to the user.
   const referenceValues = {
+    customsTax: (calculatedData.customsTax * calculatedData.currencyRate).toFixed(2),
+    additionalTax: (calculatedData.additionalTax * calculatedData.currencyRate).toFixed(2),
+    kkdf: (calculatedData.kkdf * calculatedData.currencyRate).toFixed(2),
+    vat: (calculatedData.vat * calculatedData.currencyRate).toFixed(2),
+    stampTax: '0.00',
+  };
+
+  // Left-column "Enter Amount (TL)" pre-fill — rounded UP to next 5,000 TL per
+  // CNCxSOHO convention. Stamp tax fixed at 5,000 TL. User can still edit.
+  const ceil5k = (n: number) => (n > 0 ? Math.ceil(n / 5000) * 5000 : 0);
+  const ceiledTaxDefaults = {
     customsTax: ceil5k(calculatedData.customsTax * calculatedData.currencyRate).toFixed(2),
     additionalTax: ceil5k(calculatedData.additionalTax * calculatedData.currencyRate).toFixed(2),
     kkdf: ceil5k(calculatedData.kkdf * calculatedData.currencyRate).toFixed(2),
@@ -95,11 +105,11 @@ export function AdvTaxletterModal({
   useEffect(() => {
     if (isOpen) {
       setTaxInputs({
-        customsTax: referenceValues.customsTax,
-        additionalTax: referenceValues.additionalTax,
-        kkdf: referenceValues.kkdf,
-        vat: referenceValues.vat,
-        stampTax: referenceValues.stampTax,
+        customsTax: ceiledTaxDefaults.customsTax,
+        additionalTax: ceiledTaxDefaults.additionalTax,
+        kkdf: ceiledTaxDefaults.kkdf,
+        vat: ceiledTaxDefaults.vat,
+        stampTax: ceiledTaxDefaults.stampTax,
       });
       setExpensesList([]);
       setSelectedExpenseType('');
