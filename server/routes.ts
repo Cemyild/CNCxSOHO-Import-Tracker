@@ -5471,7 +5471,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(result);
     } catch (error) {
       console.error('[extract-products]', error);
-      return res.status(500).json({ error: 'AI extraction failed, please try again' });
+      const msg = error instanceof Error ? error.message : String(error);
+      return res.status(500).json({ error: `AI extraction failed: ${msg}` });
     }
   });
 
