@@ -69,7 +69,7 @@ export async function analyzeImage(
     throw new Error('Anthropic client not initialized - API key not configured');
   }
 
-  const stream = anthropic.messages.stream({
+  const response = await anthropic.messages.create({
     model: DEFAULT_MODEL_STR,
     max_tokens: 4096,
     messages: [{
@@ -90,7 +90,6 @@ export async function analyzeImage(
       ]
     }]
   });
-  const response = await stream.finalMessage();
 
   return response.content[0].type === 'text' ? response.content[0].text : '';
 }
@@ -125,7 +124,7 @@ export async function analyzeMultipleImages(
     throw new Error('Anthropic client not initialized - API key not configured');
   }
 
-  const stream = anthropic.messages.stream({
+  const response = await anthropic.messages.create({
     model: DEFAULT_MODEL_STR,
     max_tokens: 8192,
     messages: [{
@@ -133,7 +132,6 @@ export async function analyzeMultipleImages(
       content
     }]
   });
-  const response = await stream.finalMessage();
 
   return response.content[0].type === 'text' ? response.content[0].text : '';
 }
@@ -172,7 +170,7 @@ Return ONLY the JSON object, no additional text.`;
     throw new Error('Anthropic client not initialized - API key not configured');
   }
 
-  const stream = anthropic.messages.stream({
+  const response = await anthropic.messages.create({
     model: DEFAULT_MODEL_STR,
     max_tokens: 4096,
     messages: [{
@@ -193,7 +191,6 @@ Return ONLY the JSON object, no additional text.`;
       ]
     }]
   });
-  const response = await stream.finalMessage();
 
   const text = response.content[0].type === 'text' ? response.content[0].text : '';
   
@@ -223,7 +220,7 @@ export async function askAboutImage(
     throw new Error('Anthropic client not initialized - API key not configured');
   }
 
-  const stream = anthropic.messages.stream({
+  const response = await anthropic.messages.create({
     model: DEFAULT_MODEL_STR,
     max_tokens: 2048,
     messages: [{
@@ -244,7 +241,6 @@ export async function askAboutImage(
       ]
     }]
   });
-  const response = await stream.finalMessage();
 
   return response.content[0].type === 'text' ? response.content[0].text : '';
 }
@@ -272,11 +268,7 @@ export async function analyzePdfWithClaude({
     throw new Error('Anthropic client not initialized - API key not configured');
   }
 
-  // Use streaming: Anthropic SDK errors out on non-streaming calls that may
-  // exceed 10 minutes; more importantly, streaming keeps bytes flowing so the
-  // nginx ~60s proxy_read_timeout in front of this server doesn't fire on
-  // large invoice extractions.
-  const stream = anthropic.messages.stream({
+  const message = await anthropic.messages.create({
     model,
     max_tokens: maxTokens,
     temperature: temperature,
@@ -300,14 +292,12 @@ export async function analyzePdfWithClaude({
       },
     ],
   });
-  const message = await stream.finalMessage();
 
   return message.content[0].type === 'text' ? message.content[0].text : '';
 }
 
 /**
- * Analyze text with Claude (non-vision). Streams to avoid nginx proxy timeout
- * on large outputs (see analyzePdfWithClaude for rationale).
+ * Analyze text with Claude (non-vision)
  */
 export async function analyzeText(prompt: string, systemPrompt?: string, temperature: number = 1, maxTokens: number = 4096, model: string = DEFAULT_MODEL_STR): Promise<string> {
   ensureConfigured();
@@ -316,14 +306,13 @@ export async function analyzeText(prompt: string, systemPrompt?: string, tempera
     throw new Error('Anthropic client not initialized - API key not configured');
   }
 
-  const stream = anthropic.messages.stream({
+  const message = await anthropic.messages.create({
     max_tokens: maxTokens,
     messages: [{ role: 'user', content: prompt }],
     model,
     temperature,
     ...(systemPrompt && { system: systemPrompt })
   });
-  const message = await stream.finalMessage();
 
   return message.content[0].type === 'text' ? message.content[0].text : '';
 }
