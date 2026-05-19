@@ -5455,18 +5455,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AI-powered document extraction (PDF + Excel → ProductItem[])
+  // Accepts EITHER:
+  //   - multipart/form-data with `file` field (browser file picker path)
+  //   - application/json with { "s3_key": "..." } (used when the caller has
+  //     already PUT the file to S3 via prepare_invoice_upload — needed for
+  //     Cowork's Chrome-extension flow, which cannot programmatically set a
+  //     value on <input type="file"> due to browser security)
   app.post('/api/tax-calculation/extract-products', documentUpload.single('file'), async (req: Request, res: Response) => {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
     try {
-      const isPdf =
-        req.file.mimetype === 'application/pdf' ||
-        req.file.originalname.toLowerCase().endsWith('.pdf');
+      let buffer: Buffer;
+      let nameHint: string;
+
+      const s3Key: string | undefined = req.body?.s3_key;
+      if (s3Key) {
+        const fetched = await getFile(s3Key);
+        if (!fetched.buffer || fetched.buffer.length === 0) {
+          return res.status(400).json({ error: `s3_key '${s3Key}' resolved to empty file` });
+        }
+        buffer = fetched.buffer;
+        nameHint = s3Key.toLowerCase();
+      } else if (req.file) {
+        buffer = req.file.buffer;
+        nameHint = (req.file.mimetype === 'application/pdf' ? 'pdf:' : '') + req.file.originalname.toLowerCase();
+      } else {
+        return res.status(400).json({ error: 'Provide either a `file` (multipart) or an `s3_key` (JSON body)' });
+      }
+
+      const isPdf = nameHint.includes('pdf') || /\.pdf$/i.test(nameHint);
 
       const result = isPdf
-        ? await extractFromPdf(req.file.buffer)
-        : await extractFromExcel(req.file.buffer);
+        ? await extractFromPdf(buffer)
+        : await extractFromExcel(buffer);
 
       return res.json(result);
     } catch (error) {

@@ -62,7 +62,42 @@ export function DocumentUploadDialog({
   const [invoiceMeta, setInvoiceMeta] = useState<InvoiceMetadata | undefined>(undefined);
   const [showPreview, setShowPreview] = useState(false);
   const [fileName, setFileName] = useState("");
+  const [s3Key, setS3Key] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Shared response handler — works for both multipart upload and JSON
+  // {s3_key} requests, since the server returns the same shape.
+  const handleExtractionResponse = async (response: Response, sourceLabel: string) => {
+    const text = await response.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { /* not JSON */ }
+
+    if (!response.ok) {
+      toast({
+        title: "Error",
+        description: data.error ?? "Failed to extract products",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!data.products || data.products.length === 0) {
+      toast({
+        title: "No products found",
+        description: "No product rows could be extracted from the document",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setParsedData(data.products);
+    setInvoiceMeta(data.invoiceMetadata);
+    setShowPreview(true);
+    toast({
+      title: "Success",
+      description: `Found ${data.products.length} products in ${sourceLabel}`,
+    });
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -80,39 +115,41 @@ export function DocumentUploadDialog({
         body: formData,
       });
 
-      const text = await response.text();
-      let data: any = {};
-      try { data = JSON.parse(text); } catch { /* not JSON */ }
-
-      if (!response.ok) {
-        toast({
-          title: "Error",
-          description: data.error ?? "Failed to extract products",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (!data.products || data.products.length === 0) {
-        toast({
-          title: "No products found",
-          description: "No product rows could be extracted from the document",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      setParsedData(data.products);
-      setInvoiceMeta(data.invoiceMetadata);
-      setShowPreview(true);
-      toast({
-        title: "Success",
-        description: `Found ${data.products.length} products in ${file.name}`,
-      });
+      await handleExtractionResponse(response, file.name);
     } catch {
       toast({
         title: "Error",
         description: "Failed to upload document",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load by S3 key — used by automation flows (e.g. Cowork via Chrome
+  // extension) where programmatic <input type="file"> assignment is blocked
+  // by browser security. The caller PUT the file to S3 first (via the
+  // prepare_invoice_upload MCP tool), then pastes the returned key here.
+  const handleS3KeyUpload = async () => {
+    const key = s3Key.trim();
+    if (!key) {
+      toast({ title: "S3 key gerekli", description: "Lütfen S3 anahtarını yapıştır", variant: "destructive" });
+      return;
+    }
+    setFileName(key.split("/").pop() ?? key);
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/tax-calculation/extract-products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ s3_key: key }),
+      });
+      await handleExtractionResponse(response, key.split("/").pop() ?? key);
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to fetch from S3 key",
         variant: "destructive",
       });
     } finally {
@@ -134,6 +171,7 @@ export function DocumentUploadDialog({
     setInvoiceMeta(undefined);
     setShowPreview(false);
     setFileName("");
+    setS3Key("");
     setIsLoading(false);
     onOpenChange(false);
   };
@@ -154,21 +192,58 @@ export function DocumentUploadDialog({
 
         {!showPreview ? (
           <div className="space-y-4">
-            <Input
-              key={fileName}
-              type="file"
-              accept=".pdf,.xlsx,.xls"
-              onChange={handleFileUpload}
-              disabled={isLoading}
-            />
+            <div>
+              <label className="text-sm font-medium mb-1 block">Dosyadan yükle</label>
+              <Input
+                key={fileName}
+                type="file"
+                accept=".pdf,.xlsx,.xls"
+                onChange={handleFileUpload}
+                disabled={isLoading}
+              />
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                <div className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-background px-2 text-xs uppercase text-muted-foreground">veya</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1 block">
+                S3 anahtarı ile yükle
+                <span className="text-xs text-muted-foreground font-normal ml-1">
+                  (otomasyon / Cowork için)
+                </span>
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="örn. mcp-uploads/1779165792540-TR00028_Draft_Tax_File.xlsx"
+                  value={s3Key}
+                  onChange={(e) => setS3Key(e.target.value)}
+                  disabled={isLoading}
+                />
+                <Button onClick={handleS3KeyUpload} disabled={isLoading || !s3Key.trim()}>
+                  Yükle
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                `prepare_invoice_upload` ile S3'e PUT edilmiş dosyanın anahtarını yapıştır.
+              </p>
+            </div>
+
             {isLoading && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                AI is extracting product data…
+                AI ürün verilerini çıkarıyor…
               </div>
             )}
             <Button variant="outline" onClick={handleClose} disabled={isLoading}>
-              Cancel
+              İptal
             </Button>
           </div>
         ) : (
