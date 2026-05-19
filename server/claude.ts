@@ -31,9 +31,13 @@ Claude Vision API endpoints will return 503 until this is configured.
   console.error(errorMsg);
 }
 
-// Only initialize if we have a valid key
-const anthropic = API_KEY_VALID 
-  ? new Anthropic({ apiKey: ANTHROPIC_API_KEY })
+// Only initialize if we have a valid key.
+// maxRetries bumped from default 2 to 6 so that transient Anthropic 529
+// (Overloaded) / 503 errors during heavy-traffic periods get retried with
+// exponential backoff before surfacing to the user. The SDK already retries
+// on 408/409/429/5xx; we just give it more attempts.
+const anthropic = API_KEY_VALID
+  ? new Anthropic({ apiKey: ANTHROPIC_API_KEY, maxRetries: 6 })
   : null;
 
 /**
