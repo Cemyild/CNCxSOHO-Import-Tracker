@@ -134,14 +134,12 @@ export async function extractFromPdf(buffer: Buffer): Promise<ExtractionResult> 
     throw new Error('Empty file buffer provided');
   }
   const base64Data = buffer.toString('base64');
-  // Note: model omitted to use DEFAULT_MODEL_STR (Sonnet 4.6) — larger output
-  // budget than Haiku 4.5 (which silently truncates at ~8K tokens and breaks
-  // JSON parsing for invoices with >50 line items).
   const response = await analyzePdfWithClaude({
     base64Data,
     prompt: PDF_PROMPT,
-    maxTokens: 32768,
+    maxTokens: 16384,
     temperature: 0,
+    model: 'claude-haiku-4-5-20251001',
   });
   return parseClaudeInvoiceResponse(response);
 }
@@ -190,15 +188,12 @@ export async function extractFromExcel(buffer: Buffer): Promise<ExtractionResult
   const csv = XLSX.utils.sheet_to_csv(worksheet, { blankrows: false }).trim();
   if (!csv) return { products: [] };
 
-  // Model arg omitted → DEFAULT_MODEL_STR (Sonnet 4.6). Haiku 4.5 truncates at
-  // ~8K output tokens which malforms JSON for large invoices (the original
-  // symptom was "JSON.parse failed at position ~39000" — a cutoff, not a
-  // model bug).
   const response = await analyzeText(
     `${EXCEL_PROMPT}\n\nCSV:\n${csv}`,
     undefined,
     0,
-    32768,
+    16384,
+    'claude-haiku-4-5-20251001',
   );
   return parseClaudeInvoiceResponse(response);
 }
