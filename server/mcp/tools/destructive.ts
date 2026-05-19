@@ -15,11 +15,15 @@ import {
   taxes as taxesTable,
   payments as paymentsTable,
   products as productsTable,
+  taxCalculations as taxCalculationsTable,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { McpToolError } from "../errors";
 
 // Whitelist of tables this tool may touch. Anything outside is rejected.
+// Note: tax_calculation_items has FK to tax_calculations with ON DELETE
+// CASCADE, so deleting a tax_calculations row also removes its line items
+// — Workflow 2 (delete draft + recreate from real invoice) relies on this.
 const TABLE_MAP: Record<string, { table: any; pkColumn: any; sqlName: string }> = {
   procedures:               { table: proceduresTable,       pkColumn: proceduresTable.id,       sqlName: "procedures" },
   import_expenses:          { table: importExpenses,        pkColumn: importExpenses.id,        sqlName: "import_expenses" },
@@ -27,6 +31,7 @@ const TABLE_MAP: Record<string, { table: any; pkColumn: any; sqlName: string }> 
   taxes:                    { table: taxesTable,            pkColumn: taxesTable.id,            sqlName: "taxes" },
   payments:                 { table: paymentsTable,         pkColumn: paymentsTable.id,         sqlName: "payments" },
   products:                 { table: productsTable,         pkColumn: productsTable.id,         sqlName: "products" },
+  tax_calculations:         { table: taxCalculationsTable,  pkColumn: taxCalculationsTable.id,  sqlName: "tax_calculations" },
 };
 
 registerTool({
