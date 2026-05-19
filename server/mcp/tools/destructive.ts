@@ -8,6 +8,7 @@
 // 'completed' (the terminal state in the enum).
 import { registerTool } from "../registry";
 import { db } from "../../db";
+import { storage } from "../../storage";
 import {
   procedures as proceduresTable,
   importExpenses,
@@ -52,6 +53,42 @@ registerTool({
     const def = TABLE_MAP[args.table];
     if (!def) throw new McpToolError(`Table not allowed: ${args.table}`);
     const dryRun = args.dry_run ?? true;
+
+    // Procedures need a manual-cascade delete: documents, procedure_comments,
+    // procedure_activities all have an integer FK to procedures.id WITHOUT
+    // ON DELETE CASCADE in the schema, so a raw DELETE on procedures fails
+    // with a foreign-key violation. storage.deleteProcedure() already does
+    // the cascade (it's what the UI's DELETE /api/procedures/:id calls), so
+    // we delegate to it for the actual delete.
+    if (args.table === "procedures") {
+      const [before] = await db.select().from(proceduresTable).where(eq(proceduresTable.id, args.id));
+      if (!before) throw new McpToolError(`procedures id ${args.id} not found`);
+      if (dryRun) {
+        return {
+          data: { would_delete: before, dry_run: true },
+          meta: {
+            affectedTable: def.sqlName,
+            affectedIds: [args.id],
+            before,
+            status: "dry_run" as const,
+            summary: `[dry_run] Would delete procedure ${args.id} (with cascading documents/comments/activities/tax_calculations/taxes/expenses/service_invoices/payments)`,
+          },
+        };
+      }
+      const ok = await storage.deleteProcedure(args.id);
+      if (!ok) throw new McpToolError(`storage.deleteProcedure(${args.id}) returned false`);
+      return {
+        data: { deleted: before, dry_run: false },
+        meta: {
+          affectedTable: def.sqlName,
+          affectedIds: [args.id],
+          before,
+          status: "ok" as const,
+          summary: `Deleted procedure ${args.id} (manual cascade via storage.deleteProcedure)`,
+        },
+      };
+    }
+
     return await db.transaction(async (tx) => {
       const [before] = await tx.select().from(def.table).where(eq(def.pkColumn, args.id));
       if (!before) throw new McpToolError(`${args.table} id ${args.id} not found`);
