@@ -21,4 +21,6 @@ export async function registerAllTools(): Promise<void> {
   await import("./destructive");
   // Export tools — Excel + Adv. Taxletter PDF
   await import("./exports");
+  // Storage cost estimator (historical-rate based, +1000 USD buffer)
+  await import("./storage-estimate");
 }
