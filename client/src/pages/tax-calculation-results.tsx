@@ -93,20 +93,27 @@ export default function TaxCalculationResultsPage() {
       const response = await apiRequest("POST", `/api/tax-calculation/calculations/${id}/create-procedure`, {
         userId: 3,
       });
-      if (!response.ok) throw new Error("Failed to create procedure");
+      if (!response.ok) {
+        const text = await response.text();
+        let msg = "Failed to create procedure";
+        try { const j = JSON.parse(text); msg = j.error ?? j.message ?? msg; } catch {}
+        throw new Error(msg);
+      }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/tax-calculation/calculations/${id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/procedures"] });
       toast({
         title: "Success",
         description: "Procedure created successfully",
       });
     },
-    onError: () => {
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Failed to create procedure";
       toast({
         title: "Error",
-        description: "Failed to create procedure",
+        description: msg,
         variant: "destructive",
       });
     },
@@ -436,13 +443,24 @@ export default function TaxCalculationResultsPage() {
               {replaceProductsMutation.isPending ? "Updating..." : "Update Product List"}
             </Button>
             {calculation.status === "calculated" && (
-              <Button
-                onClick={() => createProcedureMutation.mutate()}
-                disabled={createProcedureMutation.isPending}
-                data-testid="button-create-procedure"
-              >
-                Create Procedure
-              </Button>
+              (calculation as any).procedure_id ? (
+                <Button
+                  disabled
+                  variant="outline"
+                  data-testid="button-procedure-created"
+                  title={`Procedure #${(calculation as any).procedure_id} already created from this calculation`}
+                >
+                  ✓ Procedure Created (#{(calculation as any).procedure_id})
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => createProcedureMutation.mutate()}
+                  disabled={createProcedureMutation.isPending}
+                  data-testid="button-create-procedure"
+                >
+                  {createProcedureMutation.isPending ? "Creating..." : "Create Procedure"}
+                </Button>
+              )
             )}
           </div>
         </div>

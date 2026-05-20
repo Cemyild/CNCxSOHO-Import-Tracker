@@ -251,9 +251,18 @@ const num = (v: unknown): number => {
 const pickDateField = (input: any, defaultField: any) => input?.date_field ?? defaultField;
 
 function dateBetweenSql(field: any, start?: string, end?: string) {
-  const conds: any[] = [isNotNull(field)];
-  if (start) conds.push(gte(field, start));
-  if (end) conds.push(lte(field, end));
+  // Only add a non-null-date constraint when the caller actually supplied a
+  // date range. The old behavior (always isNotNull(field)) silently dropped
+  // every freshly-created Workflow 1 procedure from read_procedures results
+  // because its arrival_date is NULL until Workflow 2's Procedure Edit step
+  // fills it in. That cascaded into "I created the procedure but
+  // read_procedures says it doesn't exist" double-click duplicates.
+  const conds: any[] = [];
+  if (start || end) {
+    conds.push(isNotNull(field));
+    if (start) conds.push(gte(field, start));
+    if (end) conds.push(lte(field, end));
+  }
   return conds;
 }
 
