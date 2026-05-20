@@ -170,8 +170,13 @@ export async function computeDefaultExpenses(
     getHistoricalRate({ kind: "service" }, year),
   ]);
 
-  // Round UP to nearest 5,000 TL
-  const airportTl = ceilTo(invoiceUsd * airportRate.rate, 5000);
+  // Round UP to nearest 5,000 TL.
+  // Airport Storage Fee gets a +45,000 TL safety buffer on top of the
+  // historical-rate estimate (CNCxSOHO standard, per Cem 2026-05-20).
+  // The buffer covers unexpected airport storage charges that often appear
+  // after the procedure is filed; without it the Adv. Taxletter total
+  // routinely under-runs reality.
+  const airportTl = ceilTo(invoiceUsd * airportRate.rate, 5000) + 45000;
   const transportTl = ceilTo(invoiceUsd * transportRate.rate, 5000);
   const serviceTl = ceilTo(invoiceUsd * serviceRate.rate, 5000);
 
@@ -198,7 +203,7 @@ export async function computeDefaultExpenses(
       type: "Airport Storage Fee",
       amount: airportTl,
       source: "historical",
-      rule: `ceil(${airportRate.rate.toFixed(4)} × ${invoiceUsd.toFixed(2)} USD / 5000) × 5000`,
+      rule: `ceil(${airportRate.rate.toFixed(4)} × ${invoiceUsd.toFixed(2)} USD / 5000) × 5000 + 45000 buffer`,
     },
     {
       id: "7",
