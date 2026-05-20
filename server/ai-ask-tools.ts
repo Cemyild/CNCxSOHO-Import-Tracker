@@ -327,6 +327,14 @@ export async function runQueryProcedures(input: any): Promise<any> {
 
   // List
   if (input.list_limit && input.list_limit > 0) {
+    // Sort by COALESCE(dateField, created_at) DESC so that procedures with a
+    // NULL arrival_date / invoice_date (newly created Workflow 1 procedures
+    // where the header is filled in only later in Workflow 2's Procedure Edit
+    // step) don't get pushed to the bottom and clipped by the LIMIT. With raw
+    // `desc(arrival_date)` Postgres puts NULLs last; the freshest rows then
+    // disappear behind older fully-populated ones — that bug cost a Workflow 1
+    // test 1-2 minutes when Cowork "couldn't find" CNCALO-74..77.
+    const orderExpr = sql`COALESCE(${dateField}, ${procedures.createdAt}) DESC`;
     const items = await db.select({
       reference: procedures.reference,
       shipper: procedures.shipper,
@@ -341,7 +349,7 @@ export async function runQueryProcedures(input: any): Promise<any> {
     })
       .from(procedures)
       .where(where)
-      .orderBy(desc(dateField))
+      .orderBy(orderExpr)
       .limit(Math.min(input.list_limit, 200));
     result.items = items;
   }
