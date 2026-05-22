@@ -37,7 +37,7 @@ import { McpToolError } from "../errors";
 import { storage } from "../../storage";
 import { db } from "../../db";
 import { expenseDocuments } from "@shared/schema";
-import { uploadFile, getFile } from "../../object-storage";
+import { uploadFile, getFile, deleteFile } from "../../object-storage";
 import { resolveAgentUserId } from "../audit-attribution";
 
 const IMPORT_DOC_TYPE_ENUM = new Set([
@@ -61,7 +61,7 @@ registerTool({
   description:
     "Attach a document (PDF, image, Excel, …) to a procedure. The row lands in `expense_documents` with expense_type='import_document' and expense_id=procedure.id — that's the table the Procedure Details page renders from. " +
     "PREFER s3_key (obtained via prepare_invoice_upload + PUT) over base64: base64 inflates ~33%, exceeds proxy timeouts, and Chrome-extension automation cannot file-pick. " +
-    "When s3_key is supplied, the existing object is referenced (no S3 round-trip). When file_base64 is supplied, the bytes are uploaded to S3 under the procedure's directory first. " +
+    "When s3_key is supplied, the file is RELOCATED from prepare_invoice_upload's staging path (SOHO/mcp-uploads/...) to the procedure's canonical directory (SOHO/<safeRef>/<timestamp>-<filename>) and the staging copy is deleted; the new key is persisted in expense_documents. " +
     "`document_type` is matched against the import_document_type enum (invoice, packing_list, insurance, awb, …); unknown values (e.g. 'freight_invoice') leave the enum column null but still attach.",
   inputSchema: {
     type: "object",
@@ -106,21 +106,44 @@ registerTool({
     const mimeType = args.mime_type ?? "application/octet-stream";
 
     if (args.s3_key) {
-      // Reference the already-uploaded object — no S3 round-trip.
-      // Quick existence/size sanity check so we don't store a dangling key.
+      // prepare_invoice_upload puts the file under SOHO/mcp-uploads/ (generic
+      // staging area — it doesn't know which procedure the file belongs to).
+      // The S3 convention for procedure docs is SOHO/<safeRef>/<timestamp>-<name>.
+      // So we RELOCATE: download from the staging key, re-upload under the
+      // procedure's directory via uploadFile() (which generates the canonical
+      // key), then delete the staging copy. The new key is what we persist
+      // in expense_documents — the staging path never appears in DB rows.
+      let buf: Buffer;
       try {
         const { buffer } = await getFile(args.s3_key);
         if (!buffer || buffer.length === 0) {
           throw new McpToolError(`s3_key '${args.s3_key}' resolved to empty file`);
         }
-        byteSize = buffer.length;
+        buf = buffer;
       } catch (err: any) {
         if (err instanceof McpToolError) throw err;
-        throw new McpToolError(`Failed to verify s3_key '${args.s3_key}': ${err?.message ?? err}`);
+        throw new McpToolError(`Failed to fetch s3_key '${args.s3_key}': ${err?.message ?? err}`);
       }
-      objectKey = args.s3_key;
+
+      const relocatedKey = await uploadFile(buf, args.filename, mimeType, proc.reference);
+      if (!relocatedKey) {
+        throw new McpToolError("uploadFile (relocate) did not return an object key");
+      }
+      // Best-effort cleanup of the staging copy. If the delete fails (e.g.
+      // the staging key was already gone, or IAM permissions denied), don't
+      // unwind the relocation — the canonical copy is in place and the row
+      // will reference it correctly. The staging key just becomes garbage to
+      // be reaped by lifecycle policy.
+      try {
+        await deleteFile(args.s3_key);
+      } catch (err) {
+        console.warn(`[write_attach_document] staging cleanup failed for ${args.s3_key}:`, err);
+      }
+
+      objectKey = relocatedKey;
+      byteSize = buf.length;
     } else {
-      // Legacy base64 fallback. Decode first so we fail fast on bad input.
+      // base64 fallback. Decode first so we fail fast on bad input.
       let buf: Buffer;
       try {
         buf = Buffer.from(args.file_base64, "base64");
