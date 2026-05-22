@@ -14,7 +14,7 @@ import {
   Calculator,
   Sparkles
 } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
@@ -171,6 +171,24 @@ const categoryOptionsByType: Record<string, BaseOption[]> = {
   ]
 }
 
+// Expense category columns that can hold multiple semicolon-separated entries and need
+// to be expanded into N adjacent columns (where N = max entries across all rows).
+const EXPENSE_CATEGORIES = new Set([
+  'export_registry_fee', 'insurance', 'awb_fee', 'airport_storage_fee',
+  'bonded_warehouse_storage_fee', 'transportation', 'international_transportation',
+  'tareks_fee', 'customs_inspection', 'azo_test', 'other', 'service_invoice',
+]);
+
+// Columns whose values represent Turkish Lira amounts and should be formatted accordingly.
+const EXPENSE_COLUMN_KEYWORDS = [
+  'export_registry_fee', 'insurance', 'awb_fee', 'airport_storage_fee',
+  'bonded_warehouse_storage_fee', 'transportation', 'international_transportation',
+  'tareks_fee', 'customs_inspection', 'azo_test', 'other',
+  'import_expenses', 'total_expenses', 'total_payments', 'remaining_balance',
+  'payment_distributions', 'service_invoice',
+  'customs_tax', 'additional_customs_tax', 'kkdf', 'vat', 'stamp_tax', 'total_tax',
+];
+
 interface Procedure {
   id: number;
   reference: string;
@@ -235,6 +253,93 @@ export default function CustomReportPage() {
     return stringValue;
   }
 
+  // Format a single cell value the same way the preview JSX does — used by both the
+  // preview render and the Excel export, so they stay in sync.
+  const formatCellValue = (key: string, value: any, currency?: any): string => {
+    const isExpenseColumn = EXPENSE_COLUMN_KEYWORDS.some((kw) => key.includes(kw));
+    const isAmountColumn = key.toLowerCase() === 'amount';
+
+    if (isExpenseColumn) {
+      return formatTurkishLira(value);
+    }
+    if (isAmountColumn && value && value !== '-' && value !== '' && value !== 0) {
+      const numValue = parseFloat(String(value));
+      if (!isNaN(numValue) && numValue !== 0) {
+        const formatted = numValue.toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+        if (currency === 'USD') return `$${formatted}`;
+        if (currency === 'EUR') return `€${formatted}`;
+        if (currency === 'TRY' || currency === 'TL') return `₺${formatted}`;
+        if (currency) return `${currency} ${formatted}`;
+        return `$${formatted}`;
+      }
+    }
+    return String(value ?? '') || '-';
+  };
+
+  // Build the full headers + 2-D rows for both preview and Excel export.
+  // Memoised so the export reuses the same shape without re-walking on every keystroke.
+  const tableData = useMemo<{ headers: string[]; rows: string[][] }>(() => {
+    if (!reportData || reportData.length === 0) return { headers: [], rows: [] };
+
+    const keys = Object.keys(reportData[0]);
+
+    // Pass 1: compute how many sub-columns each expense category needs
+    const maxEntriesByKey = new Map<string, number>();
+    for (const key of keys) {
+      if (EXPENSE_CATEGORIES.has(key)) {
+        const maxEntries = Math.max(1, ...reportData.map((row) => {
+          const v = row[key];
+          if (!v || v === '' || v === '-') return 1;
+          return (String(v).match(/;/g) || []).length + 1;
+        }));
+        maxEntriesByKey.set(key, maxEntries);
+      } else {
+        maxEntriesByKey.set(key, 1);
+      }
+    }
+
+    // Pass 2: build headers
+    const headers: string[] = [];
+    for (const key of keys) {
+      const maxEntries = maxEntriesByKey.get(key) || 1;
+      const label = key.replace(/_/g, ' ');
+      if (maxEntries > 1) {
+        for (let i = 0; i < maxEntries; i++) headers.push(`${label} ${i + 1}`);
+      } else {
+        headers.push(label);
+      }
+    }
+
+    // Pass 3: build rows
+    const rows = reportData.map((row) => {
+      const cells: string[] = [];
+      const currency = row.currency || row.Currency;
+      for (const key of keys) {
+        const maxEntries = maxEntriesByKey.get(key) || 1;
+        const value = row[key];
+        if (maxEntries > 1) {
+          const entries = value && value !== '' && value !== '-'
+            ? String(value).split(';').map((e) => e.trim()).filter(Boolean)
+            : [];
+          const isExpenseColumn = EXPENSE_COLUMN_KEYWORDS.some((kw) => key.includes(kw));
+          for (let i = 0; i < maxEntries; i++) {
+            const entryValue = entries[i] || '-';
+            cells.push(entryValue !== '-' && isExpenseColumn ? formatTurkishLira(entryValue) : entryValue);
+          }
+        } else {
+          cells.push(formatCellValue(key, value, currency));
+        }
+      }
+      return cells;
+    });
+
+    return { headers, rows };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportData]);
+
   // Fetch procedures data to get real shippers
   const { data: proceduresData, isLoading: isLoadingProcedures } = useQuery({
     queryKey: ["/api/procedures"],
@@ -289,27 +394,15 @@ export default function CustomReportPage() {
     }
 
     setIsExporting(true)
-    
+
     try {
-      // Extract the exact table structure from the DOM (same as Report Preview)
-      const tableElement = document.querySelector('.report-preview-table table');
-      if (!tableElement) {
-        throw new Error('Report table not found. Please ensure the report is displayed first.');
+      // Build the 2-D array directly from the full reportData (NOT from the DOM —
+      // the preview only renders the first 10 rows, so DOM scraping was truncating
+      // the export to 10 rows). Uses the same formatter the preview uses.
+      if (tableData.rows.length === 0) {
+        throw new Error('Report data is empty.');
       }
-      
-      // Get headers from the table
-      const headerElements = tableElement.querySelectorAll('thead th');
-      const headers = Array.from(headerElements).map(th => th.textContent?.trim() || '');
-      
-      // Get data rows from the table
-      const rowElements = tableElement.querySelectorAll('tbody tr');
-      const excelData = [headers];
-      
-      Array.from(rowElements).forEach(tr => {
-        const cellElements = tr.querySelectorAll('td');
-        const rowData = Array.from(cellElements).map(td => td.textContent?.trim() || '');
-        excelData.push(rowData);
-      });
+      const excelData: string[][] = [tableData.headers, ...tableData.rows];
       
       // Create Excel workbook
       const response = await fetch('/api/custom-report/export-excel', {
@@ -812,159 +905,31 @@ export default function CustomReportPage() {
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50 sticky top-0">
                         <tr>
-                          {reportData[0] && Object.keys(reportData[0]).map((key) => {
-                            // Check if this is an expense category that might have multiple entries
-                            const isExpenseCategory = [
-                              'export_registry_fee', 'insurance', 'awb_fee', 'airport_storage_fee',
-                              'bonded_warehouse_storage_fee', 'transportation', 'international_transportation',
-                              'tareks_fee', 'customs_inspection', 'azo_test', 'other', 'service_invoice'
-                            ].includes(key);
-
-                            if (isExpenseCategory) {
-                              // Find the maximum number of entries for this category across all rows
-                              const maxEntries = Math.max(1, ...reportData.map(row => {
-                                const value = row[key];
-                                if (!value || value === '' || value === '-') return 1;
-                                // Count semicolon separators + 1 to get number of entries
-                                return (value.match(/;/g) || []).length + 1;
-                              }));
-
-                              // Create multiple column headers if more than 1 entry
-                              if (maxEntries > 1) {
-                                return Array.from({ length: maxEntries }, (_, index) => (
-                                  <th key={`${key}_${index}`} className="text-left p-2 border-b font-medium capitalize min-w-[200px]">
-                                    {key.replace(/_/g, ' ')} {index + 1}
-                                  </th>
-                                ));
-                              }
-                            }
-
-                            return (
-                              <th key={key} className="text-left p-2 border-b font-medium capitalize">
-                                {key.replace(/_/g, ' ')}
-                              </th>
-                            );
-                          }).flat()}
+                          {tableData.headers.map((header, i) => (
+                            <th
+                              key={i}
+                              className="text-left p-2 border-b font-medium capitalize min-w-[120px]"
+                            >
+                              {header}
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {reportData.slice(0, 10).map((row, index) => (
-                          <tr key={index} className="border-b hover:bg-muted/20">
-                            {Object.entries(row).map(([key, value], cellIndex) => {
-                              // Check if this is an expense category that might have multiple entries
-                              const isExpenseCategory = [
-                                'export_registry_fee', 'insurance', 'awb_fee', 'airport_storage_fee',
-                                'bonded_warehouse_storage_fee', 'transportation', 'international_transportation',
-                                'tareks_fee', 'customs_inspection', 'azo_test', 'other', 'service_invoice'
-                              ].includes(key);
-
-                              // Check if this column contains expense-related data for formatting
-                              const isExpenseColumn = key.includes('export_registry_fee') || 
-                                                     key.includes('insurance') || 
-                                                     key.includes('awb_fee') || 
-                                                     key.includes('airport_storage_fee') || 
-                                                     key.includes('bonded_warehouse_storage_fee') || 
-                                                     key.includes('transportation') || 
-                                                     key.includes('international_transportation') || 
-                                                     key.includes('tareks_fee') || 
-                                                     key.includes('customs_inspection') || 
-                                                     key.includes('azo_test') || 
-                                                     key.includes('other') ||
-                                                     key.includes('import_expenses') ||
-                                                     key.includes('total_expenses') ||
-                                                     key.includes('total_payments') ||
-                                                     key.includes('remaining_balance') ||
-                                                     key.includes('payment_distributions') ||
-                                                     key.includes('service_invoice') ||
-                                                     key.includes('customs_tax') ||
-                                                     key.includes('additional_customs_tax') ||
-                                                     key.includes('kkdf') ||
-                                                     key.includes('vat') ||
-                                                     key.includes('stamp_tax') ||
-                                                     key.includes('total_tax');
-
-                              // Check if this is the Amount column (invoice value)
-                              const isAmountColumn = key.toLowerCase() === 'amount';
-
-                              // Get currency from the same row if available
-                              const currency = row.currency || row.Currency;
-
-                              if (isExpenseCategory) {
-                                // Split multiple expenses into separate columns
-                                const expenseEntries = value && value !== '' && value !== '-' 
-                                  ? String(value).split(';').map(entry => entry.trim()).filter(entry => entry)
-                                  : [];
-
-                                // Find the maximum number of entries for this category across all rows
-                                const maxEntries = Math.max(1, ...reportData.map(r => {
-                                  const v = r[key];
-                                  if (!v || v === '' || v === '-') return 1;
-                                  return (String(v).match(/;/g) || []).length + 1;
-                                }));
-
-                                // Create cells for each entry
-                                if (maxEntries > 1) {
-                                  return Array.from({ length: maxEntries }, (_, entryIndex) => {
-                                    const entryValue = expenseEntries[entryIndex] || '-';
-                                    let displayValue = entryValue;
-
-                                    // Apply Turkish Lira formatting if it's an expense
-                                    if (entryValue !== '-' && isExpenseColumn) {
-                                      displayValue = formatTurkishLira(entryValue);
-                                    }
-
-                                    return (
-                                      <td key={`${cellIndex}_${entryIndex}`} className="p-2 text-xs min-w-[200px]">
-                                        {displayValue}
-                                      </td>
-                                    );
-                                  });
-                                }
-                              }
-
-                              // Handle regular columns
-                              let displayValue = String(value) || '-';
-
-                              if (isExpenseColumn) {
-                                displayValue = formatTurkishLira(value);
-                              } else if (isAmountColumn && value && value !== '-' && value !== '' && value !== 0) {
-                                // Format amount with currency symbol and decimal separators
-                                const numValue = parseFloat(String(value));
-                                if (!isNaN(numValue) && numValue !== 0) {
-                                  const formattedAmount = numValue.toLocaleString('en-US', { 
-                                    minimumFractionDigits: 2, 
-                                    maximumFractionDigits: 2 
-                                  });
-
-                                  // Add currency symbol based on currency type
-                                  if (currency === 'USD') {
-                                    displayValue = `$${formattedAmount}`;
-                                  } else if (currency === 'EUR') {
-                                    displayValue = `€${formattedAmount}`;
-                                  } else if (currency === 'TRY' || currency === 'TL') {
-                                    displayValue = `₺${formattedAmount}`;
-                                  } else if (currency) {
-                                    displayValue = `${currency} ${formattedAmount}`;
-                                  } else {
-                                    // Default to USD if no currency is specified
-                                    displayValue = `$${formattedAmount}`;
-                                  }
-                                }
-                              }
-
-                              return (
-                                <td key={cellIndex} className="p-2 text-xs">
-                                  {displayValue}
-                                </td>
-                              );
-                            }).flat()}
+                        {tableData.rows.slice(0, 10).map((row, rowIndex) => (
+                          <tr key={rowIndex} className="border-b hover:bg-muted/20">
+                            {row.map((cell, cellIndex) => (
+                              <td key={cellIndex} className="p-2 text-xs">
+                                {cell}
+                              </td>
+                            ))}
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                    {reportData.length > 10 && (
+                    {tableData.rows.length > 10 && (
                       <div className="p-2 text-center text-sm text-muted-foreground bg-muted/20">
-                        Showing first 10 rows of {reportData.length} total rows
+                        Showing first 10 rows of {tableData.rows.length} total rows (Excel export will include all {tableData.rows.length} rows)
                       </div>
                     )}
                   </div>
