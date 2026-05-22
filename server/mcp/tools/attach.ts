@@ -47,6 +47,7 @@ const IMPORT_DOC_TYPE_ENUM = new Set([
   "packing_list",
   "insurance",
   "awb",
+  "freight_invoice",
   "import_declaration",
   "transit_declaration",
   "pod",

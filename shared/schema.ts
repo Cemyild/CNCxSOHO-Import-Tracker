@@ -66,6 +66,12 @@ export const expenseTypeEnum = pgEnum('expense_type', [
 ]);
 
 // Import document types enum
+//
+// NOTE: this list must stay in sync with the DB's enum_range. The
+// 'freight_invoice' value was added to the DB out-of-band (ALTER TYPE)
+// before this file was updated; until 2026-05-23 the TS list lagged
+// behind and any code path that did `Set([...this list...]).has(value)`
+// rejected the legit value as unknown.
 export const importDocumentTypeEnum = pgEnum('import_document_type', [
   'tax_calculation_spreadsheet',
   'advance_taxletter',
@@ -73,6 +79,7 @@ export const importDocumentTypeEnum = pgEnum('import_document_type', [
   'packing_list',
   'insurance',
   'awb',
+  'freight_invoice',
   'import_declaration',
   'transit_declaration',
   'pod',
