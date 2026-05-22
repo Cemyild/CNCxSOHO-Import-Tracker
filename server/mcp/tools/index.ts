@@ -23,4 +23,6 @@ export async function registerAllTools(): Promise<void> {
   await import("./exports");
   // Storage cost estimator (historical-rate based, +1000 USD buffer)
   await import("./storage-estimate");
+  // Procedure status details upsert (shipment/payment/document checkboxes)
+  await import("./status-details");
 }
