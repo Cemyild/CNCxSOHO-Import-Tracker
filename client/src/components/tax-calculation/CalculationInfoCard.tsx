@@ -112,8 +112,11 @@ export function CalculationInfoCard({ calculation, calculationQueryKey }: Props)
       }
       return calcRes.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { procedureSynced?: boolean; [key: string]: unknown }) => {
       queryClient.invalidateQueries({ queryKey: calculationQueryKey });
+      if (data?.procedureSynced) {
+        queryClient.invalidateQueries({ queryKey: ["/api/procedures"] });
+      }
       toast({ title: "Saved", description: "Calculation updated and taxes recalculated" });
       setEditMode(false);
     },
