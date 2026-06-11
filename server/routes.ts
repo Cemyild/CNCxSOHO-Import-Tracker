@@ -6028,15 +6028,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Sync the linked procedure (header totals + invoice line items) from a tax
+  // calculation's current state. No-op when the calculation has no procedure.
+  async function syncProcedureFromCalculation(
+    calculationId: number,
+    userId?: number,
+  ): Promise<{ synced: boolean; procedureId?: number }> {
+    const calculation = await storage.getTaxCalculation(calculationId);
+    if (!calculation?.procedure_id) {
+      return { synced: false };
+    }
+
+    const items = await storage.getTaxCalculationItems(calculationId);
+
+    await storage.updateProcedure(calculation.procedure_id, {
+      amount: calculation.total_value,
+      piece: calculation.total_quantity,
+    });
+
+    await db
+      .delete(invoiceLineItems)
+      .where(eq(invoiceLineItems.procedureReference, calculation.reference));
+
+    if (items.length > 0) {
+      const lineItemsData = items.map((item, index) => ({
+        procedureReference: calculation.reference,
+        styleNo: item.style,
+        description: item.category,
+        quantity: item.unit_count,
+        unitPrice: item.cost,
+        totalPrice: item.total_value,
+        sortOrder: index,
+        source: 'tax_calculation',
+        createdBy: userId || 3,
+      }));
+      await db.insert(invoiceLineItems).values(lineItemsData);
+    }
+
+    return { synced: true, procedureId: calculation.procedure_id };
+  }
+
   app.post(
     "/api/tax-calculation/calculations/:id/calculate",
     async (req, res) => {
       try {
         const id = parseInt(req.params.id);
         await calculateAllItems(id);
+        const sync = await syncProcedureFromCalculation(id, req.body?.userId);
         const calculation = await storage.getTaxCalculation(id);
         const items = await storage.getTaxCalculationItems(id);
-        res.json({ calculation, items });
+        res.json({
+          calculation,
+          items,
+          procedureSynced: sync.synced,
+          procedureId: sync.procedureId ?? null,
+        });
       } catch (error) {
         res
           .status(500)
