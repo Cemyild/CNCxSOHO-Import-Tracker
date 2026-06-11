@@ -237,33 +237,50 @@ export default function TaxCalculationEditPage() {
       
       setLoadingProgress(70);
 
+      let procedureSynced = false;
+      let procedureId: number | null = null;
+
       if (data.calculate) {
         setLoadingStep('Calculating');
         console.log('🧮 STEP 3: CALCULATING TAXES...');
-        
+
         const calcTaxResponse = await apiRequest("POST", `/api/tax-calculation/calculations/${id}/calculate`, {});
         if (!calcTaxResponse.ok) throw new Error("Failed to calculate taxes");
-        
+        const calcResult = await calcTaxResponse.json();
+        procedureSynced = !!calcResult.procedureSynced;
+        procedureId = calcResult.procedureId ?? null;
+
         setLoadingProgress(100);
         console.log('✅ CALCULATION COMPLETE');
-        
+
         await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      return { id };
+      return { id, procedureSynced, procedureId };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       setIsLoading(false);
       queryClient.invalidateQueries({ queryKey: ["/api/tax-calculation/calculations"] });
       queryClient.invalidateQueries({ queryKey: [`/api/tax-calculation/calculations/${id}`] });
-      
+      if (result.procedureSynced) {
+        queryClient.invalidateQueries({ queryKey: ["/api/procedures"] });
+      }
+
       if (removedProducts.length > 0) {
+        if (result.procedureSynced) {
+          toast({
+            title: "Procedure updated",
+            description: `Linked procedure #${result.procedureId} was updated with the new totals`,
+          });
+        }
         setPendingRemovedItems(removedProducts);
         setShowRemovedItemsDialog(true);
       } else {
         toast({
           title: "Success",
-          description: "Calculation updated successfully",
+          description: result.procedureSynced
+            ? `Calculation updated — linked procedure #${result.procedureId} also updated`
+            : "Calculation updated successfully",
         });
         navigate(`/tax-calculation/${id}`);
       }
