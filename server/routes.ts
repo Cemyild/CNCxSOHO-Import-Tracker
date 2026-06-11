@@ -47,6 +47,7 @@ import customReportRoutes from "./custom-report";
 // Import Tax Calculation Excel Export
 import taxCalculationExcelRoute from "./tax-calculation-excel";
 import taxCalculationBeyannameRoute from "./tax-calculation-beyanname";
+import invoiceMakerRoute from "./invoice-maker";
 import excelEnrichmentRouter from "./excel-enrichment";
 // Import Claude AI utilities
 import claude from "./claude";
@@ -5186,6 +5187,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Use Tax Calculation Excel Export
   app.use("/api/tax-calculation/calculations", taxCalculationExcelRoute);
   app.use("/api/tax-calculation/calculations", taxCalculationBeyannameRoute);
+
+  // Invoice Maker (commercial invoice builder)
+  app.use("/api/invoice-maker", invoiceMakerRoute);
 
   // Use Tax Analytics routes
   app.use("/api", taxRoutes);

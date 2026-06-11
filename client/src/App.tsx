@@ -30,6 +30,7 @@ import TaxCalculationResultsPage from "@/pages/tax-calculation-results";
 import AskPage from "@/pages/ask";
 import StorageCalculatorPage from "@/pages/storage-calculator";
 import BulkDownloadPage from "@/pages/bulk-download";
+import InvoiceMakerPage from "@/pages/invoice-maker";
 
 function Router() {
   return (
@@ -203,6 +204,13 @@ function Router() {
         {() => (
           <ProtectedRoute>
             <BulkDownloadPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/invoice-maker">
+        {() => (
+          <ProtectedRoute>
+            <InvoiceMakerPage />
           </ProtectedRoute>
         )}
       </Route>

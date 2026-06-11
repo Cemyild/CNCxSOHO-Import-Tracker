@@ -1,5 +1,5 @@
 
-import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, decimal, unique, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, pgEnum, decimal, unique, date, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -651,3 +651,18 @@ export const agentAuditLog = pgTable("agent_audit_log", {
 export const insertAgentAuditLogSchema = createInsertSchema(agentAuditLog).omit({ id: true, ts: true });
 export type AgentAuditLog = typeof agentAuditLog.$inferSelect;
 export type InsertAgentAuditLog = z.infer<typeof insertAgentAuditLogSchema>;
+
+// Invoice Maker export history. The full export payload is stored as JSONB
+// so any past invoice can be re-downloaded (the file is rebuilt from the
+// template on demand) or used as a starting point later.
+export const invoiceMakerHistory = pgTable("invoice_maker_history", {
+  id: serial("id").primaryKey(),
+  invoice_no: text("invoice_no").notNull(),
+  total_qty: integer("total_qty").notNull(),
+  total_amount: decimal("total_amount", { precision: 14, scale: 2 }).notNull(),
+  filename: text("filename").notNull(),
+  payload: jsonb("payload").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type InvoiceMakerHistory = typeof invoiceMakerHistory.$inferSelect;

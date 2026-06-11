@@ -4,6 +4,7 @@ import {
   BarChart2,
   Calculator,
   Calendar,
+  FileText,
   Home,
   Inbox,
   Search,
@@ -28,5 +29,6 @@ export const defaultNavItems: NavItem[] = [
   { title: "Reports", url: "/reports", icon: BarChart2 },
   { title: "Bulk Download", url: "/bulk-download", icon: Archive },
   { title: "Ask CNC?", url: "/ask", icon: Sparkles },
+  { title: "Invoice Maker", url: "/invoice-maker", icon: FileText },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
