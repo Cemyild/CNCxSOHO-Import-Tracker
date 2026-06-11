@@ -6569,45 +6569,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const refreshedCalculation = await storage.getTaxCalculation(id);
         const refreshedItems = await storage.getTaxCalculationItems(id);
 
-        // 6. If a procedure is already linked, sync it
-        let procedureSynced = false;
-        if (refreshedCalculation?.procedure_id) {
-          const procId = refreshedCalculation.procedure_id;
-
-          // a. update procedure header (invoice metadata if provided + totals)
-          const procUpdate: Record<string, any> = {
-            amount: refreshedCalculation.total_value,
-            piece: refreshedCalculation.total_quantity,
-          };
+        // 6. If a procedure is already linked, sync it (totals + line items),
+        // then apply invoice metadata that only exists in this flow.
+        const sync = await syncProcedureFromCalculation(id, userId);
+        if (sync.synced && sync.procedureId) {
+          const procUpdate: Record<string, any> = {};
           if (invoiceMetadata?.invoice_no) procUpdate.invoice_no = invoiceMetadata.invoice_no;
           if (invoiceMetadata?.invoice_date) procUpdate.invoice_date = invoiceMetadata.invoice_date;
           if (invoiceMetadata?.shipper) procUpdate.shipper = invoiceMetadata.shipper;
-          await storage.updateProcedure(procId, procUpdate);
-
-          // b. replace invoice line items by procedure reference
-          await db.delete(invoiceLineItems).where(eq(invoiceLineItems.procedureReference, refreshedCalculation.reference));
-
-          if (refreshedItems.length > 0) {
-            const lineItemsData = refreshedItems.map((item, index) => ({
-              procedureReference: refreshedCalculation.reference,
-              styleNo: item.style,
-              description: item.category,
-              quantity: item.unit_count,
-              unitPrice: item.cost,
-              totalPrice: item.total_value,
-              sortOrder: index,
-              source: 'tax_calculation',
-              createdBy: userId || 3,
-            }));
-            await db.insert(invoiceLineItems).values(lineItemsData);
+          if (Object.keys(procUpdate).length > 0) {
+            await storage.updateProcedure(sync.procedureId, procUpdate);
           }
-          procedureSynced = true;
         }
 
         res.json({
           calculation: refreshedCalculation,
           items: refreshedItems,
-          procedureSynced,
+          procedureSynced: sync.synced,
         });
       } catch (error) {
         console.error('[Replace Products] ❌ ERROR:', error);
