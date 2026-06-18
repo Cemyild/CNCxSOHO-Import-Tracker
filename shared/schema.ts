@@ -9,11 +9,14 @@ export const procedureStatusEnum = pgEnum('procedure_status', ['draft', 'pending
 // Status category enums for detailed status tracking
 export const shipmentStatusOptionsEnum = pgEnum('shipment_status_options', [
   'created',
+  'tax_calc_insurance_sent',
+  'arrived',
+  'transit_started',
+  'transit_in_process',
   'tareks_application',
   'tareks_approved',
   'import_started',
   'import_finished',
-  'arrived',
   'delivered',
   'closed'
 ]);

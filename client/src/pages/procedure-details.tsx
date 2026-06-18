@@ -703,7 +703,7 @@ export default function ProcedureDetailsPage() {
       .join(' ');
 
     // Shipment status colors
-    if (["created", "import_started", "tareks_application", "tax_calc_insurance_sent"].includes(status)) {
+    if (["created", "import_started", "tareks_application", "tax_calc_insurance_sent", "transit_started", "transit_in_process"].includes(status)) {
       badgeClass = "bg-yellow-500 text-white";
     } 
     else if (["arrived", "tareks_approved", "import_finished", "delivered"].includes(status)) {
@@ -1096,6 +1096,8 @@ export default function ProcedureDetailsPage() {
                     { status: "created", label: "Created" },
                     { status: "tax_calc_insurance_sent", label: "Tax Calc & Insurance Sent" },
                     { status: "arrived", label: "Arrived" },
+                    { status: "transit_started", label: "Transit Started" },
+                    { status: "transit_in_process", label: "Transit in Process" },
                     { status: "tareks_application", label: "Tareks Application" },
                     { status: "tareks_approved", label: "Tareks Approved" },
                     { status: "import_started", label: "Import Started" },
@@ -1118,6 +1120,8 @@ export default function ProcedureDetailsPage() {
                         case "import_started":
                         case "tareks_application":
                         case "tax_calc_insurance_sent":
+                        case "transit_started":
+                        case "transit_in_process":
                           badgeClass = "bg-yellow-500 text-white";
                           break;
                         case "arrived":

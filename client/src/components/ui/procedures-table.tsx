@@ -338,6 +338,14 @@ const columns: ColumnDef<Procedure>[] = [
             formattedStatus = "Arrived";
             badgeClass = "bg-green-600 text-white";
             break;
+          case "transit_started":
+            formattedStatus = "Transit Started";
+            badgeClass = "bg-yellow-500 text-white";
+            break;
+          case "transit_in_process":
+            formattedStatus = "Transit in Process";
+            badgeClass = "bg-yellow-500 text-white";
+            break;
           case "tareks_application":
             formattedStatus = "Tareks Application";
             badgeClass = "bg-red-600 text-white";
