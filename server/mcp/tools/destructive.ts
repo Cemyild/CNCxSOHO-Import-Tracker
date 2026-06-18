@@ -3,9 +3,12 @@
 // executed, the registry's audit logger captures the full "before" state so
 // the change can be reconstructed.
 //
-// Note: procedureStatusEnum is ['draft','pending','approved','rejected','completed'].
-// 'closed' is NOT a valid value, so destructive_close_procedure sets status to
-// 'completed' (the terminal state in the enum).
+// WARNING: destructive_close_procedure writes procedures.status = 'completed'
+// (cast `as any`), but this does NOT match the live DB. There is no
+// draft/pending/approved/rejected/completed enum in use; the real status columns
+// are shipment_status / payment_status / document_status (terminal value 'closed').
+// This tool is unused by the app and would likely fail against the live schema.
+// Do not rely on it without first reconciling the procedures status column.
 import { registerTool } from "../registry";
 import { db } from "../../db";
 import { storage } from "../../storage";

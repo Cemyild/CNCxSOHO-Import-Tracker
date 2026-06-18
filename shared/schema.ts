@@ -4,7 +4,16 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const userRoleEnum = pgEnum('user_role', ['admin', 'user', 'accountant']);
-export const procedureStatusEnum = pgEnum('procedure_status', ['draft', 'pending', 'approved', 'rejected', 'completed']);
+
+// NOTE: The DB type `procedure_status` is NOT a procedure-level status enum.
+// It is the enum that actually backs the `shipment_status` column (the column is
+// declared as text() below, but in the live DB its type is `procedure_status`,
+// holding shipment values: created, tax_calc_insurance_sent, arrived,
+// transit_started, transit_in_process, tareks_application, tareks_approved,
+// import_started, import_finished, delivered, closed).
+// There is no draft/pending/approved/rejected/completed enum in use anywhere.
+// schema.ts is drifted from the live DB for these status columns — DO NOT run
+// `drizzle-kit push` / `npm run db:push`; add new status values via ALTER TYPE.
 
 // Status category enums for detailed status tracking
 export const shipmentStatusOptionsEnum = pgEnum('shipment_status_options', [
