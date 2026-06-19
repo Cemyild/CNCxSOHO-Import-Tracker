@@ -148,9 +148,13 @@ export async function handleAskRequest(req: AskRequest): Promise<AskResponse> {
   ];
 
   const trace: { name: string; input: any }[] = [];
-  const MAX_TURNS = 12;
+  // Opus (complex) turns are far slower; cap them tighter to respect the ~60s proxy timeout.
+  const MAX_TURNS = model === COMPLEX_MODEL ? 8 : 12;
+  const DEADLINE_MS = 50_000; // bail out before the ~60s proxy timeout, return a graceful message not a 504
+  const startedAt = Date.now();
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
+    if (Date.now() - startedAt > DEADLINE_MS) break;
     const response: any = await anthropic.messages.create({
       model,
       max_tokens: 16000,
