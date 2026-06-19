@@ -6,6 +6,8 @@
 // NOTE: pool is imported lazily inside runReadOnlyQuery so that importing this
 // module (e.g. in pure-guard tests) does not trigger db.ts's DATABASE_URL check.
 
+import type { FieldDef } from "@neondatabase/serverless";
+
 const FORBIDDEN = /\b(insert|update|delete|drop|alter|truncate|grant|revoke|create|comment|copy|merge|call|do|vacuum|reindex|cluster|refresh|lock|set|reset)\b/i;
 
 /** Throws if `sqlText` is not a single read-only SELECT/WITH statement. */
@@ -46,7 +48,7 @@ export async function runReadOnlyQuery(
     const res = await client.query(sqlText);
     await client.query("COMMIT");
     const rows = res.rows ?? [];
-    const columns = (res.fields ?? []).map((f: any) => f.name);
+    const columns = (res.fields ?? []).map((f: FieldDef) => f.name);
     return {
       columns,
       rows: rows.slice(0, maxRows),
