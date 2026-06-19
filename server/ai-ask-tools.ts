@@ -6,6 +6,7 @@
 
 import { and, eq, gte, lte, ilike, isNotNull, sql, desc, asc, inArray } from "drizzle-orm";
 import { db } from "./db";
+import { runReadOnlyQuery } from "./ai-ask-sql";
 import {
   procedures,
   taxes,
@@ -182,6 +183,25 @@ export const TOOL_SCHEMAS = [
     },
   },
   {
+    name: 'run_sql',
+    description:
+      'ESCAPE HATCH — run a single read-only SELECT against the database when the ' +
+      'fixed query_* tools cannot express the question (joins across tables, rankings ' +
+      '("most expensive"/"top N"), derived metrics (averages, ratios, per-unit), or ' +
+      'multi-condition comparisons). The query runs in a READ ONLY transaction: writes ' +
+      'are impossible. Rules: SELECT (or WITH ... SELECT) only, a SINGLE statement, ' +
+      'and ALWAYS include a LIMIT (<=200). Use exact table/column names from the schema ' +
+      'in the system prompt. Date columns are TEXT "YYYY-MM-DD". Prefer the dedicated ' +
+      'query_* tools for common aggregates; reach for run_sql only when they fall short.',
+    input_schema: {
+      type: 'object',
+      required: ['sql'],
+      properties: {
+        sql: { type: 'string', description: 'A single read-only SELECT/WITH statement with a LIMIT.' },
+      },
+    },
+  },
+  {
     name: 'present_answer',
     description:
       'FINAL tool — call this exactly once when you have enough data to respond. ' +
@@ -194,6 +214,15 @@ export const TOOL_SCHEMAS = [
         answer: {
           type: 'string',
           description: 'Markdown answer in the user\'s language. Be concise — 1-3 short paragraphs.',
+        },
+        source: {
+          type: 'string',
+          enum: ['database', 'general_knowledge', 'mixed'],
+          description:
+            "Where the answer's facts come from: 'database' = entirely from query results; " +
+            "'general_knowledge' = from your own knowledge, not the DB (e.g. customs regulation, " +
+            "tax-calculation logic); 'mixed' = both. When not 'database', add a short caveat in the " +
+            "answer text that the non-DB part is general knowledge and should be verified.",
         },
         blocks: {
           type: 'array',
@@ -757,6 +786,14 @@ export async function runTool(name: string, input: any): Promise<any> {
     case 'query_products':     return await runQueryProducts(input);
     case 'query_hs_codes':     return await runQueryHsCodes(input);
     case 'query_time_series':  return await runQueryTimeSeries(input);
+    case 'run_sql': {
+      try {
+        const { columns, rows, truncated } = await runReadOnlyQuery(input?.sql);
+        return { columns, rows, row_count: rows.length, truncated };
+      } catch (err: any) {
+        return { error: `SQL error: ${err?.message ?? String(err)}` };
+      }
+    }
     default:
       return { error: `Unknown tool: ${name}` };
   }

@@ -9,13 +9,13 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { TOOL_SCHEMAS, runTool } from "./ai-ask-tools";
+import { SCHEMA_SUMMARY } from "./ai-ask-schema";
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const anthropic = ANTHROPIC_API_KEY?.startsWith("sk-ant-")
   ? new Anthropic({ apiKey: ANTHROPIC_API_KEY })
   : null;
 
-const ASK_MODEL = "claude-sonnet-4-20250514"; // Tool-use accuracy matters here.
 
 const SYSTEM_PROMPT = `You are the analytics assistant for the CNCxSOHO Import Tracker (a customs / import-tracking app for a company that imports goods into Turkey). Users ask questions about import procedures, taxes, expenses, payments, products, and Turkish HS codes.
 
@@ -26,7 +26,7 @@ Today's date is provided in the first user turn — use it to resolve relative p
 How to work:
 1. Decide which tool(s) you need. You may call multiple in sequence — and you SHOULD call as many as needed: a typical "list with totals" question takes 1–3 tool calls (fetch totals, fetch list, then present_answer). Don't bail out early.
 2. Once you have enough data, call \`present_answer\` with:
-   - a concise answer in markdown (1–3 short paragraphs) in the user's language
+   - an answer in markdown, length calibrated to the question (terse for a simple metric, fuller for analysis/comparison/"why" questions), in the user's language
    - table block(s) whenever the user asks for a list / breakdown / details / "ver liste olarak" / "tarih ve fatura bilgileri" / etc.
    - chart block(s) (type: bar or line) when the user asks about trends, by-month/year, or rankings
 3. If a question is ambiguous, ask one clarifying question via \`present_answer\` (text only) instead of guessing.
@@ -58,7 +58,15 @@ Formatting rules:
 - Always include the SHIPPER's full name when listing procedures.
 - Never invent numbers — if a tool returns 0/empty, say so plainly.
 
-Available tools — query_procedures, query_taxes, query_expenses, query_payments, query_products, query_hs_codes, query_time_series, present_answer (REQUIRED final call).`;
+Available tools — query_procedures, query_taxes, query_expenses, query_payments, query_products, query_hs_codes, query_time_series, present_answer (REQUIRED final call).
+
+When the fixed query_* tools can't express the question (rankings like "most expensive", comparisons between shippers, derived metrics like averages/ratios/margins, or multi-table joins), use the \`run_sql\` tool to write a single read-only SELECT. Always add a LIMIT (<=200). Use the schema below for exact table/column names.
+
+${SCHEMA_SUMMARY}
+
+DEPTH: Calibrate answer length to the question. For a simple metric, stay terse. When the user asks "why", for analysis, comparison, or interpretation, give a fuller answer with the reasoning and relevant context — don't truncate to one line.
+
+OUT-OF-DATABASE QUESTIONS: For questions the database can't answer (Turkish customs regulation, how a tax is calculated, general advice), answer from your own knowledge — but set present_answer.source to 'general_knowledge' (or 'mixed' if you also used DB data) AND add a short caveat in the answer text that this part is general knowledge and should be verified. Never present general knowledge as if it came from the database. Set source to 'database' when every fact came from query results.`;
 
 export interface AskBlock {
   type: "table" | "chart";
@@ -76,6 +84,7 @@ export interface AskBlock {
 export interface AskResponse {
   answer: string;
   blocks?: AskBlock[];
+  source?: "database" | "general_knowledge" | "mixed";
   tool_calls?: { name: string; input: any }[]; // for transparency / debugging
 }
 
@@ -89,12 +98,47 @@ export function isAskConfigured(): boolean {
   return !!anthropic;
 }
 
+const ROUTER_MODEL = "claude-haiku-4-5";
+const SIMPLE_MODEL = "claude-sonnet-4-6";
+const COMPLEX_MODEL = "claude-opus-4-8";
+
+/**
+ * Fast pre-classification of question difficulty so we can pick a model.
+ * Returns "simple" on any error/ambiguity (safe default — keeps latency low).
+ */
+async function classifyDifficulty(question: string): Promise<"simple" | "complex"> {
+  if (!anthropic) return "simple";
+  try {
+    const res: any = await anthropic.messages.create({
+      model: ROUTER_MODEL,
+      max_tokens: 8,
+      system:
+        "Classify the user's analytics question by difficulty. Reply with EXACTLY one word: " +
+        "'simple' (a single metric, count, total, or list with basic filters) or " +
+        "'complex' (comparisons, rankings, derived metrics like averages/ratios, multi-table " +
+        "joins, or open-ended/general-knowledge questions). Reply with only the word.",
+      messages: [{ role: "user", content: question }],
+    });
+    const text = (res.content ?? [])
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join(" ")
+      .toLowerCase();
+    return text.includes("complex") ? "complex" : "simple";
+  } catch {
+    return "simple";
+  }
+}
+
 export async function handleAskRequest(req: AskRequest): Promise<AskResponse> {
   if (!anthropic) {
     throw new Error("ANTHROPIC_API_KEY not configured");
   }
 
   const today = req.todayISO ?? new Date().toISOString().slice(0, 10);
+
+  const difficulty = await classifyDifficulty(req.question);
+  const model = difficulty === "complex" ? COMPLEX_MODEL : SIMPLE_MODEL;
 
   const messages: Anthropic.MessageParam[] = [
     {
@@ -104,16 +148,21 @@ export async function handleAskRequest(req: AskRequest): Promise<AskResponse> {
   ];
 
   const trace: { name: string; input: any }[] = [];
-  const MAX_TURNS = 12;
+  // Opus (complex) turns are far slower; cap them tighter to respect the ~60s proxy timeout.
+  const MAX_TURNS = model === COMPLEX_MODEL ? 8 : 12;
+  const DEADLINE_MS = 50_000; // bail out before the ~60s proxy timeout, return a graceful message not a 504
+  const startedAt = Date.now();
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const response = await anthropic.messages.create({
-      model: ASK_MODEL,
-      max_tokens: 8192,
+    if (Date.now() - startedAt > DEADLINE_MS) break;
+    const response: any = await anthropic.messages.create({
+      model,
+      max_tokens: 16000,
+      thinking: { type: "adaptive" },
       system: SYSTEM_PROMPT,
       tools: TOOL_SCHEMAS as any,
       messages,
-    });
+    } as any);
 
     // Look for tool_use blocks
     const toolUses = response.content.filter((b: any) => b.type === "tool_use") as any[];
@@ -125,6 +174,7 @@ export async function handleAskRequest(req: AskRequest): Promise<AskResponse> {
       return {
         answer: typeof args?.answer === "string" ? args.answer : "(no answer)",
         blocks: Array.isArray(args?.blocks) ? args.blocks : undefined,
+        source: args?.source,
         tool_calls: trace,
       };
     }
