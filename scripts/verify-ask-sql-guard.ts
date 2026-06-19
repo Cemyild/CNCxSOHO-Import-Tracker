@@ -25,6 +25,7 @@ shouldThrow("insert", "INSERT INTO products (style) VALUES ('x')");
 shouldThrow("drop", "DROP TABLE procedures");
 shouldThrow("multi statement", "SELECT 1; DROP TABLE procedures");
 shouldThrow("update disguised", "select 1; update procedures set amount=1");
+shouldThrow("write cte", "WITH w AS (UPDATE procedures SET amount=0 RETURNING reference) SELECT * FROM w");
 shouldThrow("empty", "   ");
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);

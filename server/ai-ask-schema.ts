@@ -1,7 +1,7 @@
 // server/ai-ask-schema.ts
 // Compact schema summary handed to the model so it can write ad-hoc read-only
 // SELECTs via the run_sql tool. Column names are ACTUAL Postgres column names.
-export const SCHEMA_SUMMARY = `Database schema (PostgreSQL) for run_sql. Use EXACT table/column names below. All date columns are stored as TEXT in 'YYYY-MM-DD' form (filter/compare as text; group via SUBSTRING(col,1,7) for month, SUBSTRING(col,1,4) for year).
+export const SCHEMA_SUMMARY = `Database schema (PostgreSQL) for run_sql. Use EXACT table/column names below. Most date columns are stored as TEXT in 'YYYY-MM-DD' form (filter/compare as text; group via SUBSTRING(col,1,7) for month, SUBSTRING(col,1,4) for year). EXCEPTION: columns annotated (timestamp) below — e.g. distribution_date, created_at — are real PostgreSQL timestamps; group those with date_trunc('month', col) / date_trunc('year', col), not SUBSTRING.
 
 procedures (one row per import procedure)
   reference (text, PK-like), shipper (text), invoice_no (text),
