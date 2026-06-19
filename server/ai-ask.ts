@@ -89,6 +89,38 @@ export function isAskConfigured(): boolean {
   return !!anthropic;
 }
 
+const ROUTER_MODEL = "claude-haiku-4-5";
+const SIMPLE_MODEL = "claude-sonnet-4-6";
+const COMPLEX_MODEL = "claude-opus-4-8";
+
+/**
+ * Fast pre-classification of question difficulty so we can pick a model.
+ * Returns "simple" on any error/ambiguity (safe default — keeps latency low).
+ */
+async function classifyDifficulty(question: string): Promise<"simple" | "complex"> {
+  if (!anthropic) return "simple";
+  try {
+    const res: any = await anthropic.messages.create({
+      model: ROUTER_MODEL,
+      max_tokens: 8,
+      system:
+        "Classify the user's analytics question by difficulty. Reply with EXACTLY one word: " +
+        "'simple' (a single metric, count, total, or list with basic filters) or " +
+        "'complex' (comparisons, rankings, derived metrics like averages/ratios, multi-table " +
+        "joins, or open-ended/general-knowledge questions). Reply with only the word.",
+      messages: [{ role: "user", content: question }],
+    });
+    const text = (res.content ?? [])
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join(" ")
+      .toLowerCase();
+    return text.includes("complex") ? "complex" : "simple";
+  } catch {
+    return "simple";
+  }
+}
+
 export async function handleAskRequest(req: AskRequest): Promise<AskResponse> {
   if (!anthropic) {
     throw new Error("ANTHROPIC_API_KEY not configured");
