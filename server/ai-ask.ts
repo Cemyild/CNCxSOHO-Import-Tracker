@@ -15,7 +15,7 @@ const anthropic = ANTHROPIC_API_KEY?.startsWith("sk-ant-")
   ? new Anthropic({ apiKey: ANTHROPIC_API_KEY })
   : null;
 
-const ASK_MODEL = "claude-sonnet-4-20250514"; // Tool-use accuracy matters here.
+const ASK_MODEL = "claude-sonnet-4-6"; // Tool-use accuracy matters here. (Sonnet 4 retired → 4.6 drop-in)
 
 const SYSTEM_PROMPT = `You are the analytics assistant for the CNCxSOHO Import Tracker (a customs / import-tracking app for a company that imports goods into Turkey). Users ask questions about import procedures, taxes, expenses, payments, products, and Turkish HS codes.
 
