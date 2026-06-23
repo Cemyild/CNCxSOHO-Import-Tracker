@@ -6390,14 +6390,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const taxItems = await storage.getTaxCalculationItems(id);
         console.log('[Create Procedure] Tax items found:', taxItems.length);
 
+        // When a procedure is created for a "split" calculation (products removed
+        // from an existing calculation into a new one), the client passes the
+        // source procedure's shipping info so the new procedure inherits it.
+        // Excluded on purpose: package/kg (differ for the split shipment),
+        // import declaration no/date and status fields (a new customs entry),
+        // amount/piece (recomputed from this calculation's totals).
+        const inherited = req.body.inheritedProcedure ?? null;
+
         const procedureData = {
           reference: calculation.reference,
           amount: calculation.total_value,
-          currency: 'USD',
+          currency: inherited?.currency || 'USD',
           piece: calculation.total_quantity,
           invoice_no: calculation.invoice_no,
           invoice_date: calculation.invoice_date || null, // Keep as YYYY-MM-DD string to avoid timezone issues
           createdBy: req.body.userId || 3,
+          ...(inherited
+            ? {
+                shipper: inherited.shipper ?? null,
+                awb_number: inherited.awb_number ?? null,
+                carrier: inherited.carrier ?? null,
+                customs: inherited.customs ?? null,
+                arrival_date: inherited.arrival_date ?? null,
+                freight_amount: inherited.freight_amount ?? null,
+                usdtl_rate: inherited.usdtl_rate ?? null,
+              }
+            : {}),
         };
 
         // Create procedure

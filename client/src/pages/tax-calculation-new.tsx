@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import type { InsertTaxCalculation, InsertTaxCalculationItem, Product } from "@shared/schema";
 import { InvoiceInfoForm } from "@/components/tax-calculation/InvoiceInfoForm";
@@ -76,6 +76,9 @@ export default function TaxCalculationNewPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [isFromRemovedItems, setIsFromRemovedItems] = useState(false);
+  // Source procedure's shipping info to inherit when this is a "split" calculation.
+  // Held in a ref so the mutation's onSuccess reads the latest value.
+  const inheritedProcedureRef = useRef<Record<string, any> | null>(null);
   
   const [invoiceData, setInvoiceData] = useState<Partial<InsertTaxCalculation>>({
     reference: "",
@@ -112,6 +115,8 @@ export default function TaxCalculationNewPage() {
             is_atr: parsed.is_atr || false,
             status: "draft",
           });
+
+          inheritedProcedureRef.current = parsed.inheritedProcedure ?? null;
 
           if (parsed.removedItems && Array.isArray(parsed.removedItems)) {
             const loadedProducts: ProductItem[] = parsed.removedItems.map((item: any, index: number) => ({
@@ -245,9 +250,46 @@ export default function TaxCalculationNewPage() {
 
       return calculation;
     },
-    onSuccess: (calculation) => {
-      setIsLoading(false);
+    onSuccess: async (calculation) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tax-calculation/calculations"] });
+
+      // For a "split" calculation, auto-create the linked procedure now and let
+      // it inherit the source procedure's shipping info (AWB, shipper, carrier,
+      // customs, arrival date, currency, freight, USD/TL rate).
+      const inheritedProcedure = inheritedProcedureRef.current;
+      if (inheritedProcedure) {
+        try {
+          const procRes = await apiRequest(
+            "POST",
+            `/api/tax-calculation/calculations/${calculation.id}/create-procedure`,
+            { inheritedProcedure },
+          );
+          if (procRes.ok) {
+            queryClient.invalidateQueries({ queryKey: ["/api/procedures"] });
+            setIsLoading(false);
+            toast({
+              title: "Success",
+              description: "New calculation and linked procedure created with copied details",
+            });
+            navigate(`/tax-calculation/${calculation.id}`);
+            return;
+          }
+          console.error('[Split] Failed to auto-create procedure:', await procRes.text());
+        } catch (e) {
+          console.error('[Split] Error auto-creating procedure:', e);
+        }
+        // Procedure creation failed — keep the calculation, warn the user.
+        setIsLoading(false);
+        toast({
+          title: "Calculation created",
+          description: "But the linked procedure could not be created automatically. You can create it from the results page.",
+          variant: "destructive",
+        });
+        navigate(`/tax-calculation/${calculation.id}`);
+        return;
+      }
+
+      setIsLoading(false);
       toast({
         title: "Success",
         description: "Calculation created successfully",

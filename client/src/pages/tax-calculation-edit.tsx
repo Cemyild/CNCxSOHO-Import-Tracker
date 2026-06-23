@@ -719,10 +719,38 @@ export default function TaxCalculationEditPage() {
     }
   };
 
-  const handleCreateNewCalculationWithRemovedItems = () => {
+  const handleCreateNewCalculationWithRemovedItems = async () => {
     setShowRemovedItemsDialog(false);
     setRemovedProducts([]);
-    
+
+    // Load the source procedure (if the edited calculation is linked to one) so
+    // the new split calculation can inherit its shipping info. Excluded later on
+    // the server: package/kg, import declaration, status fields, amount/piece.
+    let inheritedProcedure: Record<string, any> | null = null;
+    const sourceProcedureId = calculationData?.calculation?.procedure_id;
+    if (sourceProcedureId) {
+      try {
+        const procRes = await fetch(`/api/procedures/${sourceProcedureId}`);
+        if (procRes.ok) {
+          const { procedure } = await procRes.json();
+          if (procedure) {
+            inheritedProcedure = {
+              shipper: procedure.shipper ?? null,
+              awb_number: procedure.awb_number ?? null,
+              carrier: procedure.carrier ?? null,
+              customs: procedure.customs ?? null,
+              arrival_date: procedure.arrival_date ?? null,
+              currency: procedure.currency ?? null,
+              freight_amount: procedure.freight_amount ?? null,
+              usdtl_rate: procedure.usdtl_rate ?? null,
+            };
+          }
+        }
+      } catch (e) {
+        console.error('[Split] Failed to load source procedure for inheritance:', e);
+      }
+    }
+
     const removedItemsData = pendingRemovedItems.map(item => ({
       style: item.style,
       color: item.color,
@@ -748,8 +776,9 @@ export default function TaxCalculationEditPage() {
       is_prepaid: invoiceData.is_prepaid || false,
       is_atr: invoiceData.is_atr || false,
       removedItems: removedItemsData,
+      inheritedProcedure,
     };
-    
+
     sessionStorage.setItem('newCalculationFromRemoved', JSON.stringify(newCalcData));
     
     toast({
