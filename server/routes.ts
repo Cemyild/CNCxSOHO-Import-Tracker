@@ -4776,10 +4776,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("Pending documents endpoint called");
 
+      // Only procedures still at the first document stage (Import Doc. Pending).
+      // Once documents are received (or any later stage) they drop off this list.
       const query = `
         SELECT reference, shipment_status, document_status, payment_status, created_at
-        FROM procedures 
-        WHERE document_status != 'closed' OR document_status IS NULL
+        FROM procedures
+        WHERE document_status = 'import_doc_pending'
         ORDER BY created_at DESC
       `;
 
@@ -4803,10 +4805,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("Awaiting payment endpoint called");
 
+      // Only procedures in an active payment-awaiting stage.
       const query = `
         SELECT reference, shipment_status, document_status, payment_status, created_at
-        FROM procedures 
-        WHERE payment_status != 'closed' OR payment_status IS NULL
+        FROM procedures
+        WHERE payment_status IN ('taxletter_sent', 'waiting_adv_payment', 'final_balance_letter_sent')
         ORDER BY created_at DESC
       `;
 
