@@ -4856,6 +4856,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Excel export of procedures in tareks_application shipment status
+  app.get("/api/dashboard/tareks-application/export/excel", async (req, res) => {
+    try {
+      const query = `
+        SELECT p.id, p.reference, p.shipper, p.invoice_no, p.invoice_date, p.amount, p.currency, p.piece, p.tareks_status, p.created_at,
+          (SELECT string_agg(DISTINCT tci.style, ', ' ORDER BY tci.style)
+           FROM tax_calculation_items tci
+           JOIN tax_calculations tc ON tci.tax_calculation_id = tc.id
+           WHERE tc.procedure_id = p.id AND tci.style IS NOT NULL AND tci.style != '') AS style_nos
+        FROM procedures p
+        WHERE p.shipment_status = 'tareks_application'
+        ORDER BY p.created_at DESC
+      `;
+
+      const result = await rawDb.query(query);
+      const rows = result.rows || [];
+
+      const TAREKS_STATUS_LABELS: Record<string, string> = {
+        waiting_response: "Waiting Response",
+        inspection_date_confirmed: "Inspection Date Confirmed",
+        samples_taken: "Samples Taken",
+        lab_testing: "Lab Testing",
+      };
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Tareks Application");
+
+      worksheet.columns = [
+        { header: "Reference", key: "reference", width: 18 },
+        { header: "Shipper", key: "shipper", width: 28 },
+        { header: "Invoice #", key: "invoice_no", width: 18 },
+        { header: "Invoice Date", key: "invoice_date", width: 14 },
+        { header: "Amount", key: "amount", width: 16 },
+        { header: "Currency", key: "currency", width: 10 },
+        { header: "Pieces", key: "piece", width: 10 },
+        { header: "Style No", key: "style_nos", width: 32 },
+        { header: "Status", key: "tareks_status", width: 26 },
+      ];
+
+      // Header styling
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFF3F4F6" },
+        };
+        cell.alignment = { vertical: "middle" };
+      });
+
+      for (const r of rows) {
+        const amountNum = r.amount != null ? parseFloat(r.amount) : null;
+        const invoiceDate = r.invoice_date ? new Date(r.invoice_date) : null;
+        const statusKey = r.tareks_status ?? "waiting_response";
+        const row = worksheet.addRow({
+          reference: r.reference ?? "",
+          shipper: r.shipper ?? "",
+          invoice_no: r.invoice_no ?? "",
+          invoice_date: invoiceDate && !isNaN(invoiceDate.getTime()) ? invoiceDate : null,
+          amount: amountNum != null && !isNaN(amountNum) ? amountNum : null,
+          currency: r.currency ?? "",
+          piece: r.piece ?? null,
+          style_nos: r.style_nos ?? "",
+          tareks_status: TAREKS_STATUS_LABELS[statusKey] ?? statusKey,
+        });
+        row.getCell("invoice_date").numFmt = "dd.mm.yyyy";
+        row.getCell("amount").numFmt = "#,##0.00";
+      }
+
+      const filename = `tareks-application-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      await workbook.xlsx.write(res);
+      res.end();
+    } catch (error) {
+      console.error("Error exporting tareks application procedures:", error);
+      res.status(500).json({
+        error: "Failed to export tareks application procedures",
+      });
+    }
+  });
+
   // Debug endpoint to verify database structure and data
   app.get("/api/dashboard/debug", async (req, res) => {
     try {

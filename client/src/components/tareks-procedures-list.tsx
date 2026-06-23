@@ -10,7 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, Download } from "lucide-react";
 
 type TareksProcedure = {
   id: number;
@@ -128,6 +128,21 @@ export function TareksProceduresList() {
           <Badge className="ml-1 bg-red-100 text-red-700 border-red-200 text-xs">
             {data?.count ?? 0}
           </Badge>
+        )}
+        {!isLoading && (data?.procedures.length ?? 0) > 0 && (
+          <button
+            onClick={() =>
+              window.open(
+                "/api/dashboard/tareks-application/export/excel",
+                "_blank"
+              )
+            }
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            title="Export to Excel"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export Excel
+          </button>
         )}
       </div>
 
