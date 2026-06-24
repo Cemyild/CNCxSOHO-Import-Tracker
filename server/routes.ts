@@ -7697,11 +7697,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4',
+        compress: true, // Flate-compress font/content streams; shrinks ~6MB output to <1MB
       });
-      
+
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      
+
       doc.setFont('Inter_18pt-Regular', 'normal');
       console.log('[Procedure PDF] ✓ PDF document created');
       
@@ -8686,7 +8687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Send PDF
       const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
-      const filename = `FinalBalance_${reference}_${Date.now()}.pdf`;
+      const filename = `FinalBalance_${reference}.pdf`;
       
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
