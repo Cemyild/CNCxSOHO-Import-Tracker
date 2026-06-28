@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { apiRequest } from '@/lib/queryClient';
 import { formatCurrency } from '../lib/formatters';
 
@@ -60,6 +61,7 @@ export function PaymentDistributionModal({
   const [availableProcedures, setAvailableProcedures] = useState<{ reference: string; clientName: string }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   // Initialize form with default values
   const form = useForm<PaymentDistributionFormValues>({
@@ -96,8 +98,8 @@ export function PaymentDistributionModal({
     } catch (error) {
       console.error('Error fetching procedures:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to load available procedures.',
+        title: t('payments.toast.error'),
+        description: t('payments.distribute.failLoadProcedures'),
         variant: 'destructive',
       });
     } finally {
@@ -109,8 +111,8 @@ export function PaymentDistributionModal({
   const onSubmit = async (data: PaymentDistributionFormValues) => {
     if (!paymentId) {
       toast({
-        title: 'Error',
-        description: 'No payment selected for distribution.',
+        title: t('payments.toast.error'),
+        description: t('payments.distribute.noPaymentSelected'),
         variant: 'destructive',
       });
       return;
@@ -123,8 +125,8 @@ export function PaymentDistributionModal({
     // Check if the amount is greater than the remaining balance
     if (amount > remainingBalance) {
       toast({
-        title: 'Error',
-        description: `Distribution amount (${formatCurrency(amount)}) exceeds the remaining balance (${formatCurrency(remainingBalance)}).`,
+        title: t('payments.toast.error'),
+        description: t('payments.distribute.exceedsBalance', { amount: formatCurrency(amount), balance: formatCurrency(remainingBalance) }),
         variant: 'destructive',
       });
       return;
@@ -143,8 +145,8 @@ export function PaymentDistributionModal({
 
       if (jsonData.distribution) {
         toast({
-          title: 'Success',
-          description: `Successfully distributed ${formatCurrency(parseFloat(data.distributedAmount))} to procedure ${data.procedureReference}.`,
+          title: t('payments.toast.success'),
+          description: t('payments.distribute.distributeSuccess', { amount: formatCurrency(parseFloat(data.distributedAmount)), ref: data.procedureReference }),
         });
         
         // Reset form and close modal
@@ -155,8 +157,8 @@ export function PaymentDistributionModal({
     } catch (error) {
       console.error('Error creating payment distribution:', error);
       toast({
-        title: 'Error',
-        description: `Failed to create payment distribution: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: t('payments.toast.error'),
+        description: t('payments.distribute.failDistribute', { msg: error instanceof Error ? error.message : 'Unknown error' }),
         variant: 'destructive',
       });
     } finally {
@@ -177,18 +179,18 @@ export function PaymentDistributionModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px] payment-distribution-modal">
         <DialogHeader>
-          <DialogTitle>Distribute Payment</DialogTitle>
+          <DialogTitle>{t('payments.distribute.title')}</DialogTitle>
           <DialogDescription>
             {paymentData ? (
               <div className="mt-2 space-y-2">
-                <div><strong>Payment ID:</strong> {paymentData.paymentId}</div>
-                <div><strong>Payer:</strong> {paymentData.payerInfo}</div>
-                <div><strong>Total Amount:</strong> {formatCurrency(parseFloat(paymentData.totalAmount), paymentData.currency)}</div>
-                <div><strong>Amount Distributed:</strong> {formatCurrency(parseFloat(paymentData.amountDistributed), paymentData.currency)}</div>
-                <div><strong>Remaining Balance:</strong> {formatCurrency(parseFloat(paymentData.remainingBalance), paymentData.currency)}</div>
+                <div><strong>{t('payments.distribute.paymentId')}</strong> {paymentData.paymentId}</div>
+                <div><strong>{t('payments.distribute.payer')}</strong> {paymentData.payerInfo}</div>
+                <div><strong>{t('payments.distribute.totalAmount')}</strong> {formatCurrency(parseFloat(paymentData.totalAmount), paymentData.currency)}</div>
+                <div><strong>{t('payments.distribute.amountDistributed')}</strong> {formatCurrency(parseFloat(paymentData.amountDistributed), paymentData.currency)}</div>
+                <div><strong>{t('payments.distribute.remainingBalance')}</strong> {formatCurrency(parseFloat(paymentData.remainingBalance), paymentData.currency)}</div>
               </div>
             ) : (
-              <div>Loading payment details...</div>
+              <div>{t('payments.distribute.loadingDetails')}</div>
             )}
           </DialogDescription>
         </DialogHeader>
@@ -200,7 +202,7 @@ export function PaymentDistributionModal({
               name="procedureReference"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Procedure</FormLabel>
+                  <FormLabel>{t('payments.distribute.procedure')}</FormLabel>
                   <Select
                     disabled={isLoading}
                     onValueChange={field.onChange}
@@ -208,7 +210,7 @@ export function PaymentDistributionModal({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a procedure" />
+                        <SelectValue placeholder={t('payments.distribute.selectProcedure')} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent position="popper" sideOffset={5} className="z-[9999]">
@@ -225,10 +227,10 @@ export function PaymentDistributionModal({
               name="distributedAmount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Amount to Distribute</FormLabel>
+                  <FormLabel>{t('payments.distribute.amountToDistribute')}</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="0.00"
+                      placeholder={t('payments.distribute.amountPlaceholder')}
                       {...field}
                       type="number"
                       step="0.01"
@@ -247,7 +249,7 @@ export function PaymentDistributionModal({
               name="paymentType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Payment Type</FormLabel>
+                  <FormLabel>{t('payments.distribute.paymentType')}</FormLabel>
                   <Select
                     disabled={isLoading}
                     onValueChange={field.onChange}
@@ -255,12 +257,12 @@ export function PaymentDistributionModal({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select payment type" />
+                        <SelectValue placeholder={t('payments.distribute.selectPaymentType')} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent position="popper" sideOffset={5} className="z-[9999]">
-                      <SelectItem value="advance">Advance</SelectItem>
-                      <SelectItem value="balance">Balance</SelectItem>
+                      <SelectItem value="advance">{t('payments.distribute.advance')}</SelectItem>
+                      <SelectItem value="balance">{t('payments.distribute.balance')}</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -270,10 +272,10 @@ export function PaymentDistributionModal({
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
-                Cancel
+                {t('payments.distribute.cancel')}
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? 'Processing...' : 'Distribute Payment'}
+                {isLoading ? t('payments.distribute.processing') : t('payments.distribute.distribute')}
               </Button>
             </DialogFooter>
           </form>

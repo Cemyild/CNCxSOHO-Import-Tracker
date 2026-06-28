@@ -260,6 +260,31 @@
       "addPayment": "Add Payment",
       "createdDesc": "Payment has been created successfully",
       "failCreate": "Failed to create payment. Please try again."
+    },
+    "distribute": {
+      "title": "Distribute Payment",
+      "paymentId": "Payment ID:",
+      "payer": "Payer:",
+      "totalAmount": "Total Amount:",
+      "amountDistributed": "Amount Distributed:",
+      "remainingBalance": "Remaining Balance:",
+      "loadingDetails": "Loading payment details...",
+      "procedure": "Procedure",
+      "selectProcedure": "Select a procedure",
+      "amountToDistribute": "Amount to Distribute",
+      "amountPlaceholder": "0.00",
+      "paymentType": "Payment Type",
+      "selectPaymentType": "Select payment type",
+      "advance": "Advance",
+      "balance": "Balance",
+      "cancel": "Cancel",
+      "processing": "Processing...",
+      "distribute": "Distribute Payment",
+      "failLoadProcedures": "Failed to load available procedures.",
+      "noPaymentSelected": "No payment selected for distribution.",
+      "exceedsBalance": "Distribution amount ({{amount}}) exceeds the remaining balance ({{balance}}).",
+      "distributeSuccess": "Successfully distributed {{amount}} to procedure {{ref}}.",
+      "failDistribute": "Failed to create payment distribution: {{msg}}"
     }
   },
   "paymentsTable": {

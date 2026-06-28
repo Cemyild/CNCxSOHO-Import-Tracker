@@ -260,6 +260,31 @@
       "addPayment": "Ödeme Ekle",
       "createdDesc": "Ödeme başarıyla oluşturuldu",
       "failCreate": "Ödeme oluşturulamadı. Lütfen tekrar deneyin."
+    },
+    "distribute": {
+      "title": "Ödemeyi Dağıt",
+      "paymentId": "Ödeme No:",
+      "payer": "Ödeyen:",
+      "totalAmount": "Toplam Tutar:",
+      "amountDistributed": "Dağıtılan Tutar:",
+      "remainingBalance": "Kalan Bakiye:",
+      "loadingDetails": "Ödeme detayları yükleniyor...",
+      "procedure": "İşlem",
+      "selectProcedure": "Bir işlem seçin",
+      "amountToDistribute": "Dağıtılacak Tutar",
+      "amountPlaceholder": "0,00",
+      "paymentType": "Ödeme Tipi",
+      "selectPaymentType": "Ödeme tipi seçin",
+      "advance": "Avans",
+      "balance": "Bakiye",
+      "cancel": "İptal",
+      "processing": "İşleniyor...",
+      "distribute": "Ödemeyi Dağıt",
+      "failLoadProcedures": "Uygun işlemler yüklenemedi.",
+      "noPaymentSelected": "Dağıtım için ödeme seçilmedi.",
+      "exceedsBalance": "Dağıtım tutarı ({{amount}}) kalan bakiyeyi ({{balance}}) aşıyor.",
+      "distributeSuccess": "{{amount}} tutarı {{ref}} işlemine başarıyla dağıtıldı.",
+      "failDistribute": "Ödeme dağıtımı oluşturulamadı: {{msg}}"
     }
   },
   "paymentsTable": {
