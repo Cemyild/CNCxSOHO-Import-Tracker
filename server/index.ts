@@ -4,6 +4,7 @@ import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { mcpRouter } from "./mcp/index";
 import { setupVite, serveStatic, log } from "./vite";
+import { verifyToken } from "./auth-token";
 import fs from "fs";
 import path from "path";
 
@@ -90,7 +91,7 @@ app.use((req, res, next) => {
   let headerUserId: number | null = null;
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith('Bearer ')) {
-    headerUserId = parseInt(authHeader.substring(7)) || null;
+    headerUserId = verifyToken(authHeader.substring(7));
   }
 
   if (!(sessionUserId || headerUserId)) {

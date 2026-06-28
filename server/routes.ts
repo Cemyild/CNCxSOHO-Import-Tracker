@@ -6,6 +6,7 @@ import fs from "fs";
 import mime from "mime-types";
 import ExcelJS from "exceljs";
 import { storage } from "./storage";
+import { signToken, verifyToken } from "./auth-token";
 import {
   uploadFile,
   getFile,
@@ -407,14 +408,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .then(() => {
               res.json({
                 user: { ...user, password: undefined, lastLogin: loginTime },
-                token: user.id.toString(), // Simple token for authentication
+                token: signToken(user.id), // HMAC-signed, expiring token
               });
             })
             .catch((updateError) => {
               console.error("[AUTH] Last login update error:", updateError);
               res.json({
                 user: { ...user, password: undefined, lastLogin: loginTime },
-                token: user.id.toString(),
+                token: signToken(user.id),
               });
             });
         });
@@ -437,15 +438,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Check Authorization header as fallback
     const authHeader = req.headers.authorization;
-    let headerUserId = null;
+    let headerUserId: number | null = null;
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
-      try {
-        const token = authHeader.substring(7);
-        headerUserId = parseInt(token); // Simple token for now (user ID)
-      } catch (error) {
-        // Invalid token format
-      }
+      headerUserId = verifyToken(authHeader.substring(7)); // signed token -> userId, or null
     }
 
     const effectiveUserId = userId || headerUserId;
@@ -8715,15 +8711,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Check Authorization header as fallback
     const authHeader = req.headers.authorization;
-    let headerUserId = null;
+    let headerUserId: number | null = null;
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
-      try {
-        const token = authHeader.substring(7);
-        headerUserId = parseInt(token); // Simple token for now (user ID)
-      } catch (error) {
-        // Invalid token format
-      }
+      headerUserId = verifyToken(authHeader.substring(7)); // signed token -> userId, or null
     }
 
     // Use either session or header authentication
