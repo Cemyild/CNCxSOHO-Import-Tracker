@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useId } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -105,6 +106,7 @@ interface PaymentsTableProps {
 }
 
 export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReference }: PaymentsTableProps) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddPaymentModalOpen, setIsAddPaymentModalOpen] = useState(false);
   const [selectedPaymentForEdit, setSelectedPaymentForEdit] = useState<Payment | null>(null);
@@ -431,7 +433,7 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
   }
 
   if (paymentsError) {
-    return <div className="p-4 text-red-500">Error loading payments: {String(paymentsError)}</div>;
+    return <div className="p-4 text-red-500">{t('paymentsTable.errorLoading')} {String(paymentsError)}</div>;
   }
 
   return (
@@ -450,9 +452,9 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
               )}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter by reference..."
+              placeholder={t('paymentsTable.filterByReference')}
               type="text"
-              aria-label="Filter by reference"
+              aria-label={t('paymentsTable.filterByReference')}
             />
             <div className="pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 text-muted-foreground/80 peer-disabled:opacity-50">
               <ListFilter size={16} strokeWidth={2} aria-hidden="true" />
@@ -460,7 +462,7 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
             {Boolean(searchQuery) && (
               <button
                 className="absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center rounded-e-lg text-muted-foreground/80 outline-offset-2 transition-colors hover:text-foreground focus:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Clear filter"
+                aria-label={t('paymentsTable.clearFilter')}
                 onClick={() => {
                   setSearchQuery("");
                   if (inputRef.current) {
@@ -478,7 +480,7 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="outline" size="sm" className="h-8 gap-1">
             <Columns3 className="h-3.5 w-3.5" />
-            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">Columns</span>
+            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">{t('paymentsTable.columns')}</span>
           </Button>
         </div>
       </div>
@@ -488,14 +490,14 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
         <Table>
           <TableHeader className="bg-muted/30">
             <TableRow>
-              <TableHead className="whitespace-nowrap py-3 font-medium">Reference</TableHead>
-              <TableHead className="whitespace-nowrap py-3 font-medium">Advance Payment</TableHead>
-              <TableHead className="whitespace-nowrap py-3 font-medium">Balance Payment</TableHead>
-              <TableHead className="whitespace-nowrap py-3 font-medium">Total Expenses</TableHead>
-              <TableHead className="whitespace-nowrap py-3 font-medium">Total Payment</TableHead>
-              <TableHead className="whitespace-nowrap py-3 font-medium">Remaining Balance</TableHead>
-              <TableHead className="whitespace-nowrap py-3 font-medium">Payment Status</TableHead>
-              <TableHead className="whitespace-nowrap py-3 font-medium text-right">Actions</TableHead>
+              <TableHead className="whitespace-nowrap py-3 font-medium">{t('paymentsTable.col.reference')}</TableHead>
+              <TableHead className="whitespace-nowrap py-3 font-medium">{t('paymentsTable.col.advancePayment')}</TableHead>
+              <TableHead className="whitespace-nowrap py-3 font-medium">{t('paymentsTable.col.balancePayment')}</TableHead>
+              <TableHead className="whitespace-nowrap py-3 font-medium">{t('paymentsTable.col.totalExpenses')}</TableHead>
+              <TableHead className="whitespace-nowrap py-3 font-medium">{t('paymentsTable.col.totalPayment')}</TableHead>
+              <TableHead className="whitespace-nowrap py-3 font-medium">{t('paymentsTable.col.remainingBalance')}</TableHead>
+              <TableHead className="whitespace-nowrap py-3 font-medium">{t('paymentsTable.col.paymentStatus')}</TableHead>
+              <TableHead className="whitespace-nowrap py-3 font-medium text-right">{t('paymentsTable.col.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -535,15 +537,15 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                     {/* Check if remaining balance is very close to zero (accounting for floating point imprecision) */}
                     {Math.abs(aggregated.remainingBalance) < 0.01 ? (
                       <div className="font-medium text-gray-500">
-                        {formatCurrency(0)} Paid
+                        {formatCurrency(0)} {t('paymentsTable.paid')}
                       </div>
                     ) : aggregated.remainingBalance > 0 ? (
                       <div className="font-medium text-red-600">
-                        {formatCurrency(aggregated.remainingBalance)} Balance
+                        {formatCurrency(aggregated.remainingBalance)} {t('paymentsTable.balanceSuffix')}
                       </div>
                     ) : (
                       <div className="font-medium text-green-600">
-                        {formatCurrency(Math.abs(aggregated.remainingBalance))} Overpaid
+                        {formatCurrency(Math.abs(aggregated.remainingBalance))} {t('paymentsTable.overpaid')}
                       </div>
                     )}
                   </TableCell>
@@ -553,7 +555,7 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                       if (!status) {
                         return (
                           <Badge variant="outline" className="border-gray-500 text-gray-500">
-                            None
+                            {t('paymentsTable.none')}
                           </Badge>
                         );
                       }
@@ -594,7 +596,8 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                             .join(' ');
                           badgeClass = "bg-yellow-500 text-white"; // Default to yellow
                       }
-                      
+                      formattedStatus = t(`paymentsTable.status.${status.toLowerCase()}`, { defaultValue: formattedStatus });
+
                       return (
                         <Badge className={cn(badgeClass)}>
                           {formattedStatus}
@@ -611,14 +614,14 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                           className="h-8 w-8"
                         >
                           <MoreVertical className="h-4 w-4" />
-                          <span className="sr-only">Actions</span>
+                          <span className="sr-only">{t('paymentsTable.actions')}</span>
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem 
                           onClick={() => handleViewPaymentDetails(aggregated.procedureReference)}
                         >
-                          <Eye className="h-4 w-4 mr-2" /> View Details
+                          <Eye className="h-4 w-4 mr-2" /> {t('paymentsTable.viewDetails')}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         {aggregated.payments.map(payment => (
@@ -628,8 +631,10 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                             className="text-red-600"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
-                            Delete {payment.paymentType === 'advance' ? 'Advance' : 'Balance'} Payment 
-                            ({formatCurrency(payment.amount)})
+                            {t('paymentsTable.deletePayment', {
+                              type: payment.paymentType === 'advance' ? t('paymentsTable.advance') : t('paymentsTable.balance'),
+                              amount: formatCurrency(payment.amount),
+                            })}
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuContent>
@@ -640,7 +645,7 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
             ) : (
               <TableRow>
                 <TableCell colSpan={8} className="h-24 text-center">
-                  No payments found
+                  {t('paymentsTable.noPayments')}
                 </TableCell>
               </TableRow>
             )}
@@ -651,18 +656,11 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
       {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Showing{" "}
-          <span className="font-medium">
-            {pagination.pageIndex * pagination.pageSize + 1}
-          </span>{" "}
-          to{" "}
-          <span className="font-medium">
-            {Math.min(
-              (pagination.pageIndex + 1) * pagination.pageSize,
-              aggregatedPayments.length
-            )}
-          </span>{" "}
-          of <span className="font-medium">{aggregatedPayments.length}</span> results
+          {t('procedures.showingRange', {
+            from: pagination.pageIndex * pagination.pageSize + 1,
+            to: Math.min((pagination.pageIndex + 1) * pagination.pageSize, aggregatedPayments.length),
+            total: aggregatedPayments.length,
+          })}
         </div>
         <Pagination>
           <PaginationContent>
@@ -674,7 +672,7 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                 disabled={pagination.pageIndex === 0}
                 className="hidden h-8 w-8 sm:flex"
               >
-                <span className="sr-only">Go to first page</span>
+                <span className="sr-only">{t('procedures.firstPage')}</span>
                 <ChevronFirst size={16} strokeWidth={2} />
               </Button>
             </PaginationItem>
@@ -686,7 +684,7 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                 disabled={pagination.pageIndex === 0}
                 className="h-8 w-8"
               >
-                <span className="sr-only">Go to previous page</span>
+                <span className="sr-only">{t('procedures.previousPage')}</span>
                 <ChevronLeft size={16} strokeWidth={2} />
               </Button>
             </PaginationItem>
@@ -698,7 +696,7 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                 disabled={(pagination.pageIndex + 1) * pagination.pageSize >= aggregatedPayments.length}
                 className="h-8 w-8"
               >
-                <span className="sr-only">Go to next page</span>
+                <span className="sr-only">{t('procedures.nextPage')}</span>
                 <ChevronRight size={16} strokeWidth={2} />
               </Button>
             </PaginationItem>
@@ -713,7 +711,7 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                 disabled={(pagination.pageIndex + 1) * pagination.pageSize >= aggregatedPayments.length}
                 className="hidden h-8 w-8 sm:flex"
               >
-                <span className="sr-only">Go to last page</span>
+                <span className="sr-only">{t('procedures.lastPage')}</span>
                 <ChevronLast size={16} strokeWidth={2} />
               </Button>
             </PaginationItem>

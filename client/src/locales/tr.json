@@ -196,6 +196,47 @@
       "allDeletedDesc": "{{count}} ödeme başarıyla silindi.",
       "failDeleteAll": "Tüm ödemeler silinemedi. Lütfen tekrar deneyin.",
       "incomingCreated": "Yeni gelen ödeme başarıyla oluşturuldu"
+    },
+    "summary": {
+      "totalExpenses": "Toplam Gider",
+      "totalPayments": "Toplam Ödeme",
+      "overpaid": "Fazla Ödendi",
+      "balance": "Bakiye",
+      "viewDetails": "Detayları Gör"
+    }
+  },
+  "paymentsTable": {
+    "filterByReference": "Referans ile filtrele...",
+    "clearFilter": "Filtreyi temizle",
+    "columns": "Sütunlar",
+    "errorLoading": "Ödemeler yüklenirken hata:",
+    "noPayments": "Ödeme bulunamadı",
+    "actions": "İşlemler",
+    "viewDetails": "Detayları Gör",
+    "deletePayment": "{{type}} Ödemeyi Sil ({{amount}})",
+    "advance": "Avans",
+    "balance": "Bakiye",
+    "paid": "Ödendi",
+    "balanceSuffix": "Bakiye",
+    "overpaid": "Fazla Ödendi",
+    "none": "Yok",
+    "col": {
+      "reference": "Referans",
+      "advancePayment": "Avans Ödeme",
+      "balancePayment": "Bakiye Ödeme",
+      "totalExpenses": "Toplam Gider",
+      "totalPayment": "Toplam Ödeme",
+      "remainingBalance": "Kalan Bakiye",
+      "paymentStatus": "Ödeme Durumu",
+      "actions": "İşlemler"
+    },
+    "status": {
+      "taxletter_sent": "Vergi Mektubu Gönderildi",
+      "waiting_adv_payment": "Avans Ödeme Bekleniyor",
+      "advance_payment_received": "Avans Ödeme Alındı",
+      "final_balance_letter_sent": "Bakiye Mektubu Gönderildi",
+      "balance_received": "Bakiye Alındı",
+      "closed": "Kapatıldı"
     }
   }
 }

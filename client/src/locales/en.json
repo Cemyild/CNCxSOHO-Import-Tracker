@@ -196,6 +196,47 @@
       "allDeletedDesc": "Successfully deleted {{count}} payments.",
       "failDeleteAll": "Failed to delete all payments. Please try again.",
       "incomingCreated": "New incoming payment created successfully"
+    },
+    "summary": {
+      "totalExpenses": "Total Expenses",
+      "totalPayments": "Total Payments",
+      "overpaid": "Overpaid",
+      "balance": "Balance",
+      "viewDetails": "View Details"
+    }
+  },
+  "paymentsTable": {
+    "filterByReference": "Filter by reference...",
+    "clearFilter": "Clear filter",
+    "columns": "Columns",
+    "errorLoading": "Error loading payments:",
+    "noPayments": "No payments found",
+    "actions": "Actions",
+    "viewDetails": "View Details",
+    "deletePayment": "Delete {{type}} Payment ({{amount}})",
+    "advance": "Advance",
+    "balance": "Balance",
+    "paid": "Paid",
+    "balanceSuffix": "Balance",
+    "overpaid": "Overpaid",
+    "none": "None",
+    "col": {
+      "reference": "Reference",
+      "advancePayment": "Advance Payment",
+      "balancePayment": "Balance Payment",
+      "totalExpenses": "Total Expenses",
+      "totalPayment": "Total Payment",
+      "remainingBalance": "Remaining Balance",
+      "paymentStatus": "Payment Status",
+      "actions": "Actions"
+    },
+    "status": {
+      "taxletter_sent": "Taxletter Sent",
+      "waiting_adv_payment": "Waiting Adv. Payment",
+      "advance_payment_received": "Advance Payment Received",
+      "final_balance_letter_sent": "Final Balance Letter Sent",
+      "balance_received": "Balance Received",
+      "closed": "Closed"
     }
   }
 }
