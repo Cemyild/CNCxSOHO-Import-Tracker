@@ -7,6 +7,7 @@ import mime from "mime-types";
 import ExcelJS from "exceljs";
 import { storage } from "./storage";
 import { signToken, verifyToken } from "./auth-token";
+import { requireRole } from "./auth-middleware";
 import {
   uploadFile,
   getFile,
@@ -1988,7 +1989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE remove an invoice
-  app.delete("/api/service-invoices/:id", async (req, res) => {
+  app.delete("/api/service-invoices/:id", requireRole('admin', 'accountant'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
 
@@ -2282,7 +2283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE remove an incoming payment
-  app.delete("/api/incoming-payments/:id", async (req, res) => {
+  app.delete("/api/incoming-payments/:id", requireRole('admin', 'accountant'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
 
@@ -2483,7 +2484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE remove a payment distribution
-  app.delete("/api/payment-distributions/:id", async (req, res) => {
+  app.delete("/api/payment-distributions/:id", requireRole('admin', 'accountant'), async (req, res) => {
     // Create a timeout promise to prevent hanging operations
     const timeoutPromise = new Promise((_, reject) => {
       const timeoutId = setTimeout(() => {
@@ -2814,7 +2815,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE remove a payment
-  app.delete("/api/payments/:id", async (req, res) => {
+  app.delete("/api/payments/:id", requireRole('admin', 'accountant'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
 
@@ -3499,7 +3500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE import expense
-  app.delete("/api/import-expenses/:id", async (req, res) => {
+  app.delete("/api/import-expenses/:id", requireRole('admin', 'accountant'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -4392,7 +4393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // DELETE remove a document
-  app.delete("/api/expense-documents/:id", async (req, res) => {
+  app.delete("/api/expense-documents/:id", requireRole('admin', 'accountant'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
 
@@ -5129,7 +5130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE a line item
-  app.delete("/api/invoice-line-items/:id", async (req, res) => {
+  app.delete("/api/invoice-line-items/:id", requireRole('admin', 'accountant'), async (req, res) => {
     try {
       const success = await storage.deleteInvoiceLineItem(
         parseInt(req.params.id),
@@ -6068,7 +6069,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/tax-calculation/calculations/:id", async (req, res) => {
+  app.delete("/api/tax-calculation/calculations/:id", requireRole('admin', 'accountant'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const success = await storage.deleteTaxCalculation(id);
@@ -6407,7 +6408,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/tax-calculation/items/:id", async (req, res) => {
+  app.delete("/api/tax-calculation/items/:id", requireRole('admin', 'accountant'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const success = await storage.deleteTaxCalculationItem(id);
