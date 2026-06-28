@@ -734,9 +734,9 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
       <Dialog open={isDetailsModalOpen} onOpenChange={setIsDetailsModalOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Procedure Payment Details</DialogTitle>
+            <DialogTitle>{t('paymentsTable.details.title')}</DialogTitle>
             <DialogDescription>
-              {selectedProcedureForDetails && `Payment details and financial summary for procedure ${selectedProcedureForDetails}`}
+              {selectedProcedureForDetails && t('paymentsTable.details.subtitle', { ref: selectedProcedureForDetails })}
             </DialogDescription>
           </DialogHeader>
           
@@ -760,9 +760,9 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
             };
 
             const formatDate = (dateString: string) => {
-              if (!dateString) return "N/A";
+              if (!dateString) return t('paymentsTable.details.na');
               const date = new Date(dateString);
-              if (isNaN(date.getTime())) return "N/A";
+              if (isNaN(date.getTime())) return t('paymentsTable.details.na');
               
               const day = date.getUTCDate().toString().padStart(2, '0');
               const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -776,33 +776,33 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                 {/* Procedure Information */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Procedure Information</CardTitle>
+                    <CardTitle>{t('paymentsTable.details.procedureInfo')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                       <div>
-                        <div className="text-sm font-medium text-muted-foreground">Reference</div>
+                        <div className="text-sm font-medium text-muted-foreground">{t('paymentsTable.details.reference')}</div>
                         <div className="font-medium">{procedure?.reference || selectedProcedureForDetails}</div>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-muted-foreground">Shipper</div>
-                        <div className="font-medium">{procedure?.shipper || "N/A"}</div>
+                        <div className="text-sm font-medium text-muted-foreground">{t('paymentsTable.details.shipper')}</div>
+                        <div className="font-medium">{procedure?.shipper || t('paymentsTable.details.na')}</div>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-muted-foreground">Invoice No</div>
-                        <div className="font-medium">{procedure?.invoice_no || "N/A"}</div>
+                        <div className="text-sm font-medium text-muted-foreground">{t('paymentsTable.details.invoiceNo')}</div>
+                        <div className="font-medium">{procedure?.invoice_no || t('paymentsTable.details.na')}</div>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-muted-foreground">Invoice Date</div>
+                        <div className="text-sm font-medium text-muted-foreground">{t('paymentsTable.details.invoiceDate')}</div>
                         <div className="font-medium">{formatDate(procedure?.invoice_date)}</div>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-muted-foreground">Amount</div>
-                        <div className="font-medium">{procedure?.amount ? formatCurrency(parseFloat(procedure.amount)) : "N/A"}</div>
+                        <div className="text-sm font-medium text-muted-foreground">{t('paymentsTable.details.amount')}</div>
+                        <div className="font-medium">{procedure?.amount ? formatCurrency(parseFloat(procedure.amount)) : t('paymentsTable.details.na')}</div>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-muted-foreground">Pieces</div>
-                        <div className="font-medium">{procedure?.piece || "N/A"}</div>
+                        <div className="text-sm font-medium text-muted-foreground">{t('paymentsTable.details.pieces')}</div>
+                        <div className="font-medium">{procedure?.piece || t('paymentsTable.details.na')}</div>
                       </div>
                     </div>
                   </CardContent>
@@ -811,24 +811,24 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                 {/* Financial Summary */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Financial Summary</CardTitle>
+                    <CardTitle>{t('paymentsTable.details.financialSummary')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
-                        <div className="text-sm font-medium text-muted-foreground">Total Expenses</div>
+                        <div className="text-sm font-medium text-muted-foreground">{t('paymentsTable.details.totalExpenses')}</div>
                         <div className="text-lg font-bold text-red-600">
-                          {aggregatedData ? formatCurrency(aggregatedData.totalExpenses) : "Loading..."}
+                          {aggregatedData ? formatCurrency(aggregatedData.totalExpenses) : t('paymentsTable.details.loading')}
                         </div>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-muted-foreground">Total Payments</div>
+                        <div className="text-sm font-medium text-muted-foreground">{t('paymentsTable.details.totalPayments')}</div>
                         <div className="text-lg font-bold text-green-600">
-                          {aggregatedData ? formatCurrency(aggregatedData.totalPayment) : "Loading..."}
+                          {aggregatedData ? formatCurrency(aggregatedData.totalPayment) : t('paymentsTable.details.loading')}
                         </div>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-muted-foreground">Remaining Balance</div>
+                        <div className="text-sm font-medium text-muted-foreground">{t('paymentsTable.details.remainingBalance')}</div>
                         <div className={`text-lg font-bold ${
                           aggregatedData && Math.abs(aggregatedData.remainingBalance) < 0.01 
                             ? "text-gray-500" 
@@ -837,32 +837,25 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                               : "text-green-600"
                         }`}>
                           {aggregatedData ? (
-                            Math.abs(aggregatedData.remainingBalance) < 0.01 ? 
-                              formatCurrency(0) + " (Paid)" :
+                            Math.abs(aggregatedData.remainingBalance) < 0.01 ?
+                              formatCurrency(0) + " " + t('paymentsTable.details.paidSuffix') :
                               aggregatedData.remainingBalance > 0 ?
-                                formatCurrency(aggregatedData.remainingBalance) + " (Balance)" :
-                                formatCurrency(Math.abs(aggregatedData.remainingBalance)) + " (Overpaid)"
-                          ) : "Loading..."}
+                                formatCurrency(aggregatedData.remainingBalance) + " " + t('paymentsTable.details.balanceSuffix') :
+                                formatCurrency(Math.abs(aggregatedData.remainingBalance)) + " " + t('paymentsTable.details.overpaidSuffix')
+                          ) : t('paymentsTable.details.loading')}
                         </div>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-muted-foreground">Payment Status</div>
+                        <div className="text-sm font-medium text-muted-foreground">{t('paymentsTable.details.paymentStatus')}</div>
                         <div className="font-medium">
                           {(() => {
                             const status = aggregatedData?.paymentStatus;
-                            if (!status) return "None";
-                            
-                            switch(status.toLowerCase()) {
-                              case "taxletter_sent": return "Taxletter Sent";
-                              case "waiting_adv_payment": return "Waiting Adv. Payment";
-                              case "advance_payment_received": return "Advance Payment Received";
-                              case "final_balance_letter_sent": return "Final Balance Letter Sent";
-                              case "balance_received": return "Balance Received";
-                              case "closed": return "Closed";
-                              default: return status.split('_').map(word => 
+                            if (!status) return t('paymentsTable.details.none');
+                            return t(`paymentsTable.status.${status.toLowerCase()}`, {
+                              defaultValue: status.split('_').map(word =>
                                 word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-                              ).join(' ');
-                            }
+                              ).join(' '),
+                            });
                           })()}
                         </div>
                       </div>
@@ -873,16 +866,16 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                 {/* Payments Distributed to This Procedure */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Payments Distributed to This Procedure</CardTitle>
+                    <CardTitle>{t('paymentsTable.details.distributedTitle')}</CardTitle>
                     <CardDescription>
                       {(() => {
                         const hasPayments = aggregatedData && (aggregatedData.advancePaymentTotal > 0 || aggregatedData.balancePaymentTotal > 0);
                         const totalPayments = aggregatedData ? aggregatedData.advancePaymentTotal + aggregatedData.balancePaymentTotal : 0;
-                        
+
                         if (hasPayments) {
-                          return `Total distributed payments: ${formatCurrency(totalPayments)}`;
+                          return t('paymentsTable.details.totalDistributed', { amount: formatCurrency(totalPayments) });
                         } else {
-                          return "No payments have been distributed to this procedure";
+                          return t('paymentsTable.details.noneDistributed');
                         }
                       })()}
                     </CardDescription>
@@ -896,31 +889,31 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                           <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-4 mb-4">
                               <div>
-                                <div className="text-sm font-medium text-muted-foreground">Advance Payments</div>
+                                <div className="text-sm font-medium text-muted-foreground">{t('paymentsTable.details.advancePayments')}</div>
                                 <div className="text-lg font-semibold text-black">
                                   {formatCurrency(aggregatedData.advancePaymentTotal)}
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-1">
-                                  Payments distributed as advance to cover initial expenses
+                                  {t('paymentsTable.details.advanceDesc')}
                                 </div>
                               </div>
                               <div>
-                                <div className="text-sm font-medium text-muted-foreground">Balance Payments</div>
+                                <div className="text-sm font-medium text-muted-foreground">{t('paymentsTable.details.balancePayments')}</div>
                                 <div className="text-lg font-semibold text-black">
                                   {formatCurrency(aggregatedData.balancePaymentTotal)}
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-1">
-                                  Final balance payments to complete the procedure
+                                  {t('paymentsTable.details.balanceDesc')}
                                 </div>
                               </div>
                             </div>
                             
                             <div className="border rounded-lg p-4 bg-muted/30">
-                              <h4 className="font-medium mb-3">Payment Distribution Summary</h4>
+                              <h4 className="font-medium mb-3">{t('paymentsTable.details.distributionSummary')}</h4>
                               <div className="space-y-2">
                                 {aggregatedData.advancePaymentTotal > 0 && (
                                   <div className="flex justify-between items-center">
-                                    <span className="text-sm text-muted-foreground">Advance Payment Distribution:</span>
+                                    <span className="text-sm text-muted-foreground">{t('paymentsTable.details.advanceDistribution')}</span>
                                     <span className="font-medium text-black">
                                       {formatCurrency(aggregatedData.advancePaymentTotal)}
                                     </span>
@@ -928,7 +921,7 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                                 )}
                                 {aggregatedData.balancePaymentTotal > 0 && (
                                   <div className="flex justify-between items-center">
-                                    <span className="text-sm text-muted-foreground">Balance Payment Distribution:</span>
+                                    <span className="text-sm text-muted-foreground">{t('paymentsTable.details.balanceDistribution')}</span>
                                     <span className="font-medium text-black">
                                       {formatCurrency(aggregatedData.balancePaymentTotal)}
                                     </span>
@@ -936,7 +929,7 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                                 )}
                                 <div className="border-t pt-2 mt-2">
                                   <div className="flex justify-between items-center font-medium">
-                                    <span>Total Distributed:</span>
+                                    <span>{t('paymentsTable.details.totalDistributedLabel')}</span>
                                     <span className="text-green-600">
                                       {formatCurrency(aggregatedData.advancePaymentTotal + aggregatedData.balancePaymentTotal)}
                                     </span>
@@ -958,17 +951,17 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                               if (relatedPayments.length > 0) {
                                 return (
                                   <div className="mt-6">
-                                    <h4 className="font-medium mb-3">Incoming Payment Records</h4>
+                                    <h4 className="font-medium mb-3">{t('paymentsTable.details.incomingRecords')}</h4>
                                     <div className="text-sm text-muted-foreground mb-3">
-                                      {relatedPayments.length} incoming payment(s) distributed to this procedure
+                                      {t('paymentsTable.details.incomingCount', { count: relatedPayments.length })}
                                     </div>
                                     <Table>
                                       <TableHeader>
                                         <TableRow>
-                                          <TableHead>Payment ID</TableHead>
-                                          <TableHead>Date</TableHead>
-                                          <TableHead>Total Payment</TableHead>
-                                          <TableHead>Distributed to This Procedure</TableHead>
+                                          <TableHead>{t('paymentsTable.details.colPaymentId')}</TableHead>
+                                          <TableHead>{t('paymentsTable.details.colDate')}</TableHead>
+                                          <TableHead>{t('paymentsTable.details.colTotalPayment')}</TableHead>
+                                          <TableHead>{t('paymentsTable.details.colDistributed')}</TableHead>
                                         </TableRow>
                                       </TableHeader>
                                       <TableBody>
@@ -1008,16 +1001,16 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                                                 <div className="space-y-1">
                                                   {advanceTotal > 0 && (
                                                     <div className="text-sm">
-                                                      <span className="text-muted-foreground">Advance:</span> {formatCurrency(advanceTotal)}
+                                                      <span className="text-muted-foreground">{t('paymentsTable.details.advanceLabel')}</span> {formatCurrency(advanceTotal)}
                                                     </div>
                                                   )}
                                                   {balanceTotal > 0 && (
                                                     <div className="text-sm">
-                                                      <span className="text-muted-foreground">Balance:</span> {formatCurrency(balanceTotal)}
+                                                      <span className="text-muted-foreground">{t('paymentsTable.details.balanceLabel')}</span> {formatCurrency(balanceTotal)}
                                                     </div>
                                                   )}
                                                   <div className="text-sm font-medium">
-                                                    Total: {formatCurrency(grandTotal)}
+                                                    {t('paymentsTable.details.totalLabel')} {formatCurrency(grandTotal)}
                                                   </div>
                                                 </div>
                                               </TableCell>
@@ -1036,8 +1029,8 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
                       } else {
                         return (
                           <div className="text-center py-8 text-muted-foreground">
-                            <p className="mb-2">No payments have been distributed to this procedure yet.</p>
-                            <p className="text-sm">Payments are distributed from the Incoming Payments section.</p>
+                            <p className="mb-2">{t('paymentsTable.details.emptyTitle')}</p>
+                            <p className="text-sm">{t('paymentsTable.details.emptyDesc')}</p>
                           </div>
                         );
                       }
