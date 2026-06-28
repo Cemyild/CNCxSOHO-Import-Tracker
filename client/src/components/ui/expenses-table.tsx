@@ -506,7 +506,7 @@ export function ExpensesTable(): React.ReactNode {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
-                  <p>Fetching financial data{data.retries ? `, retry attempt ${data.retries}` : ''}</p>
+                  <p>{t('expenses.fetchingData')}{data.retries ? `, ${data.retries}` : ''}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -522,7 +522,7 @@ export function ExpensesTable(): React.ReactNode {
                   <div className="text-center text-red-500">{t('expenses.error')}</div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
-                  <p>Could not load tax data after multiple attempts</p>
+                  <p>{t('expenses.errTax')}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -565,7 +565,7 @@ export function ExpensesTable(): React.ReactNode {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
-                  <p>Fetching financial data{data.retries ? `, retry attempt ${data.retries}` : ''}</p>
+                  <p>{t('expenses.fetchingData')}{data.retries ? `, ${data.retries}` : ''}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -581,7 +581,7 @@ export function ExpensesTable(): React.ReactNode {
                   <div className="text-center text-red-500">{t('expenses.error')}</div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
-                  <p>Could not load expense data after multiple attempts</p>
+                  <p>{t('expenses.errExpense')}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -624,7 +624,7 @@ export function ExpensesTable(): React.ReactNode {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
-                  <p>Fetching financial data{data.retries ? `, retry attempt ${data.retries}` : ''}</p>
+                  <p>{t('expenses.fetchingData')}{data.retries ? `, ${data.retries}` : ''}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -640,7 +640,7 @@ export function ExpensesTable(): React.ReactNode {
                   <div className="text-center text-red-500">{t('expenses.error')}</div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
-                  <p>Could not load service fee data after multiple attempts</p>
+                  <p>{t('expenses.errServiceFee')}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -683,7 +683,7 @@ export function ExpensesTable(): React.ReactNode {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
-                  <p>Fetching financial data{data.retries ? `, retry attempt ${data.retries}` : ''}</p>
+                  <p>{t('expenses.fetchingData')}{data.retries ? `, ${data.retries}` : ''}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -699,7 +699,7 @@ export function ExpensesTable(): React.ReactNode {
                   <div className="text-center text-red-500">{t('expenses.error')}</div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
-                  <p>Could not load total expenses data after multiple attempts</p>
+                  <p>{t('expenses.errTotalExpenses')}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

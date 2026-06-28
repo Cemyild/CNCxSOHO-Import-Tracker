@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { 
@@ -110,6 +111,7 @@ const items = [
 ]
 
 export default function ExpenseDetailsPage() {
+  const { t } = useTranslation();
   const [, setLocation] = useLocation();
   const [showFreightModal, setShowFreightModal] = useState(false);
   const [freightAmount, setFreightAmount] = useState("");
@@ -210,8 +212,8 @@ export default function ExpenseDetailsPage() {
       // Close modal and show success message
       setShowFreightModal(false);
       toast({
-        title: "Success",
-        description: "Freight amount updated successfully",
+        title: t('common.success'),
+        description: t('expenseDetails.freightSuccess'),
         variant: "default",
       });
       
@@ -230,12 +232,12 @@ export default function ExpenseDetailsPage() {
   
   if (isLoadingProcedure) {
     return (
-      <PageLayout title="Expense Details" navItems={items}>
+      <PageLayout title={t('expenseDetails.title')} navItems={items}>
         <div className="container mx-auto p-6">
           <div className="mb-6 flex items-center justify-between">
             <Button variant="outline" size="sm" onClick={() => setLocation('/expenses')}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Expenses
+              {t('expenseDetails.backToExpenses')}
             </Button>
             
             <div className="flex items-center gap-2">
@@ -281,12 +283,12 @@ export default function ExpenseDetailsPage() {
   const error = procedureError || financialError;
   if (error) {
     return (
-      <PageLayout title="Expense Details" navItems={items}>
+      <PageLayout title={t('expenseDetails.title')} navItems={items}>
         <div className="container mx-auto p-6">
           <div className="mb-6 flex items-center justify-between">
             <Button variant="outline" size="sm" onClick={() => setLocation('/expenses')}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Expenses
+              {t('expenseDetails.backToExpenses')}
             </Button>
             
             <div className="flex items-center gap-2">
@@ -297,7 +299,7 @@ export default function ExpenseDetailsPage() {
           </div>
 
           <Alert variant="destructive" className="mb-6">
-            <AlertTitle>Error</AlertTitle>
+            <AlertTitle>{t('common.error')}</AlertTitle>
             <AlertDescription>{error instanceof Error ? error.message : "An unknown error occurred"}</AlertDescription>
           </Alert>
         </div>
@@ -308,12 +310,12 @@ export default function ExpenseDetailsPage() {
   // Not found state
   if (!procedure) {
     return (
-      <PageLayout title="Expense Details" navItems={items}>
+      <PageLayout title={t('expenseDetails.title')} navItems={items}>
         <div className="container mx-auto p-6">
           <div className="mb-6 flex items-center justify-between">
             <Button variant="outline" size="sm" onClick={() => setLocation('/expenses')}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Expenses
+              {t('expenseDetails.backToExpenses')}
             </Button>
             
             <div className="flex items-center gap-2">
@@ -324,8 +326,8 @@ export default function ExpenseDetailsPage() {
           </div>
 
           <Alert variant="destructive" className="mb-6">
-            <AlertTitle>Not Found</AlertTitle>
-            <AlertDescription>No expense details available for the provided reference.</AlertDescription>
+            <AlertTitle>{t('expenseDetails.notFound')}</AlertTitle>
+            <AlertDescription>{t('expenseDetails.notFoundDesc')}</AlertDescription>
           </Alert>
         </div>
       </PageLayout>
@@ -333,15 +335,15 @@ export default function ExpenseDetailsPage() {
   }
 
   return (
-    <PageLayout title="Expense Details" navItems={items}>
+    <PageLayout title={t('expenseDetails.title')} navItems={items}>
       <div className="container mx-auto p-6">
         {/* Breadcrumb navigation */}
         <div className="mb-4 flex text-sm text-muted-foreground">
-          <span onClick={() => setLocation('/dashboard')} className="cursor-pointer hover:text-primary">Home</span>
+          <span onClick={() => setLocation('/dashboard')} className="cursor-pointer hover:text-primary">{t('expenseDetails.home')}</span>
           <span className="mx-2">/</span>
-          <span onClick={() => setLocation('/expenses')} className="cursor-pointer hover:text-primary">Expenses</span>
+          <span onClick={() => setLocation('/expenses')} className="cursor-pointer hover:text-primary">{t('expenseDetails.expenses')}</span>
           <span className="mx-2">/</span>
-          <span>Expense Details</span>
+          <span>{t('expenseDetails.title')}</span>
         </div>
 
         {/* Back button and actions */}
@@ -364,45 +366,45 @@ export default function ExpenseDetailsPage() {
             <div className="space-y-2">
               <CardTitle className="text-2xl">{procedure.reference}</CardTitle>
               <CardDescription>
-                Overview of expense details for this procedure
+                {t('expenseDetails.overview')}
               </CardDescription>
             </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 text-center">
               <div className="flex flex-col items-center">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Reference</h4>
+                <h4 className="text-sm font-medium text-muted-foreground mb-1">{t('expenseDetails.reference')}</h4>
                 <p className="font-medium">{procedure.reference}</p>
               </div>
               <div className="flex flex-col items-center">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Shipper</h4>
+                <h4 className="text-sm font-medium text-muted-foreground mb-1">{t('expenseDetails.shipper')}</h4>
                 <p className="font-medium">{procedure.shipper}</p>
               </div>
               <div className="flex flex-col items-center">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Invoice No</h4>
-                <p className="font-medium">{procedure.invoice_no || "N/A"}</p>
+                <h4 className="text-sm font-medium text-muted-foreground mb-1">{t('expenseDetails.invoiceNo')}</h4>
+                <p className="font-medium">{procedure.invoice_no || t('expenseDetails.na')}</p>
               </div>
               <div className="flex flex-col items-center">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Invoice Date</h4>
+                <h4 className="text-sm font-medium text-muted-foreground mb-1">{t('expenseDetails.invoiceDate')}</h4>
                 <p className="font-medium">
                   {procedure.invoice_date 
                     ? new Date(procedure.invoice_date).toLocaleDateString()
-                    : "N/A"
+                    : t('expenseDetails.na')
                   }
                 </p>
               </div>
               <div className="flex flex-col items-center">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Amount</h4>
+                <h4 className="text-sm font-medium text-muted-foreground mb-1">{t('expenseDetails.amount')}</h4>
                 <p className="font-medium">
                   {procedure.amount
                     ? formatCurrency(parseFloat(procedure.amount), procedure.currency || "TRY")
-                    : "N/A"
+                    : t('expenseDetails.na')
                   }
                 </p>
               </div>
               <div className="flex flex-col items-center">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Piece</h4>
-                <p className="font-medium">{procedure.piece || "N/A"}</p>
+                <h4 className="text-sm font-medium text-muted-foreground mb-1">{t('expenseDetails.piece')}</h4>
+                <p className="font-medium">{procedure.piece || t('expenseDetails.na')}</p>
               </div>
             </div>
           </CardContent>
@@ -413,7 +415,7 @@ export default function ExpenseDetailsPage() {
           {/* Card 1 - Invoice Value */}
           <Card className="p-4">
             <div className="flex flex-col items-center h-full">
-              <h3 className="text-sm font-medium text-muted-foreground mb-2">Invoice Value</h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">{t('expenseDetails.invoiceValue')}</h3>
               {isLoadingFinancial || !procedure ? (
                 <>
                   <Skeleton className="h-8 w-32 mb-2" />
@@ -430,7 +432,7 @@ export default function ExpenseDetailsPage() {
                         )
                       : procedure.amount && procedure.currency !== "USD"
                         ? formatCurrency(parseFloat(procedure.amount), procedure.currency || "TRY")
-                        : "N/A"}
+                        : t('expenseDetails.na')}
                   </p>
                   <div className="w-full border-t border-gray-200 my-2"></div>
                   <p className="text-2xl font-bold">
@@ -441,7 +443,7 @@ export default function ExpenseDetailsPage() {
                             convertToUSD(parseFloat(procedure.amount), parseFloat(procedure.usdtl_rate.toString())) || 0,
                             "USD"
                           )
-                        : "N/A"}
+                        : t('expenseDetails.na')}
                   </p>
                 </>
               )}
@@ -451,7 +453,7 @@ export default function ExpenseDetailsPage() {
           {/* Card 2 - Total Tax */}
           <Card className="p-4">
             <div className="flex flex-col items-center h-full">
-              <h3 className="text-sm font-medium text-muted-foreground mb-2">Total Tax</h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">{t('expenseDetails.totalTax')}</h3>
               {isLoadingFinancial || !financialData || !procedure ? (
                 <>
                   <Skeleton className="h-8 w-32 mb-2" />
@@ -465,7 +467,7 @@ export default function ExpenseDetailsPage() {
                      procedure.reference && 
                      financialData.financialSummaries[procedure.reference]
                       ? formatCurrency(financialData.financialSummaries[procedure.reference].totalTax)
-                      : "N/A"}
+                      : t('expenseDetails.na')}
                   </p>
                   <div className="w-full border-t border-gray-200 my-2"></div>
                   <p className="text-2xl font-bold">
@@ -480,7 +482,7 @@ export default function ExpenseDetailsPage() {
                           ) || 0,
                           "USD"
                         )
-                      : "N/A"}
+                      : t('expenseDetails.na')}
                   </p>
                 </>
               )}
@@ -490,7 +492,7 @@ export default function ExpenseDetailsPage() {
           {/* Card 3 - Total Import Expense */}
           <Card className="p-4">
             <div className="flex flex-col items-center h-full">
-              <h3 className="text-sm font-medium text-muted-foreground mb-2">Total Import Expense</h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">{t('expenseDetails.totalImportExpense')}</h3>
               {isLoadingFinancial || !financialData || !procedure ? (
                 <>
                   <Skeleton className="h-8 w-32 mb-2" />
@@ -504,7 +506,7 @@ export default function ExpenseDetailsPage() {
                      procedure.reference && 
                      financialData.financialSummaries[procedure.reference]
                       ? formatCurrency(financialData.financialSummaries[procedure.reference].importExpenses)
-                      : "N/A"}
+                      : t('expenseDetails.na')}
                   </p>
                   <div className="w-full border-t border-gray-200 my-2"></div>
                   <p className="text-2xl font-bold">
@@ -519,7 +521,7 @@ export default function ExpenseDetailsPage() {
                           ) || 0,
                           "USD"
                         )
-                      : "N/A"}
+                      : t('expenseDetails.na')}
                   </p>
                 </>
               )}
@@ -529,7 +531,7 @@ export default function ExpenseDetailsPage() {
           {/* Card 4 - Total Service Invoice */}
           <Card className="p-4">
             <div className="flex flex-col items-center h-full">
-              <h3 className="text-sm font-medium text-muted-foreground mb-2">Total Service Invoice</h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">{t('expenseDetails.totalServiceInvoice')}</h3>
               {isLoadingFinancial || !financialData || !procedure ? (
                 <>
                   <Skeleton className="h-8 w-32 mb-2" />
@@ -543,7 +545,7 @@ export default function ExpenseDetailsPage() {
                      procedure.reference && 
                      financialData.financialSummaries[procedure.reference]
                       ? formatCurrency(financialData.financialSummaries[procedure.reference].serviceInvoices)
-                      : "N/A"}
+                      : t('expenseDetails.na')}
                   </p>
                   <div className="w-full border-t border-gray-200 my-2"></div>
                   <p className="text-2xl font-bold">
@@ -558,7 +560,7 @@ export default function ExpenseDetailsPage() {
                           ) || 0,
                           "USD"
                         )
-                      : "N/A"}
+                      : t('expenseDetails.na')}
                   </p>
                 </>
               )}
@@ -568,7 +570,7 @@ export default function ExpenseDetailsPage() {
           {/* Card 5 - Total Expenses */}
           <Card className="p-4">
             <div className="flex flex-col items-center h-full">
-              <h3 className="text-sm font-medium text-muted-foreground mb-2">Total Expenses</h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">{t('expenseDetails.totalExpenses')}</h3>
               {isLoadingFinancial || !financialData || !procedure ? (
                 <>
                   <Skeleton className="h-8 w-32 mb-2" />
@@ -582,7 +584,7 @@ export default function ExpenseDetailsPage() {
                      procedure.reference && 
                      financialData.financialSummaries[procedure.reference]
                       ? formatCurrency(financialData.financialSummaries[procedure.reference].totalExpenses)
-                      : "N/A"}
+                      : t('expenseDetails.na')}
                   </p>
                   <div className="w-full border-t border-gray-200 my-2"></div>
                   <p className="text-2xl font-bold">
@@ -597,7 +599,7 @@ export default function ExpenseDetailsPage() {
                           ) || 0,
                           "USD"
                         )
-                      : "N/A"}
+                      : t('expenseDetails.na')}
                   </p>
                 </>
               )}
@@ -608,7 +610,7 @@ export default function ExpenseDetailsPage() {
           <Card className="p-4">
             <div className="flex flex-col items-center h-full">
               <div className="flex justify-between items-center w-full mb-2">
-                <h3 className="text-sm font-medium text-muted-foreground">Freight Invoice</h3>
+                <h3 className="text-sm font-medium text-muted-foreground">{t('expenseDetails.freightInvoice')}</h3>
                 <Button 
                   variant="ghost" 
                   size="sm" 
@@ -651,7 +653,7 @@ export default function ExpenseDetailsPage() {
           {/* Card 6 - Total Cost */}
           <Card className="p-4">
             <div className="flex flex-col items-center h-full">
-              <h3 className="text-sm font-medium text-muted-foreground mb-2">Total Cost</h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">{t('expenseDetails.totalCost')}</h3>
               {isLoadingFinancial || !financialData || !procedure ? (
                 <>
                   <Skeleton className="h-8 w-32 mb-2" />
@@ -687,7 +689,7 @@ export default function ExpenseDetailsPage() {
                           // Format with TL symbol
                           return formatCurrency(totalCostTL, "TRY");
                         })()
-                      : "N/A"}
+                      : t('expenseDetails.na')}
                   </p>
                   <div className="w-full border-t border-gray-200 my-2"></div>
                   <p className="text-2xl font-bold">
@@ -721,7 +723,7 @@ export default function ExpenseDetailsPage() {
                           // Format with USD symbol
                           return formatCurrency(totalCostUSD, "USD");
                         })()
-                      : "N/A"}
+                      : t('expenseDetails.na')}
                   </p>
                 </>
               )}
@@ -753,22 +755,22 @@ export default function ExpenseDetailsPage() {
         <Dialog open={showFreightModal} onOpenChange={setShowFreightModal}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Edit Freight Invoice</DialogTitle>
+              <DialogTitle>{t('expenseDetails.editFreight')}</DialogTitle>
               <DialogDescription>
-                Update the freight amount for this procedure.
+                {t('expenseDetails.editFreightDesc')}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="freightAmount" className="text-right">
-                  Amount ($)
+                  {t('expenseDetails.amountUsd')}
                 </Label>
                 <Input
                   id="freightAmount"
                   type="number"
                   step="0.01"
                   min="0"
-                  placeholder="Enter freight amount in USD"
+                  placeholder={t('expenseDetails.freightPlaceholder')}
                   value={freightAmount}
                   onChange={(e) => setFreightAmount(e.target.value)}
                   className="col-span-3"
@@ -783,18 +785,18 @@ export default function ExpenseDetailsPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowFreightModal(false)}>
                 <X className="w-4 h-4 mr-2" />
-                Cancel
+                {t('expenseDetails.cancel')}
               </Button>
               <Button onClick={handleUpdateFreightAmount} disabled={isUpdatingFreight}>
                 {isUpdatingFreight ? (
                   <div className="flex items-center">
                     <span className="loading loading-spinner loading-xs mr-2"></span>
-                    Updating...
+                    {t('expenseDetails.updating')}
                   </div>
                 ) : (
                   <>
                     <Save className="w-4 h-4 mr-2" />
-                    Update
+                    {t('expenseDetails.update')}
                   </>
                 )}
               </Button>
