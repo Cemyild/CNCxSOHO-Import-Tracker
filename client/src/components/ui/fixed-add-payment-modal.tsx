@@ -47,13 +47,13 @@ import {
 
 // Payment form validation schema
 const paymentSchema = z.object({
-  procedureReference: z.string().min(1, { message: "Procedure is required" }),
-  paymentType: z.string().min(1, { message: "Payment type is required" }),
+  procedureReference: z.string().min(1, { message: "validation.procedureRequired" }),
+  paymentType: z.string().min(1, { message: "validation.paymentTypeRequired" }),
   amount: z
-    .number({ required_error: "Amount is required" })
-    .positive({ message: "Amount must be positive" }),
+    .number({ required_error: "validation.amountRequired" })
+    .positive({ message: "validation.amountPositive" }),
   paymentDate: z.date({
-    required_error: "Payment date is required",
+    required_error: "validation.paymentDateRequired",
   }),
   description: z.string().optional(),
 });

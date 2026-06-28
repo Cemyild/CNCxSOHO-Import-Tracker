@@ -21,15 +21,15 @@ import { formatCurrency } from '../lib/formatters';
 
 // Define the form schema for payment distribution
 const paymentDistributionSchema = z.object({
-  procedureReference: z.string().min(1, { message: 'Procedure reference is required' }),
+  procedureReference: z.string().min(1, { message: 'validation.procedureReferenceRequired' }),
   distributedAmount: z
     .string()
-    .min(1, { message: 'Amount is required' })
+    .min(1, { message: 'validation.amountRequired' })
     .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
-      message: 'Amount must be a positive number',
+      message: 'validation.amountPositive',
     }),
   paymentType: z.enum(['advance', 'balance'], {
-    required_error: 'Payment type is required',
+    required_error: 'validation.paymentTypeRequired',
   }),
 });
 

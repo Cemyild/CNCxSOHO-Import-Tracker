@@ -9,6 +9,7 @@ import {
   FormProvider,
   useFormContext,
 } from "react-hook-form"
+import { useTranslation } from "react-i18next"
 
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
@@ -145,7 +146,12 @@ const FormMessage = React.forwardRef<
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, children, ...props }, ref) => {
   const { error, formMessageId } = useFormField()
-  const body = error ? String(error?.message) : children
+  const { t } = useTranslation()
+  const rawBody = error ? String(error?.message) : children
+  // Validation messages are stored as i18n keys (e.g. "validation.amountRequired").
+  // t() translates known keys and returns plain strings unchanged, so this is safe
+  // whether the message is a key or already-literal text.
+  const body = typeof rawBody === "string" ? t(rawBody) : rawBody
 
   if (!body) {
     return null

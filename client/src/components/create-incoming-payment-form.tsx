@@ -27,13 +27,13 @@ import { Textarea } from '@/components/ui/textarea';
 
 // Form schema validation
 const formSchema = z.object({
-  paymentId: z.string().min(1, { message: 'Payment ID is required' }),
-  dateReceived: z.string().min(1, { message: 'Date received is required' }),
-  payerInfo: z.string().min(1, { message: 'Payer information is required' }),
+  paymentId: z.string().min(1, { message: 'validation.paymentIdRequired' }),
+  dateReceived: z.string().min(1, { message: 'validation.dateReceivedRequired' }),
+  payerInfo: z.string().min(1, { message: 'validation.payerInfoRequired' }),
   totalAmount: z.string()
-    .min(1, { message: 'Total amount is required' })
+    .min(1, { message: 'validation.totalAmountRequired' })
     .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
-      message: 'Amount must be a positive number',
+      message: 'validation.amountPositive',
     }),
   currency: z.literal('TL').default('TL'), // Only allow TL as currency
   notes: z.string().optional(),

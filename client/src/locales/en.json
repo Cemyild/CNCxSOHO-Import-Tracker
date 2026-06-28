@@ -2003,5 +2003,25 @@
       "updating": "Updating...",
       "applyUpdates": "Apply {{count}} Updates"
     }
+  },
+  "validation": {
+    "paymentIdRequired": "Payment ID is required",
+    "dateReceivedRequired": "Date received is required",
+    "payerInfoRequired": "Payer information is required",
+    "totalAmountRequired": "Total amount is required",
+    "amountRequired": "Amount is required",
+    "amountPositive": "Amount must be a positive number",
+    "amountValidNumber": "Amount must be a valid number",
+    "referenceRequired": "Reference is required",
+    "procedureRequired": "Procedure is required",
+    "procedureReferenceRequired": "Procedure reference is required",
+    "paymentTypeRequired": "Payment type is required",
+    "paymentDateRequired": "Payment date is required",
+    "pieceValidInteger": "Piece must be a valid integer",
+    "kgValidNumber": "KG must be a valid number",
+    "usdTlRateValidNumber": "USD/TL rate must be a valid number",
+    "categoryRequired": "Category is required",
+    "invoiceNumberRequired": "Invoice number is required",
+    "dateRequired": "Date is required"
   }
 }

@@ -80,18 +80,18 @@ const items = [
 
 // Define the validation schema for the form
 const procedureFormSchema = z.object({
-  reference: z.string().min(1, { message: "Reference is required" }),
+  reference: z.string().min(1, { message: "validation.referenceRequired" }),
   shipper: z.string().optional(),
   invoice_no: z.string().optional(),
   invoice_date: z.date().optional().nullable(),
   amount: z.string().optional()
-    .refine(val => !val || !isNaN(parseFloat(val)), { message: "Amount must be a valid number" }),
+    .refine(val => !val || !isNaN(parseFloat(val)), { message: "validation.amountValidNumber" }),
   currency: z.string().default("TRY"),
   piece: z.string().optional()
-    .refine(val => !val || !isNaN(parseInt(val)), { message: "Piece must be a valid integer" }),
+    .refine(val => !val || !isNaN(parseInt(val)), { message: "validation.pieceValidInteger" }),
   package: z.string().optional(),
   kg: z.string().optional()
-    .refine(val => !val || !isNaN(parseFloat(val)), { message: "KG must be a valid number" }),
+    .refine(val => !val || !isNaN(parseFloat(val)), { message: "validation.kgValidNumber" }),
   awb_number: z.string().optional(),
   arrival_date: z.date().optional().nullable(),
   import_dec_date: z.date().optional().nullable(),
@@ -99,7 +99,7 @@ const procedureFormSchema = z.object({
   carrier: z.string().optional(),
   customs: z.string().optional(),
   usdtl_rate: z.string().optional()
-    .refine(val => !val || !isNaN(parseFloat(val)), { message: "USD/TL rate must be a valid number" }),
+    .refine(val => !val || !isNaN(parseFloat(val)), { message: "validation.usdTlRateValidNumber" }),
 });
 
 // Create a type based on the schema

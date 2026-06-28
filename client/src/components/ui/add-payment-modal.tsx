@@ -40,13 +40,13 @@ import { cn } from "@/lib/utils";
 
 // Schema for payment creation
 const paymentSchema = z.object({
-  procedureReference: z.string().min(1, "Procedure reference is required"),
+  procedureReference: z.string().min(1, "validation.procedureReferenceRequired"),
   paymentType: z.enum(["advance", "balance"], {
-    required_error: "Payment type is required",
+    required_error: "validation.paymentTypeRequired",
   }),
-  amount: z.coerce.number().positive("Amount must be a positive number"),
+  amount: z.coerce.number().positive("validation.amountPositive"),
   paymentDate: z.date({
-    required_error: "Payment date is required",
+    required_error: "validation.paymentDateRequired",
   }),
   description: z.string().optional(),
 });

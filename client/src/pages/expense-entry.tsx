@@ -143,7 +143,7 @@ const items = [
 
 // Form validation schemas
 const shipmentDetailsSchema = z.object({
-  reference: z.string().min(1, "Reference is required"),
+  reference: z.string().min(1, "validation.referenceRequired"),
 });
 
 const shipmentDetailsEditSchema = z.object({
@@ -167,8 +167,8 @@ const taxSchema = z.object({
 });
 
 const importExpenseSchema = z.object({
-  category: z.string().min(1, "Category is required"),
-  amount: z.string().min(1, "Amount is required"),
+  category: z.string().min(1, "validation.categoryRequired"),
+  amount: z.string().min(1, "validation.amountRequired"),
   currency: z.string().default("TRY"),
   invoiceNumber: z.string().optional(),
   invoiceDate: z.string().optional(),
@@ -179,10 +179,10 @@ const importExpenseSchema = z.object({
 });
 
 const serviceInvoiceSchema = z.object({
-  amount: z.string().min(1, "Amount is required"),
+  amount: z.string().min(1, "validation.amountRequired"),
   currency: z.string().default("TRY"),
-  invoiceNumber: z.string().min(1, "Invoice number is required"),
-  date: z.string().min(1, "Date is required"),
+  invoiceNumber: z.string().min(1, "validation.invoiceNumberRequired"),
+  date: z.string().min(1, "validation.dateRequired"),
   notes: z.string().optional(),
 });
 

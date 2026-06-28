@@ -81,7 +81,7 @@ const currencies = [
 
 // Form schema - exactly the same as add procedure
 const procedureSchema = z.object({
-  reference: z.string().min(1, "Reference is required"),
+  reference: z.string().min(1, "validation.referenceRequired"),
   shipper: z.string().optional(),
   invoice_no: z.string().optional(),
   invoice_date: z.date().nullable(),

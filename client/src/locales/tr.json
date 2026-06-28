@@ -2003,5 +2003,25 @@
       "updating": "Güncelleniyor...",
       "applyUpdates": "{{count}} Güncellemeyi Uygula"
     }
+  },
+  "validation": {
+    "paymentIdRequired": "Ödeme No zorunludur",
+    "dateReceivedRequired": "Alınma tarihi zorunludur",
+    "payerInfoRequired": "Ödeyen bilgisi zorunludur",
+    "totalAmountRequired": "Toplam tutar zorunludur",
+    "amountRequired": "Tutar zorunludur",
+    "amountPositive": "Tutar pozitif bir sayı olmalıdır",
+    "amountValidNumber": "Tutar geçerli bir sayı olmalıdır",
+    "referenceRequired": "Referans zorunludur",
+    "procedureRequired": "İşlem zorunludur",
+    "procedureReferenceRequired": "İşlem referansı zorunludur",
+    "paymentTypeRequired": "Ödeme türü zorunludur",
+    "paymentDateRequired": "Ödeme tarihi zorunludur",
+    "pieceValidInteger": "Adet geçerli bir tam sayı olmalıdır",
+    "kgValidNumber": "KG geçerli bir sayı olmalıdır",
+    "usdTlRateValidNumber": "USD/TL kuru geçerli bir sayı olmalıdır",
+    "categoryRequired": "Kategori zorunludur",
+    "invoiceNumberRequired": "Fatura numarası zorunludur",
+    "dateRequired": "Tarih zorunludur"
   }
 }
