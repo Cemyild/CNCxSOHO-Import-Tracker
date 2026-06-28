@@ -9,6 +9,9 @@ import path from "path";
 
 const app = express();
 
+// Behind nginx/SSL proxy: required for `secure` cookies to be set correctly.
+app.set('trust proxy', 1);
+
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -16,13 +19,24 @@ if (!fs.existsSync(uploadsDir)) {
   log(`Created uploads directory: ${uploadsDir}`);
 }
 
-// CORS configuration for session cookies
+// CORS: only reflect credentials for whitelisted origins.
+// Configure via ALLOWED_ORIGINS env (comma-separated); falls back to known origins.
+const DEFAULT_ORIGINS = ['https://cncsohoimportmanager.com', 'http://localhost:5000'];
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '')
+  .split(',').map(o => o.trim()).filter(Boolean);
+const allowedOrigins = ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : DEFAULT_ORIGINS;
+
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Credentials', 'true');
+  const origin = req.headers.origin;
+  // Only echo the origin (and allow credentials) when it's on the whitelist.
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Vary', 'Origin');
+  }
   res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin,X-Requested-With,Content-Type,Accept,Authorization');
-  
+
   if (req.method === 'OPTIONS') {
     res.sendStatus(200);
   } else {
@@ -30,18 +44,24 @@ app.use((req, res, next) => {
   }
 });
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: false, limit: '25mb' }));
 
 // MCP server has its own bearer-token auth; mount BEFORE session middleware
 // so MCP requests never touch the session store.
 app.use("/mcp", mcpRouter);
 
 // Session configuration with PostgreSQL store
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET) {
+  throw new Error('SESSION_SECRET tanımlı değil — uygulama başlatılamaz. .env içine güçlü bir değer ekleyin.');
+}
+const isProd = process.env.NODE_ENV === 'production';
+
 const PgSession = connectPgSimple(session);
 app.use(session({
   name: 'connect.sid',
-  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
+  secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   store: new PgSession({
@@ -50,12 +70,34 @@ app.use(session({
     createTableIfMissing: true
   }),
   cookie: {
-    secure: false,
-    httpOnly: false, // Allow JavaScript access for debugging
+    secure: isProd,        // production'da yalnızca HTTPS üzerinden gönder
+    httpOnly: true,        // JavaScript'ten okunamaz (XSS ile çerez çalınamaz)
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax'
   }
 }));
+
+// Auth gate: tüm yazma istekleri (oluştur/değiştir/sil) giriş gerektirir.
+// Giriş; oturum çerezi VEYA Bearer anahtarı ile sağlanabilir (ön yüz ikisini de gönderir).
+// Login endpoint'i ve okuma (GET) istekleri muaftır.
+const AUTH_EXEMPT_PATHS = new Set(['/api/auth/login']);
+app.use((req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  if (!req.path.startsWith('/api')) return next();
+  if (AUTH_EXEMPT_PATHS.has(req.path)) return next();
+
+  const sessionUserId = (req.session as any)?.userId;
+  let headerUserId: number | null = null;
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    headerUserId = parseInt(authHeader.substring(7)) || null;
+  }
+
+  if (!(sessionUserId || headerUserId)) {
+    return res.status(401).json({ message: 'Giriş gerekli' });
+  }
+  next();
+});
 
 app.use((req, res, next) => {
   const start = Date.now();

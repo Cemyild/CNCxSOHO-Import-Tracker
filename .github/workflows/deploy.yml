@@ -15,12 +15,13 @@ jobs:
         env:
           MCP_BEARER_TOKEN: ${{ secrets.MCP_BEARER_TOKEN }}
           MCP_AGENT_ID: ${{ secrets.MCP_AGENT_ID }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          envs: MCP_BEARER_TOKEN,MCP_AGENT_ID
+          envs: MCP_BEARER_TOKEN,MCP_AGENT_ID,SESSION_SECRET
           script: |
             set -e
             cd /root/CNCxSOHO-Import-Tracker
@@ -41,6 +42,16 @@ jobs:
               echo "[deploy] MCP_BEARER_TOKEN already in .env, leaving as-is"
             else
               echo "[deploy] WARNING: MCP_BEARER_TOKEN secret not set in GitHub. Add it via Settings -> Secrets and re-run the workflow."
+            fi
+
+            echo "[deploy] === 3b. SESSION_SECRET (idempotent) ==="
+            if grep -q '^SESSION_SECRET=' .env; then
+              echo "[deploy] SESSION_SECRET already in .env, leaving as-is"
+            elif [ -n "$SESSION_SECRET" ]; then
+              printf "\n# Session secret - auto-injected by deploy workflow\nSESSION_SECRET=%s\n" "$SESSION_SECRET" >> .env
+              echo "[deploy] SESSION_SECRET added to .env"
+            else
+              echo "[deploy] ERROR: SESSION_SECRET not in .env and no GitHub secret set. App will fail to start. Add it via Settings -> Secrets."
             fi
 
             echo "[deploy] === 4. Apply DB DDL for agent_audit_log (idempotent) ==="
