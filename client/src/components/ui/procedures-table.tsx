@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { 
@@ -105,6 +106,7 @@ const statusFilterFn: FilterFn<Procedure> = (row, columnId, filterValue: string[
 };
 
 export function ProceduresTable() {
+  const { t } = useTranslation();
   const id = useId();
   const [, setLocation] = useLocation();
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -141,15 +143,68 @@ export function ProceduresTable() {
 
   // Deletion now happens on a per-row basis in the action menu
 
+  // Shared status badge color (same mapping the three status columns used before).
+  const statusBadgeClass = (status: string): string => {
+    switch (status.toLowerCase()) {
+      case "arrived":
+      case "tareks_approved":
+      case "import_finished":
+      case "delivered":
+      case "import_doc_received":
+      case "pod_sent":
+      case "expense_documents_sent":
+      case "advance_payment_received":
+      case "balance_received":
+        return "bg-green-600 text-white";
+      case "tareks_application":
+      case "import_doc_pending":
+      case "final_balance_letter_sent":
+        return "bg-red-600 text-white";
+      case "closed":
+        return "bg-muted-foreground/60 text-primary-foreground";
+      default:
+        return "bg-yellow-500 text-white";
+    }
+  };
+
+  // Renders a status badge, translating the label by group (falls back to a
+  // humanized version of the raw status if no translation exists).
+  const renderStatusBadge = (
+    rawStatus: string | null,
+    group: "shipmentStatus" | "documentStatus" | "paymentStatus",
+  ) => {
+    if (!rawStatus) {
+      return (
+        <div className="min-w-[120px] max-w-[280px] w-full flex justify-center">
+          <Badge className="bg-gray-500/20 text-gray-700 dark:text-gray-400 hover:bg-gray-500/30 w-full text-center">
+            {t("procedures.none")}
+          </Badge>
+        </div>
+      );
+    }
+    const fallback = rawStatus
+      .split("_")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+    const label = t(`procedures.${group}.${rawStatus.toLowerCase()}`, { defaultValue: fallback });
+    return (
+      <div className="min-w-[120px] max-w-[280px] w-full flex justify-center">
+        <Badge className={cn(statusBadgeClass(rawStatus), "break-normal w-full text-center")}>
+          {label}
+        </Badge>
+      </div>
+    );
+  };
+
 const columns: ColumnDef<Procedure>[] = [
     {
       id: "actions",
-      header: () => <span className="sr-only">Actions</span>,
+      header: () => <span className="sr-only">{t('procedures.actions')}</span>,
       cell: ({ row }) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <div className="flex justify-start">
-              <Button size="icon" variant="ghost" className="shadow-none" aria-label="Actions for procedure">
+              <Button size="icon" variant="ghost" className="shadow-none" aria-label={t('procedures.actions')}>
                 <Ellipsis size={16} strokeWidth={2} aria-hidden="true" />
               </Button>
             </div>
@@ -158,14 +213,14 @@ const columns: ColumnDef<Procedure>[] = [
             <DropdownMenuGroup>
               <Link href={`/procedure-details?reference=${encodeURIComponent(row.original.reference || "")}`}>
                 <DropdownMenuItem>
-                  <span>View details</span>
+                  <span>{t('procedures.viewDetails')}</span>
                 </DropdownMenuItem>
               </Link>
               {isAdmin && (
                 <DropdownMenuItem
                   onClick={() => setLocation(`/edit-procedure?reference=${encodeURIComponent(row.original.reference || "")}`)}
                 >
-                  <span>Edit</span>
+                  <span>{t('procedures.edit')}</span>
                   <DropdownMenuShortcut>⌘E</DropdownMenuShortcut>
                 </DropdownMenuItem>
               )}
@@ -177,18 +232,18 @@ const columns: ColumnDef<Procedure>[] = [
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
-                        <span>Delete</span>
+                        <span>{t('procedures.delete')}</span>
                       </DropdownMenuItem>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Delete procedure?</AlertDialogTitle>
+                        <AlertDialogTitle>{t('procedures.deleteTitle')}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This will permanently remove this procedure. This action cannot be undone.
+                          {t('procedures.deleteDescription')}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>{t('procedures.cancel')}</AlertDialogCancel>
                         <AlertDialogAction 
                           onClick={async () => {
                             try {
@@ -199,15 +254,15 @@ const columns: ColumnDef<Procedure>[] = [
                               if (!res.ok) {
                                 throw new Error("Failed to delete procedure");
                               }
-                              
+
                               // Refresh the list
                               refetch();
                             } catch (error) {
                               console.error("Error deleting procedure:", error);
-                              alert("Failed to delete procedure");
+                              alert(t('procedures.deleteFailed'));
                             }
                           }}
-                        >Delete</AlertDialogAction>
+                        >{t('procedures.delete')}</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
@@ -221,7 +276,7 @@ const columns: ColumnDef<Procedure>[] = [
       enableHiding: false,
     },
     {
-      header: "Reference",
+      header: t('procedures.col.reference'),
       accessorKey: "reference",
       cell: ({ row }) => <div className="font-medium whitespace-nowrap overflow-hidden text-ellipsis">{row.getValue("reference") || "-"}</div>,
       size: 120,
@@ -229,7 +284,7 @@ const columns: ColumnDef<Procedure>[] = [
       enableHiding: false,
     },
     {
-      header: "Shipper",
+      header: t('procedures.col.shipper'),
       accessorKey: "shipper",
       cell: ({ row }) => {
         const value = row.getValue("shipper") as string || "-";
@@ -249,7 +304,7 @@ const columns: ColumnDef<Procedure>[] = [
       size: 150,
     },
     {
-      header: "Invoice #",
+      header: t('procedures.col.invoiceNo'),
       accessorKey: "invoice_no",
       cell: ({ row }) => {
         const value = row.getValue("invoice_no") as string || "-";
@@ -269,7 +324,7 @@ const columns: ColumnDef<Procedure>[] = [
       size: 100,
     },
     {
-      header: "Invoice Date",
+      header: t('procedures.col.invoiceDate'),
       accessorKey: "invoice_date",
       cell: ({ row }) => {
         const dateString = row.getValue("invoice_date") as string | null;
@@ -290,7 +345,7 @@ const columns: ColumnDef<Procedure>[] = [
       size: 120,
     },
     {
-      header: "Amount",
+      header: t('procedures.col.amount'),
       accessorKey: "amount",
       cell: ({ row }) => {
         const amount = parseFloat(row.getValue("amount") || "0");
@@ -305,222 +360,43 @@ const columns: ColumnDef<Procedure>[] = [
     },
 
     {
-      header: "Piece",
+      header: t('procedures.col.piece'),
       accessorKey: "piece",
       cell: ({ row }) => <div className="whitespace-nowrap overflow-hidden text-ellipsis">{row.getValue("piece") || "-"}</div>,
       size: 80,
     },
     {
-      header: "Shipment Status",
+      header: t('procedures.col.shipmentStatus'),
       accessorKey: "shipment_status",
-      cell: ({ row }) => {
-        const status = row.getValue("shipment_status") as string;
-        if (!status) {
-          return (
-            <div className="min-w-[120px] max-w-[280px] w-full flex justify-center">
-              <Badge className="bg-gray-500/20 text-gray-700 dark:text-gray-400 hover:bg-gray-500/30 w-full text-center">
-                None
-              </Badge>
-            </div>
-          );
-        }
-
-        let formattedStatus = "";
-        let badgeClass = "";
-
-        // Format specific shipment statuses with proper spacing and color coding
-        switch(status.toLowerCase()) {
-          case "created":
-            formattedStatus = "Created";
-            badgeClass = "bg-yellow-500 text-white";
-            break;
-          case "arrived":
-            formattedStatus = "Arrived";
-            badgeClass = "bg-green-600 text-white";
-            break;
-          case "transit_started":
-            formattedStatus = "Transit Started";
-            badgeClass = "bg-yellow-500 text-white";
-            break;
-          case "transit_in_process":
-            formattedStatus = "Transit in Process";
-            badgeClass = "bg-yellow-500 text-white";
-            break;
-          case "tareks_application":
-            formattedStatus = "Tareks Application";
-            badgeClass = "bg-red-600 text-white";
-            break;
-          case "tareks_approved":
-            formattedStatus = "Tareks Approved";
-            badgeClass = "bg-green-600 text-white";
-            break;
-          case "import_started":
-            formattedStatus = "Import Started";
-            badgeClass = "bg-yellow-500 text-white";
-            break;
-          case "import_finished":
-            formattedStatus = "Import Finished";
-            badgeClass = "bg-green-600 text-white";
-            break;
-          case "delivered":
-            formattedStatus = "Delivered";
-            badgeClass = "bg-green-600 text-white";
-            break;
-          case "closed":
-            formattedStatus = "Closed";
-            badgeClass = "bg-muted-foreground/60 text-primary-foreground";
-            break;
-          default:
-            formattedStatus = status.split('_')
-              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-              .join(' ');
-            badgeClass = "bg-yellow-500 text-white"; // Default to yellow
-        }
-
-        return (
-          <div className="min-w-[120px] max-w-[280px] w-full flex justify-center">
-            <Badge className={cn(badgeClass, "break-normal w-full text-center")}>
-              {formattedStatus}
-            </Badge>
-          </div>
-        );
-      },
+      cell: ({ row }) => renderStatusBadge(row.getValue("shipment_status") as string, "shipmentStatus"),
       minSize: 150,
       maxSize: 280,
       filterFn: statusFilterFn,
     },
     {
-      header: "Document Status",
+      header: t('procedures.col.documentStatus'),
       accessorKey: "document_status",
-      cell: ({ row }) => {
-        const status = row.getValue("document_status") as string;
-        if (!status) {
-          return (
-            <div className="min-w-[120px] max-w-[280px] w-full flex justify-center">
-              <Badge className="bg-gray-500/20 text-gray-700 dark:text-gray-400 hover:bg-gray-500/30 w-full text-center">
-                None
-              </Badge>
-            </div>
-          );
-        }
-
-        let formattedStatus = "";
-        let badgeClass = "";
-
-        // Format specific document statuses with proper spacing and color coding
-        switch(status.toLowerCase()) {
-          case "tax_calc_insurance_sent":
-            formattedStatus = "Tax Calc & Insurance Sent";
-            badgeClass = "bg-yellow-500 text-white";
-            break;
-          case "import_doc_pending":
-            formattedStatus = "Import Doc. Pending";
-            badgeClass = "bg-red-600 text-white";
-            break;
-          case "import_doc_received":
-            formattedStatus = "Import Doc. Received";
-            badgeClass = "bg-green-600 text-white";
-            break;
-          case "pod_sent":
-            formattedStatus = "POD Sent";
-            badgeClass = "bg-green-600 text-white";
-            break;
-          case "expense_documents_sent":
-            formattedStatus = "Expense & Documents Sent";
-            badgeClass = "bg-green-600 text-white";
-            break;
-          case "closed":
-            formattedStatus = "Closed";
-            badgeClass = "bg-muted-foreground/60 text-primary-foreground";
-            break;
-          default:
-            // Handle any other statuses by replacing underscores with spaces and capitalize
-            formattedStatus = status.split('_')
-              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-              .join(' ');
-            badgeClass = "bg-yellow-500 text-white"; //Default to yellow
-        }
-
-        return (
-          <div className="min-w-[120px] max-w-[280px] w-full flex justify-center">
-            <Badge className={cn(badgeClass, "break-normal w-full text-center")}>
-              {formattedStatus}
-            </Badge>
-          </div>
-        );
-      },
+      cell: ({ row }) => renderStatusBadge(row.getValue("document_status") as string, "documentStatus"),
       minSize: 150,
       maxSize: 280,
       filterFn: statusFilterFn,
     },
     {
-      header: "Payment Status",
+      header: t('procedures.col.paymentStatus'),
       accessorKey: "payment_status",
-      cell: ({ row }) => {
-        const status = row.getValue("payment_status") as string;
-        if (!status) {
-          return (
-            <div className="min-w-[120px] max-w-[280px] w-full flex justify-center">
-              <Badge className="bg-gray-500/20 text-gray-700 dark:text-gray-400 hover:bg-gray-500/30 w-full text-center">
-                None
-              </Badge>
-            </div>
-          );
-        }
-
-        let formattedStatus = "";
-        let badgeClass = "";
-
-        // Format specific payment statuses with proper spacing and color coding
-        switch(status.toLowerCase()) {
-          case "advance_taxletter_sent":
-            formattedStatus = "Advance Taxletter Sent";
-            badgeClass = "bg-yellow-500 text-white";
-            break;
-          case "advance_payment_received":
-            formattedStatus = "Advance Payment Received";
-            badgeClass = "bg-green-600 text-white";
-            break;
-          case "final_balance_letter_sent":
-            formattedStatus = "Final Balance Letter Sent";
-            badgeClass = "bg-red-600 text-white";
-            break;
-          case "balance_received":
-            formattedStatus = "Balance Received";
-            badgeClass = "bg-green-600 text-white";
-            break;
-          case "closed":
-            formattedStatus = "Closed";
-            badgeClass = "bg-muted-foreground/60 text-primary-foreground";
-            break;
-          default:
-            // Handle any other statuses by replacing underscores with spaces and capitalize
-            formattedStatus = status.split('_')
-              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-              .join(' ');
-            badgeClass = "bg-yellow-500 text-white"; //Default to yellow
-        }
-
-        return (
-          <div className="min-w-[120px] max-w-[280px] w-full flex justify-center">
-            <Badge className={cn(badgeClass, "break-normal w-full text-center")}>
-              {formattedStatus}
-            </Badge>
-          </div>
-        );
-      },
+      cell: ({ row }) => renderStatusBadge(row.getValue("payment_status") as string, "paymentStatus"),
       minSize: 150,
       maxSize: 280,
       filterFn: statusFilterFn,
     },
     {
-      header: "Package",
+      header: t('procedures.col.package'),
       accessorKey: "package",
       cell: ({ row }) => <div className="whitespace-nowrap overflow-hidden text-ellipsis">{row.getValue("package") || "-"}</div>,
       size: 100,
     },
     {
-      header: "KG",
+      header: t('procedures.col.kg'),
       accessorKey: "kg",
       cell: ({ row }) => {
         const kg = parseFloat(row.getValue("kg") || "0");
@@ -529,13 +405,13 @@ const columns: ColumnDef<Procedure>[] = [
       size: 80,
     },
     {
-      header: "AWB #",
+      header: t('procedures.col.awb'),
       accessorKey: "awb_number",
       cell: ({ row }) => <div className="whitespace-nowrap overflow-hidden text-ellipsis">{row.getValue("awb_number") || "-"}</div>,
       size: 120,
     },
     {
-      header: "Arrival Date",
+      header: t('procedures.col.arrivalDate'),
       accessorKey: "arrival_date",
       cell: ({ row }) => {
         const dateString = row.getValue("arrival_date") as string | null;
@@ -556,25 +432,25 @@ const columns: ColumnDef<Procedure>[] = [
       size: 120,
     },
     {
-      header: "Carrier",
+      header: t('procedures.col.carrier'),
       accessorKey: "carrier",
       cell: ({ row }) => <div className="whitespace-nowrap overflow-hidden text-ellipsis">{row.getValue("carrier") || "-"}</div>,
       size: 120,
     },
     {
-      header: "Customs",
+      header: t('procedures.col.customs'),
       accessorKey: "customs",
       cell: ({ row }) => <div className="whitespace-nowrap overflow-hidden text-ellipsis">{row.getValue("customs") || "-"}</div>,
       size: 120,
     },
     {
-      header: "Import Dec #",
+      header: t('procedures.col.importDecNo'),
       accessorKey: "import_dec_number",
       cell: ({ row }) => <div className="whitespace-nowrap overflow-hidden text-ellipsis">{row.getValue("import_dec_number") || "-"}</div>,
       size: 140,
     },
     {
-      header: "Import Dec Date",
+      header: t('procedures.col.importDecDate'),
       accessorKey: "import_dec_date",
       cell: ({ row }) => {
         const dateString = row.getValue("import_dec_date") as string | null;
@@ -753,11 +629,11 @@ const columns: ColumnDef<Procedure>[] = [
   }
 
   if (error) {
-    return <div className="p-4 text-red-500">Error loading procedures: {String(error)}</div>;
+    return <div className="p-4 text-red-500">{t('procedures.errorLoading')} {String(error)}</div>;
   }
 
   if (isLoading) {
-    return <div className="p-4">Loading procedures...</div>;
+    return <div className="p-4">{t('procedures.loading')}</div>;
   }
 
   return (
@@ -776,9 +652,9 @@ const columns: ColumnDef<Procedure>[] = [
               )}
               value={(table.getColumn("reference")?.getFilterValue() ?? "") as string}
               onChange={(e) => table.getColumn("reference")?.setFilterValue(e.target.value)}
-              placeholder="Filter by reference, shipper..."
+              placeholder={t('procedures.filterPlaceholder')}
               type="text"
-              aria-label="Filter by reference or shipper"
+              aria-label={t('procedures.filterPlaceholder')}
             />
             <div className="pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 text-muted-foreground/80 peer-disabled:opacity-50">
               <ListFilter size={16} strokeWidth={2} aria-hidden="true" />
@@ -786,7 +662,7 @@ const columns: ColumnDef<Procedure>[] = [
             {Boolean(table.getColumn("reference")?.getFilterValue()) && (
               <button
                 className="absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center rounded-e-lg text-muted-foreground/80 outline-offset-2 transition-colors hover:text-foreground focus:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Clear filter"
+                aria-label={t('procedures.clearFilter')}
                 onClick={() => {
                   table.getColumn("reference")?.setFilterValue("");
                   if (inputRef.current) {
@@ -808,7 +684,7 @@ const columns: ColumnDef<Procedure>[] = [
                   strokeWidth={2}
                   aria-hidden="true"
                 />
-                Status
+                {t('procedures.statusBtn')}
                 {totalSelectedStatuses > 0 && (
                   <span className="-me-1 ms-3 inline-flex h-5 max-h-full items-center rounded border border-border bg-background px-1 font-[inherit] text-[0.625rem] font-medium text-muted-foreground/70">
                     {totalSelectedStatuses}
@@ -820,7 +696,7 @@ const columns: ColumnDef<Procedure>[] = [
               <div className="space-y-4">
                 {/* Document Status */}
                 <div>
-                  <div className="mb-2 text-sm font-medium">Document Status</div>
+                  <div className="mb-2 text-sm font-medium">{t('procedures.documentStatusLabel')}</div>
                   <div className="space-y-2">
                     {uniqueDocumentStatusValues.length > 0 ? (
                       uniqueDocumentStatusValues.map((value: string, i: number) => (
@@ -842,13 +718,13 @@ const columns: ColumnDef<Procedure>[] = [
                         </div>
                       ))
                     ) : (
-                      <div className="text-sm text-muted-foreground">No document statuses found.</div>
+                      <div className="text-sm text-muted-foreground">{t('procedures.noDocumentStatuses')}</div>
                     )}
                   </div>
                 </div>
                 {/* Payment Status */}
                 <div>
-                  <div className="mb-2 text-sm font-medium">Payment Status</div>
+                  <div className="mb-2 text-sm font-medium">{t('procedures.paymentStatusLabel')}</div>
                   <div className="space-y-2">
                     {uniquePaymentStatusValues.length > 0 ? (
                       uniquePaymentStatusValues.map((value: string, i: number) => (
@@ -870,13 +746,13 @@ const columns: ColumnDef<Procedure>[] = [
                         </div>
                       ))
                     ) : (
-                      <div className="text-sm text-muted-foreground">No payment statuses found.</div>
+                      <div className="text-sm text-muted-foreground">{t('procedures.noPaymentStatuses')}</div>
                     )}
                   </div>
                 </div>
                 {/* Shipment Status */}
                 <div>
-                  <div className="mb-2 text-sm font-medium">Shipment Status</div>
+                  <div className="mb-2 text-sm font-medium">{t('procedures.shipmentStatusLabel')}</div>
                   <div className="space-y-2">
                     {uniqueShipmentStatusValues.length > 0 ? (
                       uniqueShipmentStatusValues.map((value: string, i: number) => (
@@ -898,7 +774,7 @@ const columns: ColumnDef<Procedure>[] = [
                         </div>
                       ))
                     ) : (
-                      <div className="text-sm text-muted-foreground">No shipment statuses found.</div>
+                      <div className="text-sm text-muted-foreground">{t('procedures.noShipmentStatuses')}</div>
                     )}
                   </div>
                 </div>
@@ -915,11 +791,11 @@ const columns: ColumnDef<Procedure>[] = [
                   strokeWidth={2}
                   aria-hidden="true"
                 />
-                Columns
+                {t('procedures.columns')}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('procedures.toggleColumns')}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {table
                 .getAllColumns()
@@ -941,7 +817,7 @@ const columns: ColumnDef<Procedure>[] = [
         <div className="flex items-center gap-2">
           {/* Row size with dropdown selector */}
           <Label htmlFor={`${id}-rows-per-page`} className="text-xs">
-            Per page
+            {t('procedures.perPage')}
           </Label>
           <Select
             value={table.getState().pagination.pageSize.toString()}
@@ -971,7 +847,7 @@ const columns: ColumnDef<Procedure>[] = [
                   strokeWidth={2}
                   aria-hidden="true"
                 />
-                New
+                {t('procedures.new')}
               </Button>
             </Link>
           )}
@@ -1043,7 +919,7 @@ const columns: ColumnDef<Procedure>[] = [
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No results.
+                  {t('procedures.noResults')}
                 </TableCell>
               </TableRow>
             )}
@@ -1054,18 +930,14 @@ const columns: ColumnDef<Procedure>[] = [
       {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Showing{" "}
-          <span className="font-medium">
-            {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
-          </span>{" "}
-          to{" "}
-          <span className="font-medium">
-            {Math.min(
+          {t('procedures.showingRange', {
+            from: table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1,
+            to: Math.min(
               (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
               table.getFilteredRowModel().rows.length
-            )}
-          </span>{" "}
-          of <span className="font-medium">{table.getFilteredRowModel().rows.length}</span> results
+            ),
+            total: table.getFilteredRowModel().rows.length,
+          })}
         </div>
         <Pagination>
           <PaginationContent>
@@ -1077,7 +949,7 @@ const columns: ColumnDef<Procedure>[] = [
                 disabled={!table.getCanPreviousPage()}
                 className="hidden h-8 w-8 sm:flex"
               >
-                <span className="sr-only">Go to first page</span>
+                <span className="sr-only">{t('procedures.firstPage')}</span>
                 <ChevronFirst size={16} strokeWidth={2} />
               </Button>
             </PaginationItem>
@@ -1089,7 +961,7 @@ const columns: ColumnDef<Procedure>[] = [
                 disabled={!table.getCanPreviousPage()}
                 className="h-8 w-8"
               >
-                <span className="sr-only">Go to previous page</span>
+                <span className="sr-only">{t('procedures.previousPage')}</span>
                 <ChevronLeft size={16} strokeWidth={2} />
               </Button>
             </PaginationItem>
@@ -1101,7 +973,7 @@ const columns: ColumnDef<Procedure>[] = [
                 disabled={!table.getCanNextPage()}
                 className="h-8 w-8"
               >
-                <span className="sr-only">Go to next page</span>
+                <span className="sr-only">{t('procedures.nextPage')}</span>
                 <ChevronRight size={16} strokeWidth={2} />
               </Button>
             </PaginationItem>
@@ -1113,7 +985,7 @@ const columns: ColumnDef<Procedure>[] = [
                 disabled={!table.getCanNextPage()}
                 className="hidden h-8 w-8 sm:flex"
               >
-                <span className="sr-only">Go to last page</span>
+                <span className="sr-only">{t('procedures.lastPage')}</span>
                 <ChevronLast size={16} strokeWidth={2} />
               </Button>
             </PaginationItem>
