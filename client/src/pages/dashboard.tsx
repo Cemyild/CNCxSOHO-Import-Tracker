@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Calendar,
   Home,
@@ -71,6 +72,7 @@ interface DashboardData {
 }
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const [dashboardData, setDashboardData] = useState<{
     activeProcedures: DashboardData;
     pendingDocuments: DashboardData;
@@ -129,26 +131,26 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <PageLayout title="Dashboard" navItems={items}>
+    <PageLayout title={t('dashboard.title')} navItems={items}>
       <DashboardSnapshot />
       <CardsProvider>
         <div className="grid gap-4 md:grid-cols-3">
           <DashboardCard
-            title="Active Procedures"
+            title={t('dashboard.activeProcedures')}
             procedures={dashboardData.activeProcedures.procedures}
             count={dashboardData.activeProcedures.count}
             isLoading={loading}
           />
 
           <DashboardCard
-            title="Pending Documents"
+            title={t('dashboard.pendingDocuments')}
             procedures={dashboardData.pendingDocuments.procedures}
             count={dashboardData.pendingDocuments.count}
             isLoading={loading}
           />
 
           <DashboardCard
-            title="Awaiting Payment"
+            title={t('dashboard.awaitingPayment')}
             procedures={dashboardData.awaitingPayment.procedures}
             count={dashboardData.awaitingPayment.count}
             isLoading={loading}

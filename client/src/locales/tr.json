@@ -16,5 +16,11 @@
     "logout": "Çıkış Yap",
     "loggingOut": "Çıkış yapılıyor...",
     "loading": "Yükleniyor..."
+  },
+  "dashboard": {
+    "title": "Panel",
+    "activeProcedures": "Aktif İşlemler",
+    "pendingDocuments": "Bekleyen Belgeler",
+    "awaitingPayment": "Ödeme Bekleyen"
   }
 }

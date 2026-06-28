@@ -16,5 +16,11 @@
     "logout": "Logout",
     "loggingOut": "Logging out...",
     "loading": "Loading..."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "activeProcedures": "Active Procedures",
+    "pendingDocuments": "Pending Documents",
+    "awaitingPayment": "Awaiting Payment"
   }
 }
