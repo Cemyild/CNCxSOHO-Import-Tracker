@@ -63,7 +63,7 @@ interface User {
   id: number;
   username: string;
   email?: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'user' | 'accountant';
   createdAt: string;
   lastLogin?: string;
 }
@@ -151,7 +151,7 @@ export function SettingsPage() {
     username: '',
     email: '',
     password: '',
-    role: 'user' as 'admin' | 'user'
+    role: 'user' as 'admin' | 'user' | 'accountant'
   });
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -989,10 +989,11 @@ export function SettingsPage() {
               <select
                 id="role"
                 value={newUserData.role}
-                onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value as 'admin' | 'user' })}
+                onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value as 'admin' | 'user' | 'accountant' })}
                 className="w-full p-2 border rounded-md"
               >
                 <option value="user">User</option>
+                <option value="accountant">Muhasebeci</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -1041,10 +1042,11 @@ export function SettingsPage() {
                 <select
                   id="edit-role"
                   value={selectedUser.role}
-                  onChange={(e) => setSelectedUser({ ...selectedUser, role: e.target.value as 'admin' | 'user' })}
+                  onChange={(e) => setSelectedUser({ ...selectedUser, role: e.target.value as 'admin' | 'user' | 'accountant' })}
                   className="w-full p-2 border rounded-md"
                 >
                   <option value="user">User</option>
+                  <option value="accountant">Muhasebeci</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
