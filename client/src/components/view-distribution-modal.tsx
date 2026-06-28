@@ -11,6 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { formatCurrency, formatDate } from '../lib/formatters';
 
 interface ViewDistributionModalProps {
@@ -54,6 +55,7 @@ const ConfirmationDialog = ({
   onConfirm: (id: number) => void; 
   isDeleting: boolean;
 }) => {
+  const { t } = useTranslation();
   // Safety check - only create the portal if document exists (e.g., during SSR or tests)
   if (typeof document === 'undefined') {
     return null;
@@ -82,9 +84,9 @@ const ConfirmationDialog = ({
           margin: '1.5rem'
         }}
       >
-        <h3 className="text-lg font-bold mb-2">Confirm Deletion</h3>
+        <h3 className="text-lg font-bold mb-2">{t('payments.viewDist.confirmTitle')}</h3>
         <div className="mb-4 text-gray-600 dark:text-gray-300">
-          This will permanently remove this distribution from the system. This action cannot be undone.
+          {t('payments.viewDist.confirmDesc')}
         </div>
         <div className="flex justify-end space-x-3">
           <Button 
@@ -96,7 +98,7 @@ const ConfirmationDialog = ({
             className="w-24"
             disabled={isDeleting}
           >
-            Cancel
+            {t('payments.viewDist.cancel')}
           </Button>
           <Button 
             variant="destructive" 
@@ -114,10 +116,10 @@ const ConfirmationDialog = ({
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Deleting
+                {t('payments.viewDist.deleting')}
               </span>
             ) : (
-              "Delete"
+              t('payments.viewDist.delete')
             )}
           </Button>
         </div>
@@ -141,6 +143,7 @@ export function ViewDistributionModal({
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Distribution | null>(null);
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   // Fetch distributions when modal opens
   useEffect(() => {
@@ -201,14 +204,14 @@ export function ViewDistributionModal({
         console.error('Fetch error during GET operation:', fetchError);
         if (fetchError.message && fetchError.message.includes('timeout')) {
           toast({
-            title: 'Request Timeout',
-            description: 'The server took too long to respond when loading distributions. Please try again.',
+            title: t('payments.viewDist.requestTimeout'),
+            description: t('payments.viewDist.timeoutDesc'),
             variant: 'destructive',
           });
         } else {
           toast({
-            title: 'Error',
-            description: `Network error: ${fetchError.message || 'Unknown error'}`,
+            title: t('payments.toast.error'),
+            description: t('payments.viewDist.networkError', { msg: fetchError.message || 'Unknown error' }),
             variant: 'destructive',
           });
         }
@@ -218,8 +221,8 @@ export function ViewDistributionModal({
     } catch (error) {
       console.error('Exception during fetching distributions:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to load payment distributions.',
+        title: t('payments.toast.error'),
+        description: t('payments.viewDist.failLoad'),
         variant: 'destructive',
       });
       // Return empty distributions on error to prevent UI from waiting indefinitely
@@ -234,11 +237,11 @@ export function ViewDistributionModal({
     if (viewMode === 'payment' && paymentData) {
       return (
         <div className="mb-6 bg-muted/30 p-4 rounded-md space-y-2">
-          <div><strong>Payment ID:</strong> {paymentData.paymentId}</div>
-          <div><strong>Payer:</strong> {paymentData.payerInfo}</div>
-          <div><strong>Total Amount:</strong> {formatCurrency(parseFloat(paymentData.totalAmount))}</div>
-          <div><strong>Amount Distributed:</strong> {formatCurrency(parseFloat(paymentData.amountDistributed))}</div>
-          <div><strong>Remaining Balance:</strong> {formatCurrency(parseFloat(paymentData.remainingBalance))}</div>
+          <div><strong>{t('payments.distribute.paymentId')}</strong> {paymentData.paymentId}</div>
+          <div><strong>{t('payments.distribute.payer')}</strong> {paymentData.payerInfo}</div>
+          <div><strong>{t('payments.distribute.totalAmount')}</strong> {formatCurrency(parseFloat(paymentData.totalAmount))}</div>
+          <div><strong>{t('payments.distribute.amountDistributed')}</strong> {formatCurrency(parseFloat(paymentData.amountDistributed))}</div>
+          <div><strong>{t('payments.distribute.remainingBalance')}</strong> {formatCurrency(parseFloat(paymentData.remainingBalance))}</div>
         </div>
       );
     }
@@ -279,8 +282,8 @@ export function ViewDistributionModal({
       console.log('Distribution removed successfully');
       
       toast({
-        title: 'Success',
-        description: 'Distribution has been deleted successfully.',
+        title: t('payments.toast.success'),
+        description: t('payments.viewDist.deletedSuccess'),
       });
       
       // Close the confirm dialog
@@ -299,8 +302,8 @@ export function ViewDistributionModal({
       
       // Show toast with error message (non-blocking)
       toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to remove distribution. Please try again.',
+        title: t('payments.toast.error'),
+        description: error instanceof Error ? error.message : t('payments.viewDist.failRemove'),
         variant: 'destructive',
       });
     } finally {
@@ -315,14 +318,14 @@ export function ViewDistributionModal({
         <DialogContent className="sm:max-w-[700px] view-distribution-modal">
           <DialogHeader>
             <DialogTitle>
-              {viewMode === 'payment' 
-                ? 'Payment Distributions' 
-                : `Distributions for Procedure ${procedureReference}`}
+              {viewMode === 'payment'
+                ? t('payments.viewDist.titlePayment')
+                : t('payments.viewDist.titleProcedure', { ref: procedureReference })}
             </DialogTitle>
             <DialogDescription>
               {viewMode === 'payment'
-                ? 'View all distributions for this payment'
-                : 'View all payments distributed to this procedure'}
+                ? t('payments.viewDist.descPayment')
+                : t('payments.viewDist.descProcedure')}
             </DialogDescription>
           </DialogHeader>
 
@@ -334,7 +337,7 @@ export function ViewDistributionModal({
             </div>
           ) : distributions.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground">
-              No distributions found.
+              {t('payments.viewDist.noDistributions')}
             </div>
           ) : (
             <div className="max-h-[400px] overflow-y-auto">
@@ -343,18 +346,18 @@ export function ViewDistributionModal({
                   <TableRow>
                     {viewMode === 'procedure' && (
                       <>
-                        <TableHead>Payment ID</TableHead>
-                        <TableHead>Total Payment</TableHead>
-                        <TableHead>Payer</TableHead>
+                        <TableHead>{t('payments.viewDist.colPaymentId')}</TableHead>
+                        <TableHead>{t('payments.viewDist.colTotalPayment')}</TableHead>
+                        <TableHead>{t('payments.viewDist.colPayer')}</TableHead>
                       </>
                     )}
                     {viewMode === 'payment' && (
-                      <TableHead>Procedure Ref</TableHead>
+                      <TableHead>{t('payments.viewDist.colProcedureRef')}</TableHead>
                     )}
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Payment Type</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t('payments.viewDist.colAmount')}</TableHead>
+                    <TableHead>{t('payments.viewDist.colPaymentType')}</TableHead>
+                    <TableHead>{t('payments.viewDist.colDate')}</TableHead>
+                    <TableHead className="text-right">{t('payments.viewDist.colActions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -372,7 +375,7 @@ export function ViewDistributionModal({
                       )}
                       <TableCell>{formatCurrency(parseFloat(distribution.distributedAmount))}</TableCell>
                       <TableCell>
-                        <span className="capitalize">{distribution.paymentType}</span>
+                        <span>{t(`payments.distribute.${distribution.paymentType}`, { defaultValue: distribution.paymentType })}</span>
                       </TableCell>
                       <TableCell>{formatDate(new Date(distribution.distributionDate))}</TableCell>
                       <TableCell className="text-right">
@@ -389,10 +392,10 @@ export function ViewDistributionModal({
                           {deletingId === distribution.id ? (
                             <div className="flex items-center justify-center">
                               <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                              Removing...
+                              {t('payments.viewDist.removing')}
                             </div>
                           ) : (
-                            "Remove"
+                            t('payments.viewDist.remove')
                           )}
                         </Button>
                       </TableCell>
@@ -412,10 +415,10 @@ export function ViewDistributionModal({
                 className="mr-2"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-refresh-cw mr-1"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
-                Refresh
+                {t('payments.viewDist.refresh')}
               </Button>
             </div>
-            <Button onClick={onClose} className="ml-auto">Close</Button>
+            <Button onClick={onClose} className="ml-auto">{t('payments.viewDist.close')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
