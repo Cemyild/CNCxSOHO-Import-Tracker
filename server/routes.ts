@@ -696,7 +696,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete TR HS Code
-  app.delete("/api/hs-codes/:trHsCode", async (req, res) => {
+  app.delete("/api/hs-codes/:trHsCode", requireRole('admin'), async (req, res) => {
     try {
       const trHsCode = decodeURIComponent(req.params.trHsCode);
       const [deletedHsCode] = await db.delete(hsCodes)
@@ -820,7 +820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete Product
-  app.delete("/api/products/:id", async (req, res) => {
+  app.delete("/api/products/:id", requireRole('admin'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -1097,7 +1097,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/procedures/:id", async (req, res) => {
+  app.delete("/api/procedures/:id", requireRole('admin'), async (req, res) => {
     const success = await storage.deleteProcedure(parseInt(req.params.id));
     res.json({ success });
   });
@@ -1655,7 +1655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/master-excel", async (_req, res) => {
+  app.delete("/api/master-excel", requireRole('admin'), async (_req, res) => {
     try {
       const deleted = await deleteMasterExcel();
       res.json({ deleted });
@@ -2015,7 +2015,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Payment routes
   // DELETE all payments (admin operation) - LEGACY ENDPOINT
-  app.delete("/api/payments/reset-all", async (req, res) => {
+  app.delete("/api/payments/reset-all", requireRole('admin'), async (req, res) => {
     try {
       console.log(
         "[routes] Received request to delete all payments (legacy endpoint)",
@@ -2042,7 +2042,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE all payments (admin operation) - NEW ENDPOINT (avoids route conflicts)
-  app.delete("/api/all-payments/reset", async (req, res) => {
+  app.delete("/api/all-payments/reset", requireRole('admin'), async (req, res) => {
     try {
       console.log(
         "[routes] Received request to delete all payments (new endpoint)",
@@ -2580,7 +2580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE all payment distributions (admin operation)
-  app.delete("/api/all-payment-distributions/reset", async (req, res) => {
+  app.delete("/api/all-payment-distributions/reset", requireRole('admin'), async (req, res) => {
     // Create a timeout promise to prevent hanging operations (10 seconds for bulk operation)
     const timeoutPromise = new Promise((_, reject) => {
       const timeoutId = setTimeout(() => {
@@ -4533,7 +4533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // Delete a status detail
-  app.delete("/api/procedure-status-details/:id", async (req, res) => {
+  app.delete("/api/procedure-status-details/:id", requireRole('admin'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const success = await storage.deleteProcedureStatusDetail(id);
@@ -5430,7 +5430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/tax-calculation/products/:id", async (req, res) => {
+  app.delete("/api/tax-calculation/products/:id", requireRole('admin'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const success = await storage.deleteProduct(id);
@@ -5532,7 +5532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/tax-calculation/hs-codes/:code", async (req, res) => {
+  app.delete("/api/tax-calculation/hs-codes/:code", requireRole('admin'), async (req, res) => {
     try {
       const code = req.params.code;
       const success = await storage.deleteHsCode(code);
