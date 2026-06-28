@@ -8,6 +8,7 @@ import {
   Calculator,
   Sparkles
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { PageLayout } from "@/components/layout/PageLayout"
 import { ExpensesTable } from "@/components/ui/expenses-table"
 
@@ -56,8 +57,9 @@ const items = [
 ]
 
 export default function ExpensesPage() {
+  const { t } = useTranslation();
   return (
-    <PageLayout title="Expenses" navItems={items}>
+    <PageLayout title={t('nav.expenses')} navItems={items}>
       {ExpensesTable()}
     </PageLayout>
   )

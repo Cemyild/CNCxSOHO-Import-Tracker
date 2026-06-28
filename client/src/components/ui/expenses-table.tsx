@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useId, useRef, useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
@@ -122,6 +123,7 @@ const multiColumnFilterFn: FilterFn<Procedure> = (row, columnId, filterValue) =>
 };
 
 export function ExpensesTable(): React.ReactNode {
+  const { t } = useTranslation();
   const id = useId();
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -333,12 +335,12 @@ export function ExpensesTable(): React.ReactNode {
   const columns: ColumnDef<Procedure>[] = [
     {
       id: "actions",
-      header: () => <span className="sr-only">Actions</span>,
+      header: () => <span className="sr-only">{t('expenses.actions')}</span>,
       cell: ({ row }) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <div className="flex justify-start">
-              <Button size="icon" variant="ghost" className="shadow-none" aria-label="Actions for procedure">
+              <Button size="icon" variant="ghost" className="shadow-none" aria-label={t('expenses.actions')}>
                 <Ellipsis size={16} strokeWidth={2} aria-hidden="true" />
               </Button>
             </div>
@@ -346,7 +348,7 @@ export function ExpensesTable(): React.ReactNode {
           <DropdownMenuContent align="start">
             <DropdownMenuGroup>
               <DropdownMenuItem onClick={() => window.location.href = `/expense-details?reference=${encodeURIComponent(row.original.reference)}`}>
-                <span>Details</span>
+                <span>{t('expenses.details')}</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             {isAdmin && (
@@ -354,7 +356,7 @@ export function ExpensesTable(): React.ReactNode {
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={() => window.location.href = `/expense-entry?reference=${encodeURIComponent(row.original.reference)}`}>
-                    <span>Add or Edit Expenses</span>
+                    <span>{t('expenses.addOrEdit')}</span>
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               </>
@@ -366,7 +368,7 @@ export function ExpensesTable(): React.ReactNode {
       enableHiding: false,
     },
     {
-      header: "Reference",
+      header: t('procedures.col.reference'),
       accessorKey: "reference",
       cell: ({ row }) => <div className="font-medium whitespace-nowrap overflow-hidden text-ellipsis">{row.getValue("reference") || "-"}</div>,
       size: 120,
@@ -374,7 +376,7 @@ export function ExpensesTable(): React.ReactNode {
       enableHiding: false,
     },
     {
-      header: "Shipper",
+      header: t('procedures.col.shipper'),
       accessorKey: "shipper",
       cell: ({ row }) => {
         const value = row.getValue("shipper") as string || "-";
@@ -394,7 +396,7 @@ export function ExpensesTable(): React.ReactNode {
       size: 150,
     },
     {
-      header: "Invoice #",
+      header: t('procedures.col.invoiceNo'),
       accessorKey: "invoice_no",
       cell: ({ row }) => {
         const value = row.getValue("invoice_no") as string || "-";
@@ -414,7 +416,7 @@ export function ExpensesTable(): React.ReactNode {
       size: 100,
     },
     {
-      header: () => <div className="text-center w-full">Invoice Date</div>,
+      header: () => <div className="text-center w-full">{t('procedures.col.invoiceDate')}</div>,
       accessorKey: "invoice_date",
       cell: ({ row }) => {
         const dateString = row.getValue("invoice_date") as string | null;
@@ -435,7 +437,7 @@ export function ExpensesTable(): React.ReactNode {
       size: 120,
     },
     {
-      header: () => <div className="text-center w-full">Amount</div>,
+      header: () => <div className="text-center w-full">{t('procedures.col.amount')}</div>,
       accessorKey: "amount",
       cell: ({ row }) => {
         const amount = parseFloat(row.getValue("amount") || "0");
@@ -449,13 +451,13 @@ export function ExpensesTable(): React.ReactNode {
       size: 100,
     },
     {
-      header: () => <div className="text-center w-full">Piece</div>,
+      header: () => <div className="text-center w-full">{t('procedures.col.piece')}</div>,
       accessorKey: "piece",
       cell: ({ row }) => <div className="text-center whitespace-nowrap overflow-hidden text-ellipsis">{row.getValue("piece") || "-"}</div>,
       size: 80,
     },
     {
-      header: () => <div className="text-center w-full">Import Dec Date</div>,
+      header: () => <div className="text-center w-full">{t('procedures.col.importDecDate')}</div>,
       accessorKey: "import_dec_date",
       cell: ({ row }) => {
         const dateString = row.getValue("import_dec_date") as string | null;
@@ -476,7 +478,7 @@ export function ExpensesTable(): React.ReactNode {
       size: 130,
     },
     {
-      header: () => <div className="text-center w-full">Total Tax</div>,
+      header: () => <div className="text-center w-full">{t('expenses.totalTax')}</div>,
       id: "total_tax",
       cell: ({ row }) => {
         const reference = row.original.reference;
@@ -490,7 +492,7 @@ export function ExpensesTable(): React.ReactNode {
         
         // Show loading state if data is being fetched
         if (!data) {
-          return <div className="text-center text-muted-foreground">Loading...</div>;
+          return <div className="text-center text-muted-foreground">{t('expenses.loading')}</div>;
         }
         
         // If data is still loading
@@ -500,7 +502,7 @@ export function ExpensesTable(): React.ReactNode {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="text-center text-muted-foreground">
-                    Loading{data.retries ? ` (Retry ${data.retries})` : '...'}
+                    {data.retries ? `${t('expenses.loading')} (${data.retries})` : t('expenses.loading')}
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
@@ -517,7 +519,7 @@ export function ExpensesTable(): React.ReactNode {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="text-center text-red-500">Error</div>
+                  <div className="text-center text-red-500">{t('expenses.error')}</div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
                   <p>Could not load tax data after multiple attempts</p>
@@ -538,7 +540,7 @@ export function ExpensesTable(): React.ReactNode {
       size: 120,
     },
     {
-      header: () => <div className="text-center w-full">Total Expense</div>,
+      header: () => <div className="text-center w-full">{t('expenses.totalExpense')}</div>,
       id: "total_expense",
       cell: ({ row }) => {
         const reference = row.original.reference;
@@ -549,7 +551,7 @@ export function ExpensesTable(): React.ReactNode {
         
         // Show loading state if data is being fetched
         if (!data) {
-          return <div className="text-center text-muted-foreground">Loading...</div>;
+          return <div className="text-center text-muted-foreground">{t('expenses.loading')}</div>;
         }
         
         // If data is still loading
@@ -559,7 +561,7 @@ export function ExpensesTable(): React.ReactNode {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="text-center text-muted-foreground">
-                    Loading{data.retries ? ` (Retry ${data.retries})` : '...'}
+                    {data.retries ? `${t('expenses.loading')} (${data.retries})` : t('expenses.loading')}
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
@@ -576,7 +578,7 @@ export function ExpensesTable(): React.ReactNode {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="text-center text-red-500">Error</div>
+                  <div className="text-center text-red-500">{t('expenses.error')}</div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
                   <p>Could not load expense data after multiple attempts</p>
@@ -597,7 +599,7 @@ export function ExpensesTable(): React.ReactNode {
       size: 120,
     },
     {
-      header: () => <div className="text-center w-full">Service Fee</div>,
+      header: () => <div className="text-center w-full">{t('expenses.serviceFee')}</div>,
       id: "service_fee",
       cell: ({ row }) => {
         const reference = row.original.reference;
@@ -608,7 +610,7 @@ export function ExpensesTable(): React.ReactNode {
         
         // Show loading state if data is being fetched
         if (!data) {
-          return <div className="text-center text-muted-foreground">Loading...</div>;
+          return <div className="text-center text-muted-foreground">{t('expenses.loading')}</div>;
         }
         
         // If data is still loading
@@ -618,7 +620,7 @@ export function ExpensesTable(): React.ReactNode {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="text-center text-muted-foreground">
-                    Loading{data.retries ? ` (Retry ${data.retries})` : '...'}
+                    {data.retries ? `${t('expenses.loading')} (${data.retries})` : t('expenses.loading')}
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
@@ -635,7 +637,7 @@ export function ExpensesTable(): React.ReactNode {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="text-center text-red-500">Error</div>
+                  <div className="text-center text-red-500">{t('expenses.error')}</div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
                   <p>Could not load service fee data after multiple attempts</p>
@@ -656,7 +658,7 @@ export function ExpensesTable(): React.ReactNode {
       size: 120,
     },
     {
-      header: () => <div className="text-center w-full">Total Expenses</div>,
+      header: () => <div className="text-center w-full">{t('expenses.totalExpenses')}</div>,
       id: "total_expenses",
       cell: ({ row }) => {
         const reference = row.original.reference;
@@ -667,7 +669,7 @@ export function ExpensesTable(): React.ReactNode {
         
         // Show loading state if data is being fetched
         if (!data) {
-          return <div className="text-center text-muted-foreground">Loading...</div>;
+          return <div className="text-center text-muted-foreground">{t('expenses.loading')}</div>;
         }
         
         // If data is still loading
@@ -677,7 +679,7 @@ export function ExpensesTable(): React.ReactNode {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="text-center text-muted-foreground">
-                    Loading{data.retries ? ` (Retry ${data.retries})` : '...'}
+                    {data.retries ? `${t('expenses.loading')} (${data.retries})` : t('expenses.loading')}
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
@@ -694,7 +696,7 @@ export function ExpensesTable(): React.ReactNode {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="text-center text-red-500">Error</div>
+                  <div className="text-center text-red-500">{t('expenses.error')}</div>
                 </TooltipTrigger>
                 <TooltipContent side="left">
                   <p>Could not load total expenses data after multiple attempts</p>
@@ -755,7 +757,7 @@ export function ExpensesTable(): React.ReactNode {
           <Input
             ref={inputRef}
             id={`filter-${id}`}
-            placeholder="Filter by reference, shipper..."
+            placeholder={t('expenses.filterPlaceholder')}
             value={(table.getColumn("reference")?.getFilterValue() as string) ?? ""}
             onChange={handleFilterChange}
             className="grow w-full max-w-sm"
@@ -772,7 +774,7 @@ export function ExpensesTable(): React.ReactNode {
               className="absolute right-0 mr-2"
             >
               <CircleX className="h-4 w-4" />
-              <span className="sr-only">Clear filter</span>
+              <span className="sr-only">{t('expenses.clearFilter')}</span>
             </Button>
           )}
         </div>
@@ -782,12 +784,12 @@ export function ExpensesTable(): React.ReactNode {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-8">
                 <ListFilter className="mr-2 h-4 w-4" />
-                <span>Filter</span>
+                <span>{t('expenses.filter')}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[200px]">
               <DropdownMenuItem>
-                <span>Clear all filters</span>
+                <span>{t('expenses.clearAllFilters')}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -796,7 +798,7 @@ export function ExpensesTable(): React.ReactNode {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="ml-auto h-8">
                 <Columns3 className="mr-2 h-4 w-4" />
-                <span>Columns</span>
+                <span>{t('expenses.columns')}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[200px]">
@@ -870,7 +872,7 @@ export function ExpensesTable(): React.ReactNode {
             {isLoading ? (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  Loading...
+                  {t('expenses.loading')}
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
@@ -896,7 +898,7 @@ export function ExpensesTable(): React.ReactNode {
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No results.
+                  {t('expenses.noResults')}
                 </TableCell>
               </TableRow>
             )}
@@ -904,7 +906,7 @@ export function ExpensesTable(): React.ReactNode {
           <TableCaption>
             {table.getFilteredRowModel().rows.length > 0 && (
               <div className="text-muted-foreground text-xs text-left">
-                Showing 1 to {table.getFilteredRowModel().rows.length} of {table.getFilteredRowModel().rows.length} results
+                {t('expenses.showing', { count: table.getFilteredRowModel().rows.length })}
               </div>
             )}
           </TableCaption>
@@ -914,7 +916,7 @@ export function ExpensesTable(): React.ReactNode {
       <div className="flex items-center justify-between">
         <div className="flex-1 text-sm text-muted-foreground">
           <div className="flex gap-1 items-center">
-            <div>Per page</div>
+            <div>{t('expenses.perPage')}</div>
             <Select
               value={`${table.getState().pagination.pageSize}`}
               onValueChange={(value) => {
@@ -944,7 +946,7 @@ export function ExpensesTable(): React.ReactNode {
                 onClick={() => table.setPageIndex(0)}
                 disabled={!table.getCanPreviousPage()}
               >
-                <span className="sr-only">Go to first page</span>
+                <span className="sr-only">{t('expenses.firstPage')}</span>
                 <ChevronFirst className="h-4 w-4" />
               </Button>
             </PaginationItem>
@@ -955,14 +957,13 @@ export function ExpensesTable(): React.ReactNode {
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
               >
-                <span className="sr-only">Go to previous page</span>
+                <span className="sr-only">{t('expenses.previousPage')}</span>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
             </PaginationItem>
             <PaginationItem className="flex h-8 items-center">
               <span className="text-sm">
-                Page {table.getState().pagination.pageIndex + 1} of{" "}
-                {table.getPageCount()}
+                {t('expenses.pageOf', { current: table.getState().pagination.pageIndex + 1, total: table.getPageCount() })}
               </span>
             </PaginationItem>
             <PaginationItem>
@@ -972,7 +973,7 @@ export function ExpensesTable(): React.ReactNode {
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
               >
-                <span className="sr-only">Go to next page</span>
+                <span className="sr-only">{t('expenses.nextPage')}</span>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </PaginationItem>
@@ -983,7 +984,7 @@ export function ExpensesTable(): React.ReactNode {
                 onClick={() => table.setPageIndex(table.getPageCount() - 1)}
                 disabled={!table.getCanNextPage()}
               >
-                <span className="sr-only">Go to last page</span>
+                <span className="sr-only">{t('expenses.lastPage')}</span>
                 <ChevronLast className="h-4 w-4" />
               </Button>
             </PaginationItem>
@@ -991,7 +992,7 @@ export function ExpensesTable(): React.ReactNode {
         </Pagination>
         
         <div className="flex-1 text-sm text-muted-foreground justify-end flex">
-          {table.getFilteredRowModel().rows.length} row(s)
+          {t('expenses.rowCount', { count: table.getFilteredRowModel().rows.length })}
         </div>
       </div>
     </div>

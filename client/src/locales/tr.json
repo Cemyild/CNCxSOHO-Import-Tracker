@@ -394,5 +394,30 @@
       "emptyTitle": "Bu işleme henüz ödeme dağıtılmadı.",
       "emptyDesc": "Ödemeler, Gelen Ödemeler bölümünden dağıtılır."
     }
+  },
+  "expenses": {
+    "actions": "İşlemler",
+    "details": "Detaylar",
+    "addOrEdit": "Gider Ekle veya Düzenle",
+    "totalTax": "Toplam Vergi",
+    "totalExpense": "Toplam Gider",
+    "serviceFee": "Hizmet Bedeli",
+    "totalExpenses": "Toplam Giderler",
+    "loading": "Yükleniyor...",
+    "error": "Hata",
+    "filterPlaceholder": "Referans, gönderici ile filtrele...",
+    "clearFilter": "Filtreyi temizle",
+    "filter": "Filtre",
+    "clearAllFilters": "Tüm filtreleri temizle",
+    "columns": "Sütunlar",
+    "noResults": "Sonuç yok.",
+    "showing": "{{count}} sonuçtan 1-{{count}} arası gösteriliyor",
+    "perPage": "Sayfa başına",
+    "firstPage": "İlk sayfaya git",
+    "previousPage": "Önceki sayfaya git",
+    "nextPage": "Sonraki sayfaya git",
+    "lastPage": "Son sayfaya git",
+    "pageOf": "Sayfa {{current}} / {{total}}",
+    "rowCount": "{{count}} satır"
   }
 }

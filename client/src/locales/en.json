@@ -394,5 +394,30 @@
       "emptyTitle": "No payments have been distributed to this procedure yet.",
       "emptyDesc": "Payments are distributed from the Incoming Payments section."
     }
+  },
+  "expenses": {
+    "actions": "Actions",
+    "details": "Details",
+    "addOrEdit": "Add or Edit Expenses",
+    "totalTax": "Total Tax",
+    "totalExpense": "Total Expense",
+    "serviceFee": "Service Fee",
+    "totalExpenses": "Total Expenses",
+    "loading": "Loading...",
+    "error": "Error",
+    "filterPlaceholder": "Filter by reference, shipper...",
+    "clearFilter": "Clear filter",
+    "filter": "Filter",
+    "clearAllFilters": "Clear all filters",
+    "columns": "Columns",
+    "noResults": "No results.",
+    "showing": "Showing 1 to {{count}} of {{count}} results",
+    "perPage": "Per page",
+    "firstPage": "Go to first page",
+    "previousPage": "Go to previous page",
+    "nextPage": "Go to next page",
+    "lastPage": "Go to last page",
+    "pageOf": "Page {{current}} of {{total}}",
+    "rowCount": "{{count}} row(s)"
   }
 }
