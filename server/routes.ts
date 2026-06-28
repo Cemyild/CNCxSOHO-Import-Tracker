@@ -528,7 +528,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/users", async (req, res) => {
+  app.post("/api/users", requireRole('admin'), async (req, res) => {
     try {
       const { username, email, password, role } = req.body;
       const user = await storage.createUser({
@@ -545,7 +545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/users/:id", async (req, res) => {
+  app.put("/api/users/:id", requireRole('admin'), async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
       const userData = req.body;
@@ -558,7 +558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/users/:id", async (req, res) => {
+  app.delete("/api/users/:id", requireRole('admin'), async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
       const success = await storage.deleteUser(userId);
@@ -575,17 +575,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   });
 
-  app.post("/api/admin/users", async (req, res) => {
+  app.post("/api/admin/users", requireRole('admin'), async (req, res) => {
     const user = await storage.createUser(req.body);
     res.json({ user: { ...user, password: undefined } });
   });
 
-  app.delete("/api/admin/users/:id", async (req, res) => {
+  app.delete("/api/admin/users/:id", requireRole('admin'), async (req, res) => {
     const success = await storage.deleteUser(parseInt(req.params.id));
     res.json({ success });
   });
 
-  app.post("/api/admin/document-types", async (req, res) => {
+  app.post("/api/admin/document-types", requireRole('admin'), async (req, res) => {
     const { name } = req.body;
     const docType = await storage.createDocumentType({
       name,
