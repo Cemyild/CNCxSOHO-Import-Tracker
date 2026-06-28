@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useQuery, useMutation } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useState, useEffect } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -107,6 +108,7 @@ const items = [
 ]
 
 export default function PaymentsPage() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [selectedProcedureRef, setSelectedProcedureRef] = useState<string | null>(null);
   const [isAddPaymentModalOpen, setIsAddPaymentModalOpen] = useState(false);
@@ -207,8 +209,8 @@ export default function PaymentsPage() {
     },
     onSuccess: () => {
       toast({
-        title: 'Success',
-        description: 'Payment deleted successfully',
+        title: t('payments.toast.success'),
+        description: t('payments.toast.deletedDesc'),
       });
       
       // Invalidate the payments query to refresh the list
@@ -221,8 +223,8 @@ export default function PaymentsPage() {
     onError: (error) => {
       console.error('Error deleting payment:', error);
       toast({
-        title: 'Error',
-        description: `Failed to delete payment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: t('payments.toast.error'),
+        description: t('payments.toast.failDelete', { msg: error instanceof Error ? error.message : 'Unknown error' }),
         variant: 'destructive',
       });
     },
@@ -237,8 +239,8 @@ export default function PaymentsPage() {
     },
     onSuccess: (data) => {
       toast({
-        title: 'Success',
-        description: `Successfully reset ${data.count} payment distributions.`,
+        title: t('payments.toast.success'),
+        description: t('payments.toast.resetDistSuccess', { count: data.count }),
       });
       
       // Invalidate the payments query to refresh the list
@@ -247,8 +249,8 @@ export default function PaymentsPage() {
     onError: (error) => {
       console.error('Error resetting payment distributions:', error);
       toast({
-        title: 'Error',
-        description: `Failed to reset payment distributions: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: t('payments.toast.error'),
+        description: t('payments.toast.failResetDist', { msg: error instanceof Error ? error.message : 'Unknown error' }),
         variant: 'destructive',
       });
     },
@@ -266,8 +268,8 @@ export default function PaymentsPage() {
       }
       
       toast({
-        title: "Payment Deleted",
-        description: "The payment has been successfully removed.",
+        title: t('payments.toast.paymentDeleted'),
+        description: t('payments.toast.paymentRemovedDesc'),
       });
       
       // Invalidate queries to update data
@@ -280,8 +282,8 @@ export default function PaymentsPage() {
     } catch (error) {
       console.error('Error deleting payment:', error);
       toast({
-        title: "Error",
-        description: "Failed to delete payment. Please try again.",
+        title: t('payments.toast.error'),
+        description: t('payments.toast.failDeleteRetry'),
         variant: "destructive",
       });
     }
@@ -308,8 +310,8 @@ export default function PaymentsPage() {
       const result = await response.json();
       
       toast({
-        title: "All Payments Deleted",
-        description: `Successfully deleted ${result.count} payment${result.count === 1 ? '' : 's'}.`,
+        title: t('payments.toast.allDeleted'),
+        description: t('payments.toast.allDeletedDesc', { count: result.count }),
       });
       
       // Invalidate all relevant queries
@@ -322,8 +324,8 @@ export default function PaymentsPage() {
       console.error('Error deleting all payments:', error);
       
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete all payments. Please try again.",
+        title: t('payments.toast.error'),
+        description: error instanceof Error ? error.message : t('payments.toast.failDeleteAll'),
         variant: "destructive",
       });
       
@@ -341,8 +343,8 @@ export default function PaymentsPage() {
     queryClient.invalidateQueries({ queryKey: ['/api/incoming-payments'] });
     
     toast({
-      title: 'Success',
-      description: 'New incoming payment created successfully',
+      title: t('payments.toast.success'),
+      description: t('payments.toast.incomingCreated'),
     });
   };
 
@@ -368,7 +370,7 @@ export default function PaymentsPage() {
   };
 
   const handleResetAllDistributions = () => {
-    if (window.confirm('Are you sure you want to reset ALL payment distributions? This will remove all distributions and reset all payments to pending status.')) {
+    if (window.confirm(t('payments.confirmResetDistributions'))) {
       resetAllDistributionsMutation.mutate();
     }
   };
@@ -398,14 +400,14 @@ export default function PaymentsPage() {
     }
     
     return (
-      <span className={`${bgColor} ${textColor} px-2 py-1 rounded-full text-xs font-medium capitalize`}>
-        {status.replace(/_/g, ' ')}
+      <span className={`${bgColor} ${textColor} px-2 py-1 rounded-full text-xs font-medium`}>
+        {t(`payments.distStatus.${status}`, { defaultValue: status.replace(/_/g, ' ') })}
       </span>
     );
   };
 
   return (
-    <PageLayout title="Payments" navItems={items}>
+    <PageLayout title={t('payments.title')} navItems={items}>
       <div className="space-y-6 p-3 md:p-6">
         {/* Payment View Toggle */}
         <Tabs 
@@ -415,15 +417,15 @@ export default function PaymentsPage() {
         >
           <div className="flex justify-between items-center mb-4">
             <div>
-              <h2 className="text-xl font-bold">Payment Management</h2>
+              <h2 className="text-xl font-bold">{t('payments.management')}</h2>
               <TabsList className="mt-2">
                 <TabsTrigger value="procedure-payments" className="flex items-center">
                   <CreditCard className="h-4 w-4 mr-2" />
-                  Procedure Payments
+                  {t('payments.procedurePayments')}
                 </TabsTrigger>
                 <TabsTrigger value="incoming-payments" className="flex items-center">
                   <DollarSign className="h-4 w-4 mr-2" />
-                  Incoming Payments
+                  {t('payments.incomingPayments')}
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -439,16 +441,16 @@ export default function PaymentsPage() {
                     className="flex items-center"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Reset All Payments
+                    {t('payments.resetAllPayments')}
                   </Button>
                   {selectedProcedureRef && (
-                    <Button 
+                    <Button
                       onClick={() => setIsAddPaymentModalOpen(true)}
                       size="sm"
                       className="flex items-center"
                     >
                       <PlusCircle className="h-4 w-4 mr-2" />
-                      Add Payment
+                      {t('payments.addPayment')}
                     </Button>
                   )}
                 </>
@@ -465,15 +467,15 @@ export default function PaymentsPage() {
                         className="flex items-center"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
-                        Reset All Distributions
+                        {t('payments.resetAllDistributions')}
                       </Button>
-                      <Button 
+                      <Button
                         onClick={() => setShowCreateIncomingForm(true)}
                         size="sm"
                         className="flex items-center"
                       >
                         <PlusCircle className="h-4 w-4 mr-2" />
-                        Add Incoming Payment
+                        {t('payments.addIncomingPayment')}
                       </Button>
                     </>
                   )}
@@ -490,18 +492,18 @@ export default function PaymentsPage() {
           <TabsContent value="procedure-payments" className="space-y-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Filter by Procedure</CardTitle>
+                <CardTitle className="text-lg">{t('payments.filterByProcedure')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <Select 
+                <Select
                   value={selectedProcedureRef || "all_procedures"}
                   onValueChange={(value) => setSelectedProcedureRef(value === "all_procedures" ? null : value)}
                 >
                   <SelectTrigger className="w-full md:w-[300px]">
-                    <SelectValue placeholder="Select a procedure" />
+                    <SelectValue placeholder={t('payments.selectProcedure')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all_procedures">All Procedures</SelectItem>
+                    <SelectItem value="all_procedures">{t('payments.allProcedures')}</SelectItem>
                     {proceduresData?.procedures?.map((procedure: any) => (
                       <SelectItem key={procedure.reference} value={procedure.reference}>
                         {procedure.reference} - {procedure.shipper}
@@ -529,57 +531,57 @@ export default function PaymentsPage() {
               <div className="grid gap-4 md:grid-cols-3">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('payments.totalPayments')}</CardTitle>
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
                       {formatCurrency(
-                        incomingPaymentsData.payments.reduce((sum: number, payment: any) => 
+                        incomingPaymentsData.payments.reduce((sum: number, payment: any) =>
                           sum + parseFloat(payment.totalAmount || 0), 0
                         )
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Total amount received
+                      {t('payments.totalAmountReceived')}
                     </p>
                   </CardContent>
                 </Card>
                 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Distributed</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('payments.totalDistributed')}</CardTitle>
                     <CreditCard className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
                       {formatCurrency(
-                        incomingPaymentsData.payments.reduce((sum: number, payment: any) => 
+                        incomingPaymentsData.payments.reduce((sum: number, payment: any) =>
                           sum + parseFloat(payment.amountDistributed || 0), 0
                         )
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Amount allocated to procedures
+                      {t('payments.amountAllocated')}
                     </p>
                   </CardContent>
                 </Card>
                 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Remaining Payments</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('payments.remainingPayments')}</CardTitle>
                     <AlertTriangle className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
                       {formatCurrency(
-                        incomingPaymentsData.payments.reduce((sum: number, payment: any) => 
+                        incomingPaymentsData.payments.reduce((sum: number, payment: any) =>
                           sum + parseFloat(payment.remainingBalance || 0), 0
                         )
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Amount pending distribution
+                      {t('payments.amountPending')}
                     </p>
                   </CardContent>
                 </Card>
@@ -588,7 +590,7 @@ export default function PaymentsPage() {
             
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Incoming Payments</CardTitle>
+                <CardTitle className="text-lg">{t('payments.incomingPayments')}</CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoadingIncoming ? (
@@ -598,7 +600,7 @@ export default function PaymentsPage() {
                 ) : isIncomingError ? (
                   <div className="bg-destructive/10 p-4 rounded-md">
                     <AlertTriangle className="h-6 w-6 text-destructive mx-auto mb-2" />
-                    <p className="text-center text-destructive">Failed to load incoming payments</p>
+                    <p className="text-center text-destructive">{t('payments.failedLoadIncoming')}</p>
                     <p className="text-center text-sm text-destructive/80 mt-1">
                       {incomingError instanceof Error ? incomingError.message : 'Unknown error'}
                     </p>
@@ -606,9 +608,9 @@ export default function PaymentsPage() {
                 ) : incomingPaymentsData?.payments?.length === 0 ? (
                   <div className="bg-muted p-6 text-center rounded-lg">
                     <Database className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                    <h3 className="text-lg font-medium">No Incoming Payments</h3>
+                    <h3 className="text-lg font-medium">{t('payments.noIncomingTitle')}</h3>
                     <p className="text-muted-foreground mt-2">
-                      You haven't recorded any incoming payments yet. Click "Add Incoming Payment" to get started.
+                      {t('payments.noIncomingDesc')}
                     </p>
                   </div>
                 ) : (
@@ -616,14 +618,14 @@ export default function PaymentsPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[100px]">Payment ID</TableHead>
-                          <TableHead className="w-[120px]">Date Received</TableHead>
-                          <TableHead className="w-[180px]">Payer Information</TableHead>
-                          <TableHead className="w-[120px]">Total Amount</TableHead>
-                          <TableHead className="w-[120px]">Amount Distributed</TableHead>
-                          <TableHead className="w-[120px]">Remaining Balance</TableHead>
-                          <TableHead className="w-[120px]">Status</TableHead>
-                          <TableHead className="text-right w-[100px]">Actions</TableHead>
+                          <TableHead className="w-[100px]">{t('payments.col.paymentId')}</TableHead>
+                          <TableHead className="w-[120px]">{t('payments.col.dateReceived')}</TableHead>
+                          <TableHead className="w-[180px]">{t('payments.col.payerInfo')}</TableHead>
+                          <TableHead className="w-[120px]">{t('payments.col.totalAmount')}</TableHead>
+                          <TableHead className="w-[120px]">{t('payments.col.amountDistributed')}</TableHead>
+                          <TableHead className="w-[120px]">{t('payments.col.remainingBalance')}</TableHead>
+                          <TableHead className="w-[120px]">{t('payments.col.status')}</TableHead>
+                          <TableHead className="text-right w-[100px]">{t('payments.col.actions')}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -642,35 +644,35 @@ export default function PaymentsPage() {
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" className="h-8 w-8 p-0">
-                                    <span className="sr-only">Open menu</span>
+                                    <span className="sr-only">{t('payments.openMenu')}</span>
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                  <DropdownMenuLabel>{t('payments.actions')}</DropdownMenuLabel>
                                   {payment.distributionStatus !== 'fully_distributed' && (
                                     <DropdownMenuItem 
                                       onClick={() => handleDistribute(payment)}
                                       className="cursor-pointer"
                                     >
                                       <DollarSign className="mr-2 h-4 w-4" />
-                                      Distribute Payment
+                                      {t('payments.distributePayment')}
                                     </DropdownMenuItem>
                                   )}
-                                  <DropdownMenuItem 
+                                  <DropdownMenuItem
                                     onClick={() => handleViewDistributions(payment)}
                                     className="cursor-pointer"
                                   >
                                     <Eye className="mr-2 h-4 w-4" />
-                                    View Distributions
+                                    {t('payments.viewDistributions')}
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem 
+                                  <DropdownMenuItem
                                     onClick={() => handleDeleteIncomingPayment(payment)}
                                     className="cursor-pointer text-destructive"
                                   >
                                     <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
+                                    {t('payments.delete')}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -706,20 +708,19 @@ export default function PaymentsPage() {
       <AlertDialog open={isDeleteAllConfirmOpen} onOpenChange={setIsDeleteAllConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reset All Payments?</AlertDialogTitle>
+            <AlertDialogTitle>{t('payments.resetAllTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action will permanently delete ALL payments in the system. This is irreversible.
-              Any financial calculations that depend on payment records will be reset.
+              {t('payments.resetAllDesc')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('payments.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteAllPayments}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isDeleting}
             >
-              {isDeleting ? 'Resetting...' : 'Reset All Payments'}
+              {isDeleting ? t('payments.resetting') : t('payments.resetAllPayments')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -756,19 +757,18 @@ export default function PaymentsPage() {
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Incoming Payment</AlertDialogTitle>
+            <AlertDialogTitle>{t('payments.deleteIncomingTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the payment record and all its distributions.
-              This action cannot be undone.
+              {t('payments.deleteIncomingDesc')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('payments.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteIncoming}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t('payments.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
