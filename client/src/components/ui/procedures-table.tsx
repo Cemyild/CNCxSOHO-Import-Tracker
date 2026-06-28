@@ -99,6 +99,15 @@ const multiColumnFilterFn: FilterFn<Procedure> = (row, columnId, filterValue) =>
   return searchableRowContent.includes(searchTerm);
 };
 
+// Maps a table column id (snake_case) to its translation key under procedures.col.*
+const COL_KEY_MAP: Record<string, string> = {
+  reference: "reference", shipper: "shipper", invoice_no: "invoiceNo", invoice_date: "invoiceDate",
+  amount: "amount", piece: "piece", shipment_status: "shipmentStatus", document_status: "documentStatus",
+  payment_status: "paymentStatus", package: "package", kg: "kg", awb_number: "awb",
+  arrival_date: "arrivalDate", carrier: "carrier", customs: "customs",
+  import_dec_number: "importDecNo", import_dec_date: "importDecDate",
+};
+
 const statusFilterFn: FilterFn<Procedure> = (row, columnId, filterValue: string[]) => {
   if (!filterValue?.length) return true;
   const status = row.getValue(columnId) as string;
@@ -710,7 +719,7 @@ const columns: ColumnDef<Procedure>[] = [
                             htmlFor={`doc-${id}-${i}`}
                             className="flex grow justify-between gap-2 font-normal"
                           >
-                            {value && value.charAt(0).toUpperCase() + value.slice(1)}{" "}
+                            {t(`procedures.documentStatus.${value.toLowerCase()}`, { defaultValue: value.charAt(0).toUpperCase() + value.slice(1) })}{" "}
                             <span className="ms-2 text-xs text-muted-foreground">
                               {documentStatusCounts.get(value)}
                             </span>
@@ -738,7 +747,7 @@ const columns: ColumnDef<Procedure>[] = [
                             htmlFor={`pay-${id}-${i}`}
                             className="flex grow justify-between gap-2 font-normal"
                           >
-                            {value && value.charAt(0).toUpperCase() + value.slice(1)}{" "}
+                            {t(`procedures.paymentStatus.${value.toLowerCase()}`, { defaultValue: value.charAt(0).toUpperCase() + value.slice(1) })}{" "}
                             <span className="ms-2 text-xs text-muted-foreground">
                               {paymentStatusCounts.get(value)}
                             </span>
@@ -766,7 +775,7 @@ const columns: ColumnDef<Procedure>[] = [
                             htmlFor={`ship-${id}-${i}`}
                             className="flex grow justify-between gap-2 font-normal"
                           >
-                            {value && value.charAt(0).toUpperCase() + value.slice(1)}{" "}
+                            {t(`procedures.shipmentStatus.${value.toLowerCase()}`, { defaultValue: value.charAt(0).toUpperCase() + value.slice(1) })}{" "}
                             <span className="ms-2 text-xs text-muted-foreground">
                               {shipmentStatusCounts.get(value)}
                             </span>
@@ -807,7 +816,7 @@ const columns: ColumnDef<Procedure>[] = [
                       checked={column.getIsVisible()}
                       onCheckedChange={(value) => column.toggleVisibility(!!value)}
                     >
-                      {column.id.charAt(0).toUpperCase() + column.id.slice(1).replace(/_/g, " ")}
+                      {t(`procedures.col.${COL_KEY_MAP[column.id] ?? column.id}`, { defaultValue: column.id.charAt(0).toUpperCase() + column.id.slice(1).replace(/_/g, " ") })}
                     </DropdownMenuCheckboxItem>
                   );
                 })}
