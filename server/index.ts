@@ -78,12 +78,11 @@ app.use(session({
   }
 }));
 
-// Auth gate: tüm yazma istekleri (oluştur/değiştir/sil) giriş gerektirir.
-// Giriş; oturum çerezi VEYA Bearer anahtarı ile sağlanabilir (ön yüz ikisini de gönderir).
-// Login endpoint'i ve okuma (GET) istekleri muaftır.
-const AUTH_EXEMPT_PATHS = new Set(['/api/auth/login']);
+// Auth gate: tüm /api istekleri giriş gerektirir (görüntüleme dahil).
+// Giriş; oturum çerezi VEYA imzalı Bearer anahtarı ile sağlanabilir (ön yüz ikisini de gönderir).
+// Muaf: login (giriş yapmak için) ve /api/auth/me (giriş durumunu kendi kontrol eder).
+const AUTH_EXEMPT_PATHS = new Set(['/api/auth/login', '/api/auth/me']);
 app.use((req, res, next) => {
-  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
   if (!req.path.startsWith('/api')) return next();
   if (AUTH_EXEMPT_PATHS.has(req.path)) return next();
 
