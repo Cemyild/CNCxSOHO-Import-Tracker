@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useTranslation } from "react-i18next";
 
 interface MissingAtrRate {
   tr_hs_code: string;
@@ -24,6 +25,7 @@ export function AtrRatesModal({
   onComplete,
   onCancel,
 }: AtrRatesModalProps) {
+  const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [customsTaxPercent, setCustomsTaxPercent] = useState("");
@@ -48,8 +50,8 @@ export function AtrRatesModal({
 
     if (!customsTaxPercent) {
       toast({
-        title: "Validation Error",
-        description: "Customs Tax % is required for ATR calculation",
+        title: t('taxCalcComp.atrRates.validationErrorTitle'),
+        description: t('taxCalcComp.atrRates.customsTaxRequired'),
         variant: "destructive",
       });
       return;
@@ -64,8 +66,8 @@ export function AtrRatesModal({
       });
 
       toast({
-        title: "Success",
-        description: `ATR rate saved for ${currentRate.tr_hs_code}`,
+        title: t('common.success'),
+        description: t('taxCalcComp.atrRates.rateSaved', { code: currentRate.tr_hs_code }),
       });
 
       if (currentIndex >= missingAtrRates.length - 1) {
@@ -75,8 +77,8 @@ export function AtrRatesModal({
       }
     } catch (error) {
       toast({
-        title: "Error",
-        description: `Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`,
+        title: t('common.error'),
+        description: t('taxCalcComp.atrRates.saveFailed', { error: error instanceof Error ? error.message : t('taxCalcComp.atrRates.unknownError') }),
         variant: "destructive",
       });
     } finally {
@@ -92,36 +94,36 @@ export function AtrRatesModal({
     <Dialog open={open} onOpenChange={onCancel}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>ATR Customs Rate Required</DialogTitle>
+          <DialogTitle>{t('taxCalcComp.atrRates.title')}</DialogTitle>
           <DialogDescription>
-            Products from non-EU/exempt countries with A.TR certificate require specific customs tax rates.
+            {t('taxCalcComp.atrRates.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h3 className="font-semibold mb-2">
-              HS Code {currentIndex + 1} of {missingAtrRates.length}
+              {t('taxCalcComp.atrRates.hsCodeProgress', { current: currentIndex + 1, total: missingAtrRates.length })}
             </h3>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div>
-                <span className="text-gray-500">TR HS Code:</span>
+                <span className="text-gray-500">{t('taxCalcComp.atrRates.trHsCodeLabel')}</span>
                 <span className="ml-2 font-mono font-medium">{currentRate.tr_hs_code}</span>
               </div>
               <div>
-                <span className="text-gray-500">Origin:</span>
+                <span className="text-gray-500">{t('taxCalcComp.atrRates.originLabel')}</span>
                 <span className="ml-2 font-medium">{currentRate.country_of_origin}</span>
               </div>
             </div>
             <p className="text-sm text-gray-600 mt-2">
-              A.TR certificate exempts additional customs tax, but base customs tax rate is required.
+              {t('taxCalcComp.atrRates.exemptNote')}
             </p>
           </div>
 
           <div>
             <Label>
-              Customs Tax % *{" "}
-              <span className="text-xs text-gray-500">(e.g., 0.03 for 3%)</span>
+              {t('taxCalcComp.atrRates.customsTaxPercent')}{" "}
+              <span className="text-xs text-gray-500">{t('taxCalcComp.atrRates.customsTaxHint')}</span>
             </Label>
             <Input
               type="number"
@@ -141,14 +143,14 @@ export function AtrRatesModal({
               disabled={isSaving}
               data-testid="button-cancel-atr"
             >
-              Cancel
+              {t('taxCalcComp.atrRates.cancel')}
             </Button>
             <Button
               onClick={handleSave}
               disabled={isSaving}
               data-testid="button-save-atr-rate"
             >
-              {isSaving ? "Saving..." : currentIndex < missingAtrRates.length - 1 ? "Save & Next" : "Save & Calculate"}
+              {isSaving ? t('taxCalcComp.atrRates.saving') : currentIndex < missingAtrRates.length - 1 ? t('taxCalcComp.atrRates.saveNext') : t('taxCalcComp.atrRates.saveCalculate')}
             </Button>
           </div>
         </div>

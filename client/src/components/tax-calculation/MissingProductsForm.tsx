@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import { Info } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface Product {
   style: string;
@@ -31,6 +32,7 @@ export function MissingProductsForm({
   products: Product[];
   onComplete: () => void;
 }) {
+  const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [suggestions, setSuggestions] = useState<TrHsCodeSuggestion[]>([]);
@@ -133,8 +135,8 @@ export function MissingProductsForm({
   const handleUseSuggestion = (trHsCode: string) => {
     setFormData(prev => ({ ...prev, tr_hs_code: trHsCode }));
     toast({
-      title: "TR HS Code Selected",
-      description: `Applied: ${trHsCode}`
+      title: t('taxCalcComp.missingProducts.trHsSelectedTitle'),
+      description: t('taxCalcComp.missingProducts.applied', { code: trHsCode })
     });
   };
 
@@ -163,14 +165,14 @@ export function MissingProductsForm({
       
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.details || error.error || 'Failed to save');
+        throw new Error(error.details || error.error || t('taxCalcComp.missingProducts.failedToSave'));
       }
-      
+
       await response.json();
-      
+
       toast({
-        title: "Success",
-        description: `${formData.style} saved to database`
+        title: t('common.success'),
+        description: t('taxCalcComp.missingProducts.savedToDatabase', { style: formData.style })
       });
       
       console.log(`[FORM] Save successful. Current index: ${currentIndex}, Total: ${products.length}`);
@@ -189,8 +191,8 @@ export function MissingProductsForm({
     } catch (error) {
       console.error('[FORM] Save error:', error);
       toast({
-        title: "Error",
-        description: `Failed to save: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: t('common.error'),
+        description: t('taxCalcComp.missingProducts.saveFailed', { error: error instanceof Error ? error.message : t('taxCalcComp.missingProducts.unknownError') }),
         variant: "destructive"
       });
     } finally {
@@ -206,10 +208,10 @@ export function MissingProductsForm({
     <div className="space-y-4">
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
         <h3 className="font-semibold mb-2">
-          Product {currentIndex + 1} of {products.length}: {currentProduct.style}
+          {t('taxCalcComp.missingProducts.productHeading', { current: currentIndex + 1, total: products.length, style: currentProduct.style })}
         </h3>
         <p className="text-sm text-gray-600">
-          Edit the information if needed and save it to the database.
+          {t('taxCalcComp.missingProducts.editAndSave')}
         </p>
       </div>
 
@@ -217,14 +219,14 @@ export function MissingProductsForm({
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
             <Info className="w-5 h-5" />
-            Suggested TR HS Codes
+            {t('taxCalcComp.missingProducts.suggestedTrHsCodes')}
           </h4>
           <p className="text-sm text-blue-600 mb-3">
-            Based on HTS Code: <span className="font-mono font-semibold">{currentProduct.hts_code}</span>
+            {t('taxCalcComp.missingProducts.basedOnHts')} <span className="font-mono font-semibold">{currentProduct.hts_code}</span>
           </p>
-          
+
           {isLoadingSuggestions ? (
-            <div className="text-sm text-gray-500">Loading suggestions...</div>
+            <div className="text-sm text-gray-500">{t('taxCalcComp.missingProducts.loadingSuggestions')}</div>
           ) : suggestions.length > 0 ? (
             <div className="space-y-2">
               {suggestions.map((suggestion, idx) => (
@@ -235,7 +237,7 @@ export function MissingProductsForm({
                   <div>
                     <span className="font-mono font-medium">{suggestion.tr_hs_code}</span>
                     <span className="text-sm text-gray-500 ml-2">
-                      ({suggestion.product_count} product{suggestion.product_count > 1 ? 's' : ''} use this)
+                      {t('taxCalcComp.missingProducts.productsUseThis', { count: suggestion.product_count })}
                     </span>
                   </div>
                   <Button
@@ -246,14 +248,14 @@ export function MissingProductsForm({
                     onClick={() => handleUseSuggestion(suggestion.tr_hs_code)}
                     data-testid={`button-use-suggestion-${idx}`}
                   >
-                    Use This
+                    {t('taxCalcComp.missingProducts.useThis')}
                   </Button>
                 </div>
               ))}
             </div>
           ) : (
             <div className="text-sm text-gray-500 italic">
-              No matching TR HS Codes found for this HTS Code in the database.
+              {t('taxCalcComp.missingProducts.noMatchingTrHs')}
             </div>
           )}
         </div>
@@ -261,13 +263,13 @@ export function MissingProductsForm({
       
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label>Brand</Label>
-          <Select 
-            value={formData.brand} 
+          <Label>{t('taxCalcComp.missingProducts.brand')}</Label>
+          <Select
+            value={formData.brand}
             onValueChange={(value) => setFormData({ ...formData, brand: value })}
           >
             <SelectTrigger data-testid="select-brand">
-              <SelectValue placeholder={isLoadingBrands ? "Loading brands..." : "Select a brand"} />
+              <SelectValue placeholder={isLoadingBrands ? t('taxCalcComp.missingProducts.loadingBrands') : t('taxCalcComp.missingProducts.selectBrand')} />
             </SelectTrigger>
             <SelectContent>
               {brands.map((brand) => (
@@ -280,110 +282,110 @@ export function MissingProductsForm({
         </div>
         
         <div>
-          <Label>Style *</Label>
-          <Input 
-            value={formData.style} 
+          <Label>{t('taxCalcComp.missingProducts.styleRequired')}</Label>
+          <Input
+            value={formData.style}
             disabled
             data-testid="input-style"
           />
         </div>
-        
+
         <div>
-          <Label>Category</Label>
-          <Input 
+          <Label>{t('taxCalcComp.missingProducts.category')}</Label>
+          <Input
             value={formData.category}
             onChange={(e) => handleCategoryChange(e.target.value)}
-            placeholder="e.g., Women's Outerwear"
+            placeholder={t('taxCalcComp.missingProducts.categoryPlaceholder')}
             data-testid="input-category"
           />
         </div>
-        
+
         <div>
-          <Label>Color</Label>
-          <Input 
+          <Label>{t('taxCalcComp.missingProducts.color')}</Label>
+          <Input
             value={formData.color || "MIXED"}
             disabled
             className="bg-gray-50 text-gray-600"
             data-testid="input-color"
           />
           <p className="text-xs text-gray-500 mt-1">
-            Color is set to "MIXED" for products with multiple colors in the invoice
+            {t('taxCalcComp.missingProducts.colorMixedNote')}
           </p>
         </div>
-        
+
         <div className="col-span-2">
-          <Label>Fabric Content</Label>
-          <Input 
+          <Label>{t('taxCalcComp.missingProducts.fabricContent')}</Label>
+          <Input
             value={formData.fabric_content}
             onChange={(e) => setFormData({ ...formData, fabric_content: e.target.value })}
-            placeholder="e.g., 100% COTTON"
+            placeholder={t('taxCalcComp.missingProducts.fabricPlaceholder')}
             data-testid="input-fabric-content"
           />
         </div>
-        
+
         <div>
-          <Label>Country of Origin</Label>
-          <Input 
+          <Label>{t('taxCalcComp.missingProducts.countryOfOrigin')}</Label>
+          <Input
             value={formData.country_of_origin}
             onChange={(e) => setFormData({ ...formData, country_of_origin: e.target.value.toUpperCase() })}
-            placeholder="e.g., CN, VN, TR"
+            placeholder={t('taxCalcComp.missingProducts.countryPlaceholder')}
             maxLength={2}
             data-testid="input-country-origin"
           />
         </div>
-        
+
         <div>
-          <Label>HTS Code</Label>
-          <Input 
+          <Label>{t('taxCalcComp.missingProducts.htsCode')}</Label>
+          <Input
             value={formData.hts_code}
             onChange={(e) => setFormData({ ...formData, hts_code: e.target.value })}
-            placeholder="e.g., 6102.10.0000"
+            placeholder={t('taxCalcComp.missingProducts.htsPlaceholder')}
             data-testid="input-hts-code"
           />
         </div>
-        
+
         <div className="col-span-2">
-          <Label>TR HS CODE</Label>
-          <Input 
+          <Label>{t('taxCalcComp.missingProducts.trHsCode')}</Label>
+          <Input
             value={formData.tr_hs_code}
             onChange={(e) => setFormData({ ...formData, tr_hs_code: e.target.value })}
-            placeholder="e.g., 6102.10.00.00.00"
+            placeholder={t('taxCalcComp.missingProducts.trHsPlaceholder')}
             data-testid="input-tr-hs-code"
           />
           <p className="text-xs text-gray-500 mt-1">
-            Select a suggestion above or enter manually
+            {t('taxCalcComp.missingProducts.selectOrEnterManually')}
           </p>
         </div>
-        
+
         <div className="col-span-2">
-          <Label>Item Description</Label>
-          <Input 
+          <Label>{t('taxCalcComp.missingProducts.itemDescription')}</Label>
+          <Input
             value={formData.item_description}
             onChange={(e) => setFormData({ ...formData, item_description: e.target.value })}
-            placeholder="Auto-filled from category"
+            placeholder={t('taxCalcComp.missingProducts.itemDescriptionPlaceholder')}
             data-testid="input-item-description"
           />
           <p className="text-xs text-gray-500 mt-1">
-            Automatically set to match Category
+            {t('taxCalcComp.missingProducts.autoSetToCategory')}
           </p>
         </div>
       </div>
-      
+
       <div className="flex justify-end space-x-2">
-        <Button 
-          variant="outline" 
-          onClick={onComplete} 
+        <Button
+          variant="outline"
+          onClick={onComplete}
           disabled={isSaving}
           data-testid="button-skip-all-products"
         >
-          Skip All
+          {t('taxCalcComp.missingProducts.skipAll')}
         </Button>
-        <Button 
-          onClick={handleSave} 
+        <Button
+          onClick={handleSave}
           disabled={isSaving}
           data-testid="button-save-product"
         >
-          {isSaving ? 'Saving...' : 'Save & Next'}
+          {isSaving ? t('taxCalcComp.missingProducts.saving') : t('taxCalcComp.missingProducts.saveNext')}
         </Button>
       </div>
     </div>

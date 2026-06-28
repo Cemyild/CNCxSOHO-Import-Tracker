@@ -27,47 +27,49 @@ import {
 import { BackgroundPaths } from "@/components/ui/background-paths"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Text_03 } from "@/components/ui/wave-text"
+import { useTranslation } from "react-i18next"
 
 // Menu items
 const items = [
   {
-    title: "Dashboard",
+    titleKey: "nav.dashboard",
     url: "/dashboard",
     icon: Home,
   },
   {
-    title: "Procedures",
+    titleKey: "nav.procedures",
     url: "/procedures",
     icon: Inbox,
   },
   {
-    title: "Expenses",
+    titleKey: "nav.expenses",
     url: "/expenses",
     icon: Calendar,
   },
   {
-    title: "Payments",
+    titleKey: "nav.payments",
     url: "/payments",
     icon: Search,
   },
   {
-    title: "Reports",
+    titleKey: "nav.reports",
     url: "/reports",
     icon: BarChart2,
   },
   {
-    title: "Ask CNC?",
+    titleKey: "nav.askCnc",
     url: "/ask",
     icon: Sparkles,
   },
   {
-    title: "Settings",
+    titleKey: "nav.settings",
     url: "/settings",
     icon: Settings,
   },
 ]
 
 export default function UserPage() {
+  const { t } = useTranslation();
   return (
     <div className="relative w-full min-h-screen">
       {/* Background component - positioned absolutely to fill the entire screen */}
@@ -81,16 +83,16 @@ export default function UserPage() {
             <SidebarContent>
               <SidebarGroup>
                 <div className="flex justify-center mt-6 mb-8">
-                  <img src="/Company Logo.png" alt="Company Logo" className="w-full px-4 dark:invert" />
+                  <img src="/Company Logo.png" alt={t('userPage.companyLogoAlt')} className="w-full px-4 dark:invert" />
                 </div>
                 <SidebarGroupContent>
                   <SidebarMenu className="pl-[15%]">
                     {items.map((item) => (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild tooltip={item.title} className="text-[1.1em]">
+                      <SidebarMenuItem key={item.titleKey}>
+                        <SidebarMenuButton asChild tooltip={t(item.titleKey)} className="text-[1.1em]">
                           <a href={item.url}>
                             <item.icon />
-                            <span>{item.title}</span>
+                            <span>{t(item.titleKey)}</span>
                           </a>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -121,7 +123,7 @@ export default function UserPage() {
           <main className="flex-1 min-w-100vh">
             <div className="px-4 py-2 flex justify-between items-center">
               <SidebarTrigger className="h-4 w-4 mt-2" />
-              <Text_03 text="User Profile" className="text-[1.35rem] font-medium" />
+              <Text_03 text={t('userPage.title')} className="text-[1.35rem] font-medium" />
               <div className="mr-4">
                 <ThemeToggle />
               </div>

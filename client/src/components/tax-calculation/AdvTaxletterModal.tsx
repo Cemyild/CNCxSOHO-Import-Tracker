@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Plus, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const EXPENSE_TYPES = [
   'Export Registry Fee',
@@ -69,6 +70,23 @@ export function AdvTaxletterModal({
   calculationId,
   isLoading = false,
 }: AdvTaxletterModalProps) {
+  const { t } = useTranslation();
+
+  const expenseTypeLabels: Record<string, string> = {
+    'Export Registry Fee': t('taxCalcComp.expenseTypes.exportRegistryFee'),
+    'Insurance': t('taxCalcComp.expenseTypes.insurance'),
+    'Awb Fee': t('taxCalcComp.expenseTypes.awbFee'),
+    'Airport Storage Fee': t('taxCalcComp.expenseTypes.airportStorageFee'),
+    'Bonded Warehouse Storage Fee': t('taxCalcComp.expenseTypes.bondedWarehouseStorageFee'),
+    'Transportation': t('taxCalcComp.expenseTypes.transportation'),
+    'International Transportation': t('taxCalcComp.expenseTypes.internationalTransportation'),
+    'Tareks Fee': t('taxCalcComp.expenseTypes.tareksFee'),
+    'Customs Inspection': t('taxCalcComp.expenseTypes.customsInspection'),
+    'Azo Test': t('taxCalcComp.expenseTypes.azoTest'),
+    'Service Invoice': t('taxCalcComp.expenseTypes.serviceInvoice'),
+    'Other': t('taxCalcComp.expenseTypes.other'),
+  };
+
   const [taxInputs, setTaxInputs] = useState({
     customsTax: '',
     additionalTax: '',
@@ -186,29 +204,29 @@ export function AdvTaxletterModal({
   };
 
   const taxFields = [
-    { key: 'customsTax', label: 'Customs Tax', ref: referenceValues.customsTax },
-    { key: 'additionalTax', label: 'Additional Customs Tax', ref: referenceValues.additionalTax },
-    { key: 'kkdf', label: 'KKDF', ref: referenceValues.kkdf },
-    { key: 'vat', label: 'VAT', ref: referenceValues.vat },
-    { key: 'stampTax', label: 'Stamp Tax', ref: referenceValues.stampTax },
+    { key: 'customsTax', label: t('taxCalcComp.advTaxletter.customsTax'), ref: referenceValues.customsTax },
+    { key: 'additionalTax', label: t('taxCalcComp.advTaxletter.additionalCustomsTax'), ref: referenceValues.additionalTax },
+    { key: 'kkdf', label: t('taxCalcComp.advTaxletter.kkdf'), ref: referenceValues.kkdf },
+    { key: 'vat', label: t('taxCalcComp.advTaxletter.vat'), ref: referenceValues.vat },
+    { key: 'stampTax', label: t('taxCalcComp.advTaxletter.stampTax'), ref: referenceValues.stampTax },
   ];
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Advance Taxletter - {reference}</DialogTitle>
+          <DialogTitle>{t('taxCalcComp.advTaxletter.title', { reference })}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b pb-2">TAX</h3>
-            
+            <h3 className="text-lg font-semibold border-b pb-2">{t('taxCalcComp.advTaxletter.taxSection')}</h3>
+
             <div className="grid gap-3">
               <div className="grid grid-cols-3 gap-4 text-sm font-medium text-muted-foreground">
-                <div>Tax Type</div>
-                <div>Enter Amount (TL)</div>
-                <div>Calculated Reference (TL)</div>
+                <div>{t('taxCalcComp.advTaxletter.taxType')}</div>
+                <div>{t('taxCalcComp.advTaxletter.enterAmountTl')}</div>
+                <div>{t('taxCalcComp.advTaxletter.calculatedReferenceTl')}</div>
               </div>
 
               {taxFields.map(({ key, label, ref }) => (
@@ -232,7 +250,7 @@ export function AdvTaxletterModal({
               ))}
 
               <div className="grid grid-cols-3 gap-4 items-center pt-2 border-t">
-                <Label className="text-sm font-bold">TOTAL TAX</Label>
+                <Label className="text-sm font-bold">{t('taxCalcComp.advTaxletter.totalTax')}</Label>
                 <div className="text-lg font-bold text-primary" data-testid="text-total-tax">
                   ₺{totalTaxTl.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
                 </div>
@@ -244,27 +262,27 @@ export function AdvTaxletterModal({
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b pb-2">EXPENSES</h3>
-            
+            <h3 className="text-lg font-semibold border-b pb-2">{t('taxCalcComp.advTaxletter.expensesSection')}</h3>
+
             <div className="flex gap-3 items-end">
               <div className="flex-1">
-                <Label className="text-sm mb-1 block">Expense Type</Label>
+                <Label className="text-sm mb-1 block">{t('taxCalcComp.advTaxletter.expenseType')}</Label>
                 <Select value={selectedExpenseType} onValueChange={setSelectedExpenseType}>
                   <SelectTrigger data-testid="select-expense-type">
-                    <SelectValue placeholder="Select expense type..." />
+                    <SelectValue placeholder={t('taxCalcComp.advTaxletter.selectExpenseType')} />
                   </SelectTrigger>
                   <SelectContent>
                     {EXPENSE_TYPES.map(type => (
                       <SelectItem key={type} value={type}>
-                        {type}
+                        {expenseTypeLabels[type] ?? type}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="w-40">
-                <Label className="text-sm mb-1 block">Amount (TL)</Label>
+                <Label className="text-sm mb-1 block">{t('taxCalcComp.advTaxletter.amountTl')}</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₺</span>
                   <Input
@@ -293,7 +311,7 @@ export function AdvTaxletterModal({
               <div className="border rounded-lg divide-y">
                 {expensesList.map((expense) => (
                   <div key={expense.id} className="flex items-center justify-between px-4 py-2" data-testid={`expense-item-${expense.id}`}>
-                    <span className="text-sm">{expense.type}</span>
+                    <span className="text-sm">{expenseTypeLabels[expense.type] ?? expense.type}</span>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-medium">
                         ₺{expense.amount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
@@ -312,20 +330,20 @@ export function AdvTaxletterModal({
                 ))}
                 
                 <div className="flex items-center justify-between px-4 py-3 bg-muted font-medium">
-                  <span>TOTAL EXPENSES</span>
+                  <span>{t('taxCalcComp.advTaxletter.totalExpenses')}</span>
                   <span data-testid="text-total-expenses">₺{totalExpensesTl.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             ) : (
               <div className="text-sm text-muted-foreground italic text-center py-4 border rounded-lg bg-muted">
-                No expenses added yet. Select a type and enter amount to add.
+                {t('taxCalcComp.advTaxletter.noExpensesYet')}
               </div>
             )}
           </div>
 
           <div className="bg-primary/10 rounded-lg p-4">
             <div className="flex items-center justify-between">
-              <span className="text-lg font-bold">GRAND TOTAL (Tax + Expenses)</span>
+              <span className="text-lg font-bold">{t('taxCalcComp.advTaxletter.grandTotal')}</span>
               <span className="text-xl font-bold text-primary" data-testid="text-grand-total">
                 ₺{grandTotalTl.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
               </span>
@@ -335,10 +353,10 @@ export function AdvTaxletterModal({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} data-testid="button-cancel-taxletter">
-            Cancel
+            {t('taxCalcComp.advTaxletter.cancel')}
           </Button>
           <Button onClick={handleGenerate} disabled={isLoading} data-testid="button-generate-taxletter">
-            {isLoading ? 'Generating...' : 'Generate PDF'}
+            {isLoading ? t('taxCalcComp.advTaxletter.generating') : t('taxCalcComp.advTaxletter.generatePdf')}
           </Button>
         </DialogFooter>
       </DialogContent>

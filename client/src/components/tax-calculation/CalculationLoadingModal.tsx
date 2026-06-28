@@ -1,5 +1,6 @@
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface CalculationLoadingModalProps {
   open: boolean;
@@ -10,8 +11,9 @@ interface CalculationLoadingModalProps {
 export function CalculationLoadingModal({ 
   open, 
   currentStep,
-  progress 
+  progress
 }: CalculationLoadingModalProps) {
+  const { t } = useTranslation();
   return (
     <Dialog open={open}>
       <DialogContent 
@@ -29,17 +31,17 @@ export function CalculationLoadingModal({
           
           <div className="text-center space-y-2">
             <h3 className="text-lg font-semibold">
-              Calculating Taxes
+              {t('taxCalcComp.calcLoading.title')}
             </h3>
             <p className="text-sm text-muted-foreground">
-              Please wait while we process your calculation...
+              {t('taxCalcComp.calcLoading.pleaseWait')}
             </p>
           </div>
-          
+
           <div className="w-full space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Current step:</span>
-              <span className="font-medium">{currentStep}</span>
+              <span className="text-muted-foreground">{t('taxCalcComp.calcLoading.currentStep')}</span>
+              <span className="font-medium">{t(`taxCalcComp.calcLoading.steps.${currentStep}`, { defaultValue: currentStep })}</span>
             </div>
             
             {progress !== undefined && (
@@ -61,7 +63,7 @@ export function CalculationLoadingModal({
                 {currentStep !== 'Validating' ? '✓' : '1'}
               </div>
               <span className={currentStep === 'Validating' ? 'font-medium' : 'text-muted-foreground'}>
-                Validating products
+                {t('taxCalcComp.calcLoading.validatingProducts')}
               </span>
             </div>
             
@@ -73,7 +75,7 @@ export function CalculationLoadingModal({
                 {currentStep === 'Creating items' || currentStep === 'Calculating' ? '✓' : '2'}
               </div>
               <span className={currentStep === 'Creating calculation' ? 'font-medium' : 'text-muted-foreground'}>
-                Creating calculation
+                {t('taxCalcComp.calcLoading.creatingCalculation')}
               </span>
             </div>
             
@@ -85,7 +87,7 @@ export function CalculationLoadingModal({
                 {currentStep === 'Calculating' ? '✓' : '3'}
               </div>
               <span className={currentStep === 'Creating items' ? 'font-medium' : 'text-muted-foreground'}>
-                Adding products
+                {t('taxCalcComp.calcLoading.addingProducts')}
               </span>
             </div>
             
@@ -96,14 +98,14 @@ export function CalculationLoadingModal({
                 4
               </div>
               <span className={currentStep === 'Calculating' ? 'font-medium' : 'text-muted-foreground'}>
-                Calculating taxes
+                {t('taxCalcComp.calcLoading.calculatingTaxes')}
               </span>
             </div>
           </div>
-          
+
           {currentStep === 'Calculating' && (
             <div className="text-xs text-muted-foreground text-center bg-yellow-50 p-3 rounded-md border border-yellow-200">
-              ⏱️ Large calculations may take 1-2 minutes. Please don't close this window.
+              {t('taxCalcComp.calcLoading.largeCalcWarning')}
             </div>
           )}
         </div>

@@ -40,6 +40,7 @@ import {
 } from "recharts"
 import { apiRequest } from "@/lib/queryClient"
 import { useQuery } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
@@ -134,6 +135,7 @@ const formatCategoryName = (name: string) => {
 }
 
 export default function TaxAnalyticsPage() {
+  const { t } = useTranslation();
   // Date range state with default values (last 90 days)
   const [date, setDate] = useState<DateRange | undefined>(() => {
     const to = new Date(); // Today
@@ -300,20 +302,20 @@ export default function TaxAnalyticsPage() {
   }, [date]);
 
   return (
-    <PageLayout title="Tax Analytics" navItems={items}>
+    <PageLayout title={t('reportsPages.taxReport.pageTitle')} navItems={items}>
       <div className="container mx-auto p-6">
         <div className="mb-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Tax Analytics</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{t('reportsPages.taxReport.heading')}</h1>
             <p className="text-muted-foreground">
-              Analyze tax payments and distribution across procedures.
+              {t('reportsPages.taxReport.subtitle')}
             </p>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row gap-3">
             <Link href="/reports">
               <Button variant="outline" className="whitespace-nowrap">
-                Back to Reports
+                {t('reportsPages.taxReport.backToReports')}
               </Button>
             </Link>
           </div>
@@ -323,14 +325,14 @@ export default function TaxAnalyticsPage() {
           {/* Filters Card */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle>Filters</CardTitle>
+              <CardTitle>{t('reportsPages.taxReport.filters')}</CardTitle>
               <CardDescription>
-                Filter and customize the data view
+                {t('reportsPages.taxReport.filtersDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-6">
               <div>
-                <Label className="mb-2 block">Date Range</Label>
+                <Label className="mb-2 block">{t('reportsPages.taxReport.dateRange')}</Label>
                 <DatePickerWithRange
                   value={date}
                   onChange={setDate}
@@ -343,9 +345,9 @@ export default function TaxAnalyticsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Total Taxes</CardTitle>
+                <CardTitle>{t('reportsPages.taxReport.totalTaxes')}</CardTitle>
                 <CardDescription>
-                  Total taxes for the selected period
+                  {t('reportsPages.taxReport.totalTaxesDesc')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -361,9 +363,9 @@ export default function TaxAnalyticsPage() {
             
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Tax Count</CardTitle>
+                <CardTitle>{t('reportsPages.taxReport.taxCount')}</CardTitle>
                 <CardDescription>
-                  Number of tax transactions
+                  {t('reportsPages.taxReport.taxCountDesc')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -379,9 +381,9 @@ export default function TaxAnalyticsPage() {
             
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Largest Tax Category</CardTitle>
+                <CardTitle>{t('reportsPages.taxReport.largestCategory')}</CardTitle>
                 <CardDescription>
-                  Highest tax payment category
+                  {t('reportsPages.taxReport.largestCategoryDesc')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -397,20 +399,20 @@ export default function TaxAnalyticsPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-muted-foreground">No data available</div>
+                  <div className="text-muted-foreground">{t('reportsPages.taxReport.noDataAvailable')}</div>
                 )}
               </CardContent>
             </Card>
           </div>
-          
+
           {/* Charts - Stacked Vertical Layout */}
           <div className="space-y-6">
             {/* Bar Chart */}
             <Card>
               <CardHeader>
-                <CardTitle>Tax Distribution by Category</CardTitle>
+                <CardTitle>{t('reportsPages.taxReport.distributionTitle')}</CardTitle>
                 <CardDescription>
-                  Breakdown of taxes across different categories
+                  {t('reportsPages.taxReport.distributionDesc')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0 pl-2">
@@ -478,7 +480,7 @@ export default function TaxAnalyticsPage() {
                                 <div className="bg-white p-3 shadow-md rounded-md border border-gray-100">
                                   <p className="text-gray-600 mb-1">{data.name}</p>
                                   <p className="text-gray-800 font-semibold">{formatAmount(value)} ₺</p>
-                                  <p className="text-gray-500 text-sm">{percentage}% of total</p>
+                                  <p className="text-gray-500 text-sm">{t('reportsPages.taxReport.percentOfTotal', { percentage })}</p>
                                 </div>
                               );
                             }
@@ -546,24 +548,24 @@ export default function TaxAnalyticsPage() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-center h-[350px]">
-                    <p className="text-muted-foreground">No data available</p>
+                    <p className="text-muted-foreground">{t('reportsPages.taxReport.noDataAvailable')}</p>
                   </div>
                 )}
               </CardContent>
             </Card>
-            
+
             {/* Trend Analysis */}
             <Card>
               <CardHeader>
-                <CardTitle>Tax Trend Analysis</CardTitle>
+                <CardTitle>{t('reportsPages.taxReport.trendTitle')}</CardTitle>
                 <CardDescription>
-                  View tax payment trends over time for specific categories
+                  {t('reportsPages.taxReport.trendDesc')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="category-select" className="mb-2 block">Select Tax Category</Label>
+                    <Label htmlFor="category-select" className="mb-2 block">{t('reportsPages.taxReport.selectTaxCategory')}</Label>
                     <Select
                       value={selectedCategory}
                       onValueChange={(value) => {
@@ -571,7 +573,7 @@ export default function TaxAnalyticsPage() {
                       }}
                     >
                       <SelectTrigger id="category-select" className="w-full">
-                        <SelectValue placeholder="Select a category" />
+                        <SelectValue placeholder={t('reportsPages.taxReport.selectACategory')} />
                       </SelectTrigger>
                       <SelectContent>
                         {formattedData?.map((item: {category: string, name: string}) => (
@@ -587,21 +589,21 @@ export default function TaxAnalyticsPage() {
                   </div>
                   
                   <div className="flex items-center justify-end space-x-2">
-                    <Label htmlFor="period-toggle">Weekly</Label>
-                    <Switch 
+                    <Label htmlFor="period-toggle">{t('reportsPages.taxReport.weekly')}</Label>
+                    <Switch
                       id="period-toggle"
                       checked={isMonthlyView}
                       onCheckedChange={setIsMonthlyView}
                     />
-                    <Label htmlFor="period-toggle">Monthly</Label>
+                    <Label htmlFor="period-toggle">{t('reportsPages.taxReport.monthly')}</Label>
                   </div>
                 </div>
                 
                 {/* Selected date range indicator */}
                 <div className="mt-4 text-sm text-gray-500">
-                  <span>Selected period: </span>
+                  <span>{t('reportsPages.taxReport.selectedPeriodLabel')} </span>
                   <span className="font-medium">{formattedDateRange}</span>
-                  <span className="text-gray-400 ml-2">(Showing all historical data with selected period highlighted)</span>
+                  <span className="text-gray-400 ml-2">{t('reportsPages.taxReport.historicalHint')}</span>
                 </div>
                 
                 <div className="mt-4">
@@ -656,7 +658,7 @@ export default function TaxAnalyticsPage() {
                                     <div className="bg-white p-3 shadow-md rounded-md border border-gray-100">
                                       <p className="text-gray-600 mb-1">
                                         {data.period}
-                                        {isInSelectedRange && <span className="ml-1 text-blue-600 font-medium">(Selected Period)</span>}
+                                        {isInSelectedRange && <span className="ml-1 text-blue-600 font-medium">{t('reportsPages.taxReport.selectedPeriodBadge')}</span>}
                                       </p>
                                       <p className="text-gray-800 font-semibold">{formatAmount(value)} ₺</p>
                                     </div>
@@ -666,9 +668,9 @@ export default function TaxAnalyticsPage() {
                               }}
                               cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }}
                             />
-                            <Bar 
-                              dataKey="amount" 
-                              name="Tax Amount" 
+                            <Bar
+                              dataKey="amount"
+                              name={t('reportsPages.taxReport.taxAmount')}
                               radius={[4, 4, 0, 0]}
                             >
                               {processedTrendData.map((entry, index) => (
@@ -709,19 +711,19 @@ export default function TaxAnalyticsPage() {
                       {/* Summary statistics */}
                       <div className="flex justify-between mt-6 pt-4 border-t border-gray-100">
                         <div>
-                          <p className="text-sm text-gray-500">Total</p>
+                          <p className="text-sm text-gray-500">{t('reportsPages.taxReport.total')}</p>
                           <p className="text-lg font-semibold text-gray-800">
                             {formatAmount(getTotalAmount(processedTrendData))} ₺
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-500">Average</p>
+                          <p className="text-sm text-gray-500">{t('reportsPages.taxReport.average')}</p>
                           <p className="text-lg font-semibold text-gray-800">
                             {formatAmount(getAverageAmount(processedTrendData))} ₺
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-500">Highest Period</p>
+                          <p className="text-sm text-gray-500">{t('reportsPages.taxReport.highestPeriod')}</p>
                           <p className="text-lg font-semibold text-gray-800">
                             {getHighestPeriod(processedTrendData)}
                           </p>
@@ -730,11 +732,11 @@ export default function TaxAnalyticsPage() {
                     </div>
                   ) : selectedCategory ? (
                     <div className="flex items-center justify-center h-[350px]">
-                      <p className="text-muted-foreground">No trend data available for this category</p>
+                      <p className="text-muted-foreground">{t('reportsPages.taxReport.noTrendForCategory')}</p>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-[350px]">
-                      <p className="text-muted-foreground">Select a tax category to view trends</p>
+                      <p className="text-muted-foreground">{t('reportsPages.taxReport.selectCategoryForTrends')}</p>
                     </div>
                   )}
                 </div>
@@ -745,9 +747,9 @@ export default function TaxAnalyticsPage() {
           {/* Tax List Section */}
           <Card>
             <CardHeader>
-              <CardTitle>Detailed Tax Breakdown</CardTitle>
+              <CardTitle>{t('reportsPages.taxReport.detailedBreakdown')}</CardTitle>
               <CardDescription>
-                List of all taxes in the selected period by category
+                {t('reportsPages.taxReport.detailedBreakdownDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -758,10 +760,10 @@ export default function TaxAnalyticsPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-gray-200">
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Category</th>
-                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-500">Amount</th>
-                        <th className="px-4 py-3 text-center text-sm font-medium text-gray-500">Count</th>
-                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-500">% of Total</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">{t('reportsPages.taxReport.colCategory')}</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-500">{t('reportsPages.taxReport.colAmount')}</th>
+                        <th className="px-4 py-3 text-center text-sm font-medium text-gray-500">{t('reportsPages.taxReport.colCount')}</th>
+                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-500">{t('reportsPages.taxReport.colPercentOfTotal')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -784,7 +786,7 @@ export default function TaxAnalyticsPage() {
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-800">Total</td>
+                        <td className="px-4 py-3 text-sm font-medium text-gray-800">{t('reportsPages.taxReport.total')}</td>
                         <td className="px-4 py-3 text-sm font-medium text-gray-800 text-right">
                           {formatAmount(totalTaxAmount)}
                         </td>
@@ -798,7 +800,7 @@ export default function TaxAnalyticsPage() {
                 </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
-                  No tax data available for the selected period
+                  {t('reportsPages.taxReport.noTaxDataForPeriod')}
                 </div>
               )}
             </CardContent>

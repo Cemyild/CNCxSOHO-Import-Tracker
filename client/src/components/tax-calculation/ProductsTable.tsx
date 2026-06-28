@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 export interface ProductItem {
   tempId?: string;
@@ -44,23 +45,24 @@ export function ProductsTable({
   onMatchProduct,
   availableProducts = []
 }: ProductsTableProps) {
-  
+  const { t } = useTranslation();
+
   const getMatchBadge = (status?: string) => {
     const statusMap = {
-      matched: { 
-        label: "Matched", 
-        icon: CheckCircle2, 
-        className: "bg-green-500 hover:bg-green-600" 
+      matched: {
+        label: t('taxCalcComp.productsTable.matched'),
+        icon: CheckCircle2,
+        className: "bg-green-500 hover:bg-green-600"
       },
-      partial: { 
-        label: "Partial", 
-        icon: AlertCircle, 
-        className: "bg-yellow-500 hover:bg-yellow-600" 
+      partial: {
+        label: t('taxCalcComp.productsTable.partial'),
+        icon: AlertCircle,
+        className: "bg-yellow-500 hover:bg-yellow-600"
       },
-      unmatched: { 
-        label: "Unmatched", 
-        icon: XCircle, 
-        className: "bg-red-500 hover:bg-red-600" 
+      unmatched: {
+        label: t('taxCalcComp.productsTable.unmatched'),
+        icon: XCircle,
+        className: "bg-red-500 hover:bg-red-600"
       },
     };
     
@@ -80,25 +82,25 @@ export function ProductsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="min-w-[100px]">Style *</TableHead>
-            <TableHead className="min-w-[80px]">Color</TableHead>
-            <TableHead className="min-w-[120px]">Category</TableHead>
-            <TableHead className="min-w-[150px]">Fabric Content</TableHead>
-            <TableHead className="min-w-[80px]">Country</TableHead>
-            <TableHead className="min-w-[120px]">HTS Code</TableHead>
-            <TableHead className="min-w-[80px]">Cost ($) *</TableHead>
-            <TableHead className="min-w-[80px]">Units *</TableHead>
-            <TableHead className="min-w-[100px]">Total Value</TableHead>
-            <TableHead className="min-w-[150px]">TR HS CODE</TableHead>
-            <TableHead className="min-w-[100px]">Status</TableHead>
-            <TableHead className="min-w-[100px]">Actions</TableHead>
+            <TableHead className="min-w-[100px]">{t('taxCalcComp.productsTable.styleRequired')}</TableHead>
+            <TableHead className="min-w-[80px]">{t('taxCalcComp.table.color')}</TableHead>
+            <TableHead className="min-w-[120px]">{t('taxCalcComp.table.category')}</TableHead>
+            <TableHead className="min-w-[150px]">{t('taxCalcComp.productsTable.fabricContent')}</TableHead>
+            <TableHead className="min-w-[80px]">{t('taxCalcComp.table.country')}</TableHead>
+            <TableHead className="min-w-[120px]">{t('taxCalcComp.table.htsCode')}</TableHead>
+            <TableHead className="min-w-[80px]">{t('taxCalcComp.productsTable.costRequired')}</TableHead>
+            <TableHead className="min-w-[80px]">{t('taxCalcComp.productsTable.unitsRequired')}</TableHead>
+            <TableHead className="min-w-[100px]">{t('taxCalcComp.table.totalValue')}</TableHead>
+            <TableHead className="min-w-[150px]">{t('taxCalcComp.productsTable.trHsCode')}</TableHead>
+            <TableHead className="min-w-[100px]">{t('taxCalcComp.productsTable.status')}</TableHead>
+            <TableHead className="min-w-[100px]">{t('taxCalcComp.productsTable.actions')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
               <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
-                No products added. Use the buttons above to add products.
+                {t('taxCalcComp.productsTable.noProducts')}
               </TableCell>
             </TableRow>
           ) : (

@@ -40,6 +40,7 @@ import {
 } from "recharts"
 import { apiRequest } from "@/lib/queryClient"
 import { useQuery } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
@@ -135,6 +136,7 @@ const formatCategoryName = (name: string) => {
 }
 
 export default function AnalyticsPage() {
+  const { t } = useTranslation();
   // Date range state with default values (last 90 days)
   const [date, setDate] = useState<DateRange | undefined>(() => {
     const to = new Date(); // Today
@@ -264,21 +266,21 @@ export default function AnalyticsPage() {
   }, [trendData]);
 
   return (
-    <PageLayout title="Expense Analytics" navItems={items}>
+    <PageLayout title={t('reportsPages.analytics.pageTitle')} navItems={items}>
       <div className="container mx-auto p-6">
         <div className="mb-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Expense Analytics</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{t('reportsPages.analytics.heading')}</h1>
             <p className="text-muted-foreground">
-              Analyze expense patterns and distribution across procedures.
+              {t('reportsPages.analytics.subtitle')}
             </p>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row gap-3">
             <Link href="/expense-entry">
               <Button className="whitespace-nowrap">
                 <Plus className="mr-2 h-4 w-4" />
-                Add New Expense
+                {t('reportsPages.analytics.addNewExpense')}
               </Button>
             </Link>
           </div>
@@ -288,14 +290,14 @@ export default function AnalyticsPage() {
           {/* Filters Card */}
           <Card className="lg:col-span-12">
             <CardHeader className="pb-3">
-              <CardTitle>Filters</CardTitle>
+              <CardTitle>{t('reportsPages.analytics.filters')}</CardTitle>
               <CardDescription>
-                Filter and customize the data view
+                {t('reportsPages.analytics.filtersDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-6">
               <div>
-                <Label className="mb-2 block">Date Range</Label>
+                <Label className="mb-2 block">{t('reportsPages.analytics.dateRange')}</Label>
                 <DatePickerWithRange
                   value={date}
                   onChange={setDate}
@@ -308,9 +310,9 @@ export default function AnalyticsPage() {
           <div className="lg:col-span-4 space-y-6">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Total Expenses</CardTitle>
+                <CardTitle>{t('reportsPages.analytics.totalExpenses')}</CardTitle>
                 <CardDescription>
-                  Total amount for the selected period
+                  {t('reportsPages.analytics.totalExpensesDesc')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -326,9 +328,9 @@ export default function AnalyticsPage() {
             
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Expense Count</CardTitle>
+                <CardTitle>{t('reportsPages.analytics.expenseCount')}</CardTitle>
                 <CardDescription>
-                  Number of expense transactions
+                  {t('reportsPages.analytics.expenseCountDesc')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -344,9 +346,9 @@ export default function AnalyticsPage() {
             
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Largest Expense Category</CardTitle>
+                <CardTitle>{t('reportsPages.analytics.largestCategory')}</CardTitle>
                 <CardDescription>
-                  Highest spending category
+                  {t('reportsPages.analytics.largestCategoryDesc')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -362,18 +364,18 @@ export default function AnalyticsPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-muted-foreground">No data available</div>
+                  <div className="text-muted-foreground">{t('reportsPages.analytics.noDataAvailable')}</div>
                 )}
               </CardContent>
             </Card>
           </div>
-          
+
           {/* Bar Chart */}
           <Card className="lg:col-span-8">
             <CardHeader>
-              <CardTitle>Expense Distribution by Category</CardTitle>
+              <CardTitle>{t('reportsPages.analytics.distributionTitle')}</CardTitle>
               <CardDescription>
-                Breakdown of expenses across different categories
+                {t('reportsPages.analytics.distributionDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 pl-2">
@@ -443,7 +445,7 @@ export default function AnalyticsPage() {
                               <div className="bg-white p-3 shadow-md rounded-md border border-gray-100">
                                 <p className="text-gray-600 mb-1">{data.name}</p>
                                 <p className="text-gray-800 font-semibold">{formatAmount(value)} ₺</p>
-                                <p className="text-gray-500 text-sm">{percentage}% of total</p>
+                                <p className="text-gray-500 text-sm">{t('reportsPages.analytics.percentOfTotal', { percentage })}</p>
                               </div>
                             );
                           }
@@ -507,7 +509,7 @@ export default function AnalyticsPage() {
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-[350px] text-muted-foreground">
-                  No data available for the selected filters
+                  {t('reportsPages.analytics.noDataForFilters')}
                 </div>
               )}
             </CardContent>
@@ -517,15 +519,15 @@ export default function AnalyticsPage() {
           {/* Expense Trend Analysis */}
           <Card className="lg:col-span-12 mt-6">
             <CardHeader>
-              <CardTitle>Expense Trend Analysis</CardTitle>
+              <CardTitle>{t('reportsPages.analytics.trendTitle')}</CardTitle>
               <CardDescription>
-                View expense trends over time for specific categories
+                {t('reportsPages.analytics.trendDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="category-select" className="mb-2 block">Select Expense Category</Label>
+                  <Label htmlFor="category-select" className="mb-2 block">{t('reportsPages.analytics.selectExpenseCategory')}</Label>
                   <Select
                     value={selectedCategory}
                     onValueChange={(value) => {
@@ -533,7 +535,7 @@ export default function AnalyticsPage() {
                     }}
                   >
                     <SelectTrigger id="category-select" className="w-full">
-                      <SelectValue placeholder="Select a category" />
+                      <SelectValue placeholder={t('reportsPages.analytics.selectACategory')} />
                     </SelectTrigger>
                     <SelectContent>
                       {formattedData?.map((item) => (
@@ -549,13 +551,13 @@ export default function AnalyticsPage() {
                 </div>
                 
                 <div className="flex items-center justify-end space-x-2">
-                  <Label htmlFor="period-toggle">Weekly</Label>
-                  <Switch 
+                  <Label htmlFor="period-toggle">{t('reportsPages.analytics.weekly')}</Label>
+                  <Switch
                     id="period-toggle"
                     checked={isMonthlyView}
                     onCheckedChange={setIsMonthlyView}
                   />
-                  <Label htmlFor="period-toggle">Monthly</Label>
+                  <Label htmlFor="period-toggle">{t('reportsPages.analytics.monthly')}</Label>
                 </div>
               </div>
               
@@ -569,11 +571,11 @@ export default function AnalyticsPage() {
                   <div className="h-80 min-h-[300px] w-full flex items-center justify-center text-muted-foreground">
                     <div className="text-center">
                       <BarChart2 className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                      <p className="mt-2">No trend data available</p>
+                      <p className="mt-2">{t('reportsPages.analytics.noTrendData')}</p>
                       <p className="text-sm text-muted-foreground/70">
-                        {formattedData.length === 0 
-                          ? "No expense data for the selected date range" 
-                          : "Select a category to view expense trends"}
+                        {formattedData.length === 0
+                          ? t('reportsPages.analytics.noExpenseForRange')
+                          : t('reportsPages.analytics.selectCategoryForTrends')}
                       </p>
                     </div>
                   </div>
@@ -602,13 +604,13 @@ export default function AnalyticsPage() {
                             tickFormatter={(value) => value >= 1000 ? `${(value/1000).toFixed(0)}k` : value}
                             width={60}
                           />
-                          <RechartsTooltip 
-                            formatter={(value: any) => [`${formatAmount(value)} ₺`, 'Amount']}
+                          <RechartsTooltip
+                            formatter={(value: any) => [`${formatAmount(value)} ₺`, t('reportsPages.analytics.amount')]}
                             cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }}
                           />
-                          <Bar 
-                            dataKey="amount" 
-                            name="Expense Amount" 
+                          <Bar
+                            dataKey="amount"
+                            name={t('reportsPages.analytics.expenseAmount')}
                             fill="url(#colorGradient)"
                             radius={[4, 4, 0, 0]}
                           />
@@ -625,19 +627,19 @@ export default function AnalyticsPage() {
                     {/* Summary statistics */}
                     <div className="flex justify-between mt-6 pt-4 border-t border-gray-100">
                       <div>
-                        <p className="text-sm text-gray-500">Total</p>
+                        <p className="text-sm text-gray-500">{t('reportsPages.analytics.total')}</p>
                         <p className="text-lg font-semibold text-gray-800">
                           {formatAmount(getTotalAmount(processedTrendData))} ₺
                         </p>
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500">Average</p>
+                        <p className="text-sm text-gray-500">{t('reportsPages.analytics.average')}</p>
                         <p className="text-lg font-semibold text-gray-800">
                           {formatAmount(getAverageAmount(processedTrendData))} ₺
                         </p>
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500">Highest Period</p>
+                        <p className="text-sm text-gray-500">{t('reportsPages.analytics.highestPeriod')}</p>
                         <p className="text-lg font-semibold text-gray-800">
                           {getHighestPeriod(processedTrendData)}
                         </p>

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MissingProductsForm } from "./MissingProductsForm";
 import { MissingHsCodesForm } from "./MissingHsCodesForm";
+import { useTranslation } from "react-i18next";
 
 interface Product {
   style: string;
@@ -27,9 +28,10 @@ export function MissingDataModal({
   open, 
   missingProducts, 
   missingHsCodes, 
-  onComplete, 
-  onCancel 
+  onComplete,
+  onCancel
 }: MissingDataModalProps) {
+  const { t } = useTranslation();
   const [currentStep, setCurrentStep] = useState<'products' | 'hscodes'>('products');
   
   // Filter to unique style codes only
@@ -79,12 +81,12 @@ export function MissingDataModal({
     <Dialog open={open} onOpenChange={onCancel}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Missing Data Detected</DialogTitle>
+          <DialogTitle>{t('taxCalcComp.missingData.title')}</DialogTitle>
           <DialogDescription>
-            Please provide missing information before calculating taxes.
+            {t('taxCalcComp.missingData.description')}
             {missingProducts.length > uniqueProducts.length && (
               <span className="text-yellow-600 font-semibold">
-                {' '}Note: {missingProducts.length - uniqueProducts.length} duplicate style codes filtered.
+                {' '}{t('taxCalcComp.missingData.duplicatesFiltered', { count: missingProducts.length - uniqueProducts.length })}
               </span>
             )}
           </DialogDescription>

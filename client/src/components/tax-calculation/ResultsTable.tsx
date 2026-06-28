@@ -2,6 +2,7 @@ import { useState, Fragment } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { RequirementsBadge } from "./RequirementsBadge";
+import { useTranslation } from "react-i18next";
 
 function formatCurrency(value: string | number | null | undefined): string {
   if (!value) return "0.00";
@@ -36,6 +37,7 @@ interface ResultsTableProps {
 }
 
 export function ResultsTable({ items }: ResultsTableProps) {
+  const { t } = useTranslation();
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
   const toggleRow = (id: number) => {
@@ -54,25 +56,25 @@ export function ResultsTable({ items }: ResultsTableProps) {
         <TableHeader>
           <TableRow>
             <TableHead className="w-10"></TableHead>
-            <TableHead>Style</TableHead>
-            <TableHead>Cost</TableHead>
-            <TableHead>Units</TableHead>
-            <TableHead>TR HS CODE</TableHead>
-            <TableHead>CIF Value</TableHead>
-            <TableHead>Customs Tax</TableHead>
-            <TableHead>Add. Tax</TableHead>
-            <TableHead>KKDF</TableHead>
-            <TableHead>VAT</TableHead>
-            <TableHead>Total Tax (USD)</TableHead>
-            <TableHead>Total Tax (TL)</TableHead>
-            <TableHead>Requirements</TableHead>
+            <TableHead>{t('taxCalcComp.table.style')}</TableHead>
+            <TableHead>{t('taxCalcComp.table.cost')}</TableHead>
+            <TableHead>{t('taxCalcComp.table.units')}</TableHead>
+            <TableHead>{t('taxCalcComp.resultsTable.trHsCode')}</TableHead>
+            <TableHead>{t('taxCalcComp.resultsTable.cifValue')}</TableHead>
+            <TableHead>{t('taxCalcComp.resultsTable.customsTax')}</TableHead>
+            <TableHead>{t('taxCalcComp.resultsTable.additionalTax')}</TableHead>
+            <TableHead>{t('taxCalcComp.resultsTable.kkdf')}</TableHead>
+            <TableHead>{t('taxCalcComp.resultsTable.vat')}</TableHead>
+            <TableHead>{t('taxCalcComp.resultsTable.totalTaxUsd')}</TableHead>
+            <TableHead>{t('taxCalcComp.resultsTable.totalTaxTl')}</TableHead>
+            <TableHead>{t('taxCalcComp.resultsTable.requirements')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {items.length === 0 ? (
             <TableRow>
               <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
-                No calculation results available
+                {t('taxCalcComp.resultsTable.noResults')}
               </TableCell>
             </TableRow>
           ) : (
@@ -113,26 +115,26 @@ export function ResultsTable({ items }: ResultsTableProps) {
                   <TableRow className="bg-muted/30">
                     <TableCell colSpan={13}>
                       <div className="px-4 py-3 space-y-2 text-sm">
-                        <div className="font-semibold">Breakdown:</div>
+                        <div className="font-semibold">{t('taxCalcComp.resultsTable.breakdown')}</div>
                         <div className="grid grid-cols-3 gap-4">
                           <div>
-                            <span className="text-muted-foreground">Transport Share:</span>
+                            <span className="text-muted-foreground">{t('taxCalcComp.resultsTable.transportShare')}</span>
                             <span className="ml-2 font-medium">${formatCurrency(item.transport_share)}</span>
                           </div>
                           <div>
-                            <span className="text-muted-foreground">Insurance Share:</span>
+                            <span className="text-muted-foreground">{t('taxCalcComp.resultsTable.insuranceShare')}</span>
                             <span className="ml-2 font-medium">${formatCurrency(item.insurance_share)}</span>
                           </div>
                           <div>
-                            <span className="text-muted-foreground">Storage Share:</span>
+                            <span className="text-muted-foreground">{t('taxCalcComp.resultsTable.storageShare')}</span>
                             <span className="ml-2 font-medium">${formatCurrency(item.storage_share)}</span>
                           </div>
                           <div>
-                            <span className="text-muted-foreground">VAT Base:</span>
+                            <span className="text-muted-foreground">{t('taxCalcComp.resultsTable.vatBase')}</span>
                             <span className="ml-2 font-medium">${formatCurrency(item.vat_base)}</span>
                           </div>
                           <div>
-                            <span className="text-muted-foreground">Total Value:</span>
+                            <span className="text-muted-foreground">{t('taxCalcComp.resultsTable.totalValue')}</span>
                             <span className="ml-2 font-medium">${formatCurrency(item.total_value)}</span>
                           </div>
                         </div>

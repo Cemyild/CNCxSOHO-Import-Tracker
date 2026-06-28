@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from "react-i18next";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { formatAmount } from "@/utils/formatters";
 
@@ -15,6 +16,7 @@ interface ExpenseDistributionChartProps {
 }
 
 const ExpenseDistributionChart: React.FC<ExpenseDistributionChartProps> = ({ data }) => {
+  const { t } = useTranslation();
   // Sort data by value in descending order
   const sortedData = [...data].sort((a, b) => b.value - a.value);
   
@@ -47,7 +49,7 @@ const ExpenseDistributionChart: React.FC<ExpenseDistributionChartProps> = ({ dat
         <div className="bg-white p-3 shadow-md rounded-md border border-gray-100">
           <p className="text-gray-600 mb-1">{payload[0].payload.name}</p>
           <p className="text-gray-800 font-semibold">{formatAmount(value)} ₺</p>
-          <p className="text-gray-500 text-sm">{percentage}% of total</p>
+          <p className="text-gray-500 text-sm">{t('reportsPages.chart.percentOfTotal', { percentage })}</p>
         </div>
       );
     }
@@ -79,7 +81,7 @@ const ExpenseDistributionChart: React.FC<ExpenseDistributionChartProps> = ({ dat
   if (dataWithColors.length === 0) {
     return (
       <div className="h-80 min-h-[300px] w-full flex items-center justify-center text-gray-500">
-        No expense data available
+        {t('reportsPages.chart.noExpenseData')}
       </div>
     );
   }
@@ -112,9 +114,9 @@ const ExpenseDistributionChart: React.FC<ExpenseDistributionChartProps> = ({ dat
               width={50}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }} />
-            <Bar 
-              dataKey="value" 
-              name="Expense Amount" 
+            <Bar
+              dataKey="value"
+              name={t('reportsPages.chart.expenseAmount')}
               radius={[4, 4, 0, 0]}
             >
               {dataWithColors.map((entry, index) => (
@@ -127,17 +129,17 @@ const ExpenseDistributionChart: React.FC<ExpenseDistributionChartProps> = ({ dat
       
       <div className="flex justify-between mt-6 pt-4 border-t border-gray-100">
         <div>
-          <p className="text-sm text-gray-500">Total Expenses</p>
+          <p className="text-sm text-gray-500">{t('reportsPages.chart.totalExpenses')}</p>
           <p className="text-lg font-semibold text-gray-800">{formatAmount(total)} ₺</p>
         </div>
         <div>
-          <p className="text-sm text-gray-500">Top Category</p>
+          <p className="text-sm text-gray-500">{t('reportsPages.chart.topCategory')}</p>
           <p className="text-lg font-semibold text-gray-800">
-            {dataWithColors.length > 0 ? dataWithColors[0].name.split(' ')[0] : 'N/A'}
+            {dataWithColors.length > 0 ? dataWithColors[0].name.split(' ')[0] : t('reportsPages.chart.notAvailable')}
           </p>
         </div>
         <div>
-          <p className="text-sm text-gray-500">Top Category %</p>
+          <p className="text-sm text-gray-500">{t('reportsPages.chart.topCategoryPercent')}</p>
           <p className="text-lg font-semibold text-gray-800">
             {dataWithColors.length > 0 ? formatPercentage(dataWithColors[0].value) : '0%'}
           </p>

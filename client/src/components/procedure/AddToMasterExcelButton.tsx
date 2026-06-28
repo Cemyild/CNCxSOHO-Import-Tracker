@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { FileSpreadsheet, Loader2 } from "lucide-react";
@@ -28,6 +29,7 @@ function triggerDownload(blob: Blob, filename: string) {
 }
 
 export function AddToMasterExcelButton({ procedureReference }: Props) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isWorking, setIsWorking] = useState(false);
@@ -52,8 +54,8 @@ export function AddToMasterExcelButton({ procedureReference }: Props) {
     const blob = await res.blob();
     triggerDownload(blob, "master-import-list.xlsx");
     toast({
-      title: "Master Excel updated",
-      description: `${procedureReference} eklendi. Güncel dosya indirildi.`,
+      title: t("procedurePages.masterExcel.updatedTitle"),
+      description: t("procedurePages.masterExcel.updatedDescription", { reference: procedureReference }),
     });
   };
 
@@ -65,14 +67,14 @@ export function AddToMasterExcelButton({ procedureReference }: Props) {
     } catch (err: any) {
       if (err?.kind === "master_not_uploaded") {
         toast({
-          title: "Master Excel henüz yüklenmemiş",
-          description: "Lütfen ilk seferde master Excel dosyasını seç.",
+          title: t("procedurePages.masterExcel.notUploadedTitle"),
+          description: t("procedurePages.masterExcel.notUploadedDescription"),
         });
         fileInputRef.current?.click();
       } else {
         toast({
-          title: "Hata",
-          description: err?.message ?? "Master Excel'e ekleme başarısız",
+          title: t("common.error"),
+          description: err?.message ?? t("procedurePages.masterExcel.appendFailed"),
           variant: "destructive",
         });
       }
@@ -102,8 +104,8 @@ export function AddToMasterExcelButton({ procedureReference }: Props) {
       await appendAndDownload();
     } catch (err: any) {
       toast({
-        title: "Hata",
-        description: err?.message ?? "Master Excel yüklenemedi",
+        title: t("common.error"),
+        description: err?.message ?? t("procedurePages.masterExcel.uploadFailed"),
         variant: "destructive",
       });
     } finally {
@@ -124,7 +126,7 @@ export function AddToMasterExcelButton({ procedureReference }: Props) {
         ) : (
           <FileSpreadsheet className="mr-2 h-4 w-4" />
         )}
-        Add to Master Excel
+        {t("procedurePages.masterExcel.buttonLabel")}
       </Button>
       <input
         ref={fileInputRef}

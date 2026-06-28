@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -112,6 +113,7 @@ function AddableSelect({
   placeholder,
   addLabel,
 }: AddableSelectProps) {
+  const { t } = useTranslation();
   const [customOptions, setCustomOptions] = useState<string[]>(() =>
     loadCustomOptions(storageKey),
   );
@@ -169,11 +171,11 @@ function AddableSelect({
                     handleAdd();
                   }
                 }}
-                placeholder="Type new value..."
+                placeholder={t("invoiceMaker.typeNewValue")}
                 autoFocus
               />
               <Button onClick={handleAdd} disabled={!draft.trim()}>
-                Add
+                {t("invoiceMaker.add")}
               </Button>
             </div>
           </div>
@@ -227,6 +229,7 @@ function triggerDownload(blob: Blob, filename: string) {
 }
 
 export default function InvoiceMakerPage() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<InvoiceHeaderForm>(EMPTY_INVOICE_HEADER);
@@ -299,15 +302,15 @@ export default function InvoiceMakerPage() {
         (li) => !li.htsCode.trim() && matches[li.styleNo.trim()],
       ).length;
       toast({
-        title: "TR HS lookup",
+        title: t("invoiceMaker.hsLookupTitle"),
         description:
           filled > 0
-            ? `${filled} line(s) auto-filled from past tax calculations.`
-            : "No matching TR HS codes found in past tax calculations.",
+            ? t("invoiceMaker.hsLookupFilled", { count: filled })
+            : t("invoiceMaker.hsLookupNone"),
       });
     } catch (error) {
       toast({
-        title: "TR HS lookup failed",
+        title: t("invoiceMaker.hsLookupFailedTitle"),
         description: String(error),
         variant: "destructive",
       });
@@ -328,8 +331,8 @@ export default function InvoiceMakerPage() {
       const result = parseDraftTaxFile(data);
       if (result.lineItems.length === 0) {
         toast({
-          title: "No rows found",
-          description: "The file was parsed but no product rows were detected.",
+          title: t("invoiceMaker.noRowsTitle"),
+          description: t("invoiceMaker.noRowsDesc"),
           variant: "destructive",
         });
         return;
@@ -339,13 +342,16 @@ export default function InvoiceMakerPage() {
         set("poOrderNo", result.poNumbers.join(", "));
       }
       toast({
-        title: "Draft Tax File loaded",
-        description: `${result.skuRowCount} SKU rows grouped into ${result.lineItems.length} invoice lines.`,
+        title: t("invoiceMaker.draftLoadedTitle"),
+        description: t("invoiceMaker.draftLoadedDesc", {
+          skuCount: result.skuRowCount,
+          lineCount: result.lineItems.length,
+        }),
       });
       await resolveHsCodes(result.lineItems);
     } catch (error) {
       toast({
-        title: "Failed to parse file",
+        title: t("invoiceMaker.parseFailedTitle"),
         description: String(error),
         variant: "destructive",
       });
@@ -427,7 +433,7 @@ export default function InvoiceMakerPage() {
       triggerDownload(await res.blob(), row.filename);
     } catch (error) {
       toast({
-        title: "Download failed",
+        title: t("invoiceMaker.downloadFailedTitle"),
         description: String(error),
         variant: "destructive",
       });
@@ -442,32 +448,32 @@ export default function InvoiceMakerPage() {
   const handleExport = async () => {
     if (!selectedShipper) {
       toast({
-        title: "Shipper required",
-        description: "Select a shipper before exporting.",
+        title: t("invoiceMaker.shipperRequiredTitle"),
+        description: t("invoiceMaker.shipperRequiredDesc"),
         variant: "destructive",
       });
       return;
     }
     if (lineItems.length === 0) {
       toast({
-        title: "No line items",
-        description: "Add invoice line items before exporting.",
+        title: t("invoiceMaker.noLineItemsTitle"),
+        description: t("invoiceMaker.noLineItemsDesc"),
         variant: "destructive",
       });
       return;
     }
     if (missingHsCount > 0) {
       toast({
-        title: "Missing TR HS codes",
-        description: `${missingHsCount} line(s) have no HTS CODE. Fill the highlighted cells first.`,
+        title: t("invoiceMaker.missingHsTitle"),
+        description: t("invoiceMaker.missingHsDesc", { count: missingHsCount }),
         variant: "destructive",
       });
       return;
     }
     if (pallets.length === 0) {
       toast({
-        title: "No pallets",
-        description: "Add at least one pallet row before exporting.",
+        title: t("invoiceMaker.noPalletsTitle"),
+        description: t("invoiceMaker.noPalletsDesc"),
         variant: "destructive",
       });
       return;
@@ -528,12 +534,12 @@ export default function InvoiceMakerPage() {
       });
 
       toast({
-        title: "Excel exported",
+        title: t("invoiceMaker.excelExportedTitle"),
         description: filename,
       });
     } catch (error) {
       toast({
-        title: "Export failed",
+        title: t("invoiceMaker.exportFailedTitle"),
         description: String(error),
         variant: "destructive",
       });
@@ -561,23 +567,23 @@ export default function InvoiceMakerPage() {
   };
 
   return (
-    <PageLayout title="Invoice Maker">
+    <PageLayout title={t("nav.invoiceMaker")}>
       <div className="mx-auto max-w-5xl space-y-6">
         {/* ------------------------------------------------ Invoice details */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Invoice Details</CardTitle>
+            <CardTitle className="text-lg">{t("invoiceMaker.invoiceDetails")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2 md:col-span-1">
-                <Label>1. Shipper</Label>
+                <Label>{t("invoiceMaker.shipperLabel")}</Label>
                 <Select
                   value={form.shipperId}
                   onValueChange={(v) => set("shipperId", v)}
                 >
                   <SelectTrigger data-testid="select-shipper">
-                    <SelectValue placeholder="Select shipper" />
+                    <SelectValue placeholder={t("invoiceMaker.selectShipper")} />
                   </SelectTrigger>
                   <SelectContent>
                     {SHIPPERS.map((s) => (
@@ -589,16 +595,16 @@ export default function InvoiceMakerPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>9. Invoice No</Label>
+                <Label>{t("invoiceMaker.invoiceNoLabel")}</Label>
                 <Input
                   value={form.invoiceNo}
                   onChange={(e) => set("invoiceNo", e.target.value)}
-                  placeholder="e.g. 53598059"
+                  placeholder={t("invoiceMaker.invoiceNoPlaceholder")}
                   data-testid="input-invoice-no"
                 />
               </div>
               <div className="space-y-2">
-                <Label>10. Invoice Date</Label>
+                <Label>{t("invoiceMaker.invoiceDateLabel")}</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -612,7 +618,7 @@ export default function InvoiceMakerPage() {
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {form.invoiceDate
                         ? format(form.invoiceDate, "d-MMM-yy")
-                        : "Pick a date"}
+                        : t("invoiceMaker.pickDate")}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -631,7 +637,7 @@ export default function InvoiceMakerPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>11. Invoice Reference</Label>
+                <Label>{t("invoiceMaker.invoiceReferenceLabel")}</Label>
                 <Input
                   value={form.invoiceReference}
                   onChange={(e) => set("invoiceReference", e.target.value)}
@@ -640,7 +646,7 @@ export default function InvoiceMakerPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>12. PO / Order No.</Label>
+                <Label>{t("invoiceMaker.poOrderNoLabel")}</Label>
                 <Input
                   value={form.poOrderNo}
                   onChange={(e) => set("poOrderNo", e.target.value)}
@@ -655,18 +661,18 @@ export default function InvoiceMakerPage() {
         {/* ------------------------------------------------------- Parties */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Parties</CardTitle>
+            <CardTitle className="text-lg">{t("invoiceMaker.parties")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>2. Importer / Bill To</Label>
+                <Label>{t("invoiceMaker.importerLabel")}</Label>
                 <Select
                   value={form.importerId}
                   onValueChange={(v) => set("importerId", v)}
                 >
                   <SelectTrigger data-testid="select-importer">
-                    <SelectValue placeholder="Select importer" />
+                    <SelectValue placeholder={t("invoiceMaker.selectImporter")} />
                   </SelectTrigger>
                   <SelectContent>
                     {IMPORTERS.map((i) => (
@@ -679,13 +685,13 @@ export default function InvoiceMakerPage() {
                 <AddressPreview address={selectedImporter?.address} />
               </div>
               <div className="space-y-2">
-                <Label>3. Final Place of Delivery</Label>
+                <Label>{t("invoiceMaker.deliveryPlaceLabel")}</Label>
                 <Select
                   value={form.deliveryPlaceId}
                   onValueChange={(v) => set("deliveryPlaceId", v)}
                 >
                   <SelectTrigger data-testid="select-delivery-place">
-                    <SelectValue placeholder="Select delivery place" />
+                    <SelectValue placeholder={t("invoiceMaker.selectDeliveryPlace")} />
                   </SelectTrigger>
                   <SelectContent>
                     {DELIVERY_PLACES.map((d) => (
@@ -704,51 +710,51 @@ export default function InvoiceMakerPage() {
         {/* ------------------------------------------------------ Shipment */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Shipment</CardTitle>
+            <CardTitle className="text-lg">{t("invoiceMaker.shipment")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
-                <Label>4. Port of Loading</Label>
+                <Label>{t("invoiceMaker.portOfLoadingLabel")}</Label>
                 <AddableSelect
                   value={form.portOfLoading}
                   onChange={(v) => set("portOfLoading", v)}
                   defaultOptions={DEFAULT_PORTS_OF_LOADING}
                   storageKey="invoiceMaker.customPorts"
-                  placeholder="Select port"
-                  addLabel="Add new port"
+                  placeholder={t("invoiceMaker.selectPort")}
+                  addLabel={t("invoiceMaker.addNewPort")}
                 />
               </div>
               <div className="space-y-2">
-                <Label>5. Final Destination</Label>
+                <Label>{t("invoiceMaker.finalDestinationLabel")}</Label>
                 <AddableSelect
                   value={form.finalDestination}
                   onChange={(v) => set("finalDestination", v)}
                   defaultOptions={DEFAULT_FINAL_DESTINATIONS}
                   storageKey="invoiceMaker.customDestinations"
-                  placeholder="Select destination"
-                  addLabel="Add new destination"
+                  placeholder={t("invoiceMaker.selectDestination")}
+                  addLabel={t("invoiceMaker.addNewDestination")}
                 />
               </div>
               <div className="space-y-2">
-                <Label>15. Payment Term</Label>
+                <Label>{t("invoiceMaker.paymentTermLabel")}</Label>
                 <AddableSelect
                   value={form.paymentTerm}
                   onChange={(v) => set("paymentTerm", v)}
                   defaultOptions={DEFAULT_PAYMENT_TERMS}
                   storageKey="invoiceMaker.customPaymentTerms"
-                  placeholder="Select payment term"
-                  addLabel="Add new payment term"
+                  placeholder={t("invoiceMaker.selectPaymentTerm")}
+                  addLabel={t("invoiceMaker.addNewPaymentTerm")}
                 />
               </div>
               <div className="space-y-2">
-                <Label>6. Shipment Mode</Label>
+                <Label>{t("invoiceMaker.shipmentModeLabel")}</Label>
                 <Select
                   value={form.shipmentMode}
                   onValueChange={(v) => set("shipmentMode", v)}
                 >
                   <SelectTrigger data-testid="select-shipment-mode">
-                    <SelectValue placeholder="Select mode" />
+                    <SelectValue placeholder={t("invoiceMaker.selectMode")} />
                   </SelectTrigger>
                   <SelectContent>
                     {SHIPMENT_MODES.map((m) => (
@@ -760,13 +766,13 @@ export default function InvoiceMakerPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>7. Shipment Term (Incoterms)</Label>
+                <Label>{t("invoiceMaker.shipmentTermLabel")}</Label>
                 <Select
                   value={form.shipmentTerm}
                   onValueChange={(v) => set("shipmentTerm", v)}
                 >
                   <SelectTrigger data-testid="select-shipment-term">
-                    <SelectValue placeholder="Select incoterm" />
+                    <SelectValue placeholder={t("invoiceMaker.selectIncoterm")} />
                   </SelectTrigger>
                   <SelectContent>
                     {INCOTERMS.map((t) => (
@@ -778,7 +784,7 @@ export default function InvoiceMakerPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>W/H Invoice REF NO</Label>
+                <Label>{t("invoiceMaker.whInvoiceRefLabel")}</Label>
                 <Input
                   value={form.whInvoiceRef}
                   onChange={(e) => set("whInvoiceRef", e.target.value)}
@@ -793,11 +799,11 @@ export default function InvoiceMakerPage() {
         {/* ---------------------------------------------- Goods and totals */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Goods &amp; Shipment Summary</CardTitle>
+            <CardTitle className="text-lg">{t("invoiceMaker.goodsSummary")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2 md:max-w-md">
-              <Label>8. Description of Goods</Label>
+              <Label>{t("invoiceMaker.descriptionOfGoodsLabel")}</Label>
               <Popover open={goodsOpen} onOpenChange={setGoodsOpen}>
                 <PopoverTrigger asChild>
                   <Button
@@ -812,7 +818,7 @@ export default function InvoiceMakerPage() {
                     <span className="truncate">
                       {form.goodsDescriptions.length > 0
                         ? form.goodsDescriptions.join(", ")
-                        : "Select descriptions"}
+                        : t("invoiceMaker.selectDescriptions")}
                     </span>
                     <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
@@ -837,7 +843,7 @@ export default function InvoiceMakerPage() {
               {form.goodsDescriptions.length > 0 && (
                 <p className="text-xs text-muted-foreground">
                   <Check className="mr-1 inline h-3 w-3" />
-                  Will be written as:{" "}
+                  {t("invoiceMaker.willBeWrittenAs")}{" "}
                   <span className="font-medium">
                     {form.goodsDescriptions.join(", ")}
                   </span>
@@ -847,11 +853,11 @@ export default function InvoiceMakerPage() {
 
             {/* ----------------------------------- Pallets (packing list) */}
             <div className="space-y-3">
-              <Label>Pallets (Packing List)</Label>
+              <Label>{t("invoiceMaker.palletsPackingList")}</Label>
               <div className="flex flex-wrap items-end gap-2">
                 <div className="space-y-1">
                   <Label className="text-xs font-normal text-muted-foreground">
-                    Length (cm)
+                    {t("invoiceMaker.lengthCm")}
                   </Label>
                   <Input
                     className="h-9 w-24"
@@ -867,7 +873,7 @@ export default function InvoiceMakerPage() {
                 <span className="pb-2 text-muted-foreground">×</span>
                 <div className="space-y-1">
                   <Label className="text-xs font-normal text-muted-foreground">
-                    Width (cm)
+                    {t("invoiceMaker.widthCm")}
                   </Label>
                   <Input
                     className="h-9 w-24"
@@ -883,7 +889,7 @@ export default function InvoiceMakerPage() {
                 <span className="pb-2 text-muted-foreground">×</span>
                 <div className="space-y-1">
                   <Label className="text-xs font-normal text-muted-foreground">
-                    Height (cm)
+                    {t("invoiceMaker.heightCm")}
                   </Label>
                   <Input
                     className="h-9 w-24"
@@ -898,7 +904,7 @@ export default function InvoiceMakerPage() {
                 </div>
                 <div className="ml-2 space-y-1">
                   <Label className="text-xs font-normal text-muted-foreground">
-                    No. of Pallets
+                    {t("invoiceMaker.noOfPallets")}
                   </Label>
                   <Input
                     className="h-9 w-24"
@@ -913,7 +919,7 @@ export default function InvoiceMakerPage() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-normal text-muted-foreground">
-                    Gross Wt (kgs)
+                    {t("invoiceMaker.grossWtKgs")}
                   </Label>
                   <Input
                     className="h-9 w-28"
@@ -933,7 +939,7 @@ export default function InvoiceMakerPage() {
                   data-testid="button-add-pallet"
                 >
                   <Plus className="mr-1 h-4 w-4" />
-                  Add
+                  {t("invoiceMaker.add")}
                 </Button>
               </div>
 
@@ -943,15 +949,15 @@ export default function InvoiceMakerPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="min-w-[180px]">
-                          Pallet Dimension (L x B x H Cm)
+                          {t("invoiceMaker.palletDimensionHeader")}
                         </TableHead>
                         <TableHead className="text-right">
-                          No. of Pallets
+                          {t("invoiceMaker.noOfPallets")}
                         </TableHead>
                         <TableHead className="text-right">
-                          Gross Wt (kgs)
+                          {t("invoiceMaker.grossWtKgs")}
                         </TableHead>
-                        <TableHead className="text-right">CBM</TableHead>
+                        <TableHead className="text-right">{t("invoiceMaker.cbm")}</TableHead>
                         <TableHead className="w-10" />
                       </TableRow>
                     </TableHeader>
@@ -976,7 +982,7 @@ export default function InvoiceMakerPage() {
                               size="icon"
                               className="h-8 w-8 text-muted-foreground hover:text-destructive"
                               onClick={() => removePallet(p.id)}
-                              title="Remove pallet"
+                              title={t("invoiceMaker.removePallet")}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -984,7 +990,7 @@ export default function InvoiceMakerPage() {
                         </TableRow>
                       ))}
                       <TableRow className="bg-muted/40 font-medium">
-                        <TableCell>GRAND TOTAL</TableCell>
+                        <TableCell>{t("invoiceMaker.grandTotalUpper")}</TableCell>
                         <TableCell className="text-right tabular-nums">
                           {palletTotals.count}
                         </TableCell>
@@ -1006,9 +1012,9 @@ export default function InvoiceMakerPage() {
             <div className="grid gap-4 md:grid-cols-4">
               <div className="space-y-2">
                 <Label className="flex items-center gap-1.5">
-                  Gross Weight (KGS)
+                  {t("invoiceMaker.grossWeightKgs")}
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
-                    auto
+                    {t("invoiceMaker.autoBadge")}
                   </span>
                 </Label>
                 <div
@@ -1020,9 +1026,9 @@ export default function InvoiceMakerPage() {
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-1.5">
-                  MEAS / CBM
+                  {t("invoiceMaker.measCbm")}
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
-                    auto
+                    {t("invoiceMaker.autoBadge")}
                   </span>
                 </Label>
                 <div
@@ -1034,9 +1040,9 @@ export default function InvoiceMakerPage() {
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-1.5">
-                  Total Pallets
+                  {t("invoiceMaker.totalPallets")}
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
-                    auto
+                    {t("invoiceMaker.autoBadge")}
                   </span>
                 </Label>
                 <div
@@ -1047,7 +1053,7 @@ export default function InvoiceMakerPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Total Cartons</Label>
+                <Label>{t("invoiceMaker.totalCartons")}</Label>
                 <Input
                   type="number"
                   min="0"
@@ -1065,7 +1071,7 @@ export default function InvoiceMakerPage() {
         {/* ---------------------------------------------------- Line items */}
         <Card>
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-            <CardTitle className="text-lg">Invoice Line Items</CardTitle>
+            <CardTitle className="text-lg">{t("invoiceMaker.invoiceLineItems")}</CardTitle>
             <div className="flex flex-wrap gap-2">
               <input
                 ref={draftFileRef}
@@ -1082,14 +1088,14 @@ export default function InvoiceMakerPage() {
                 data-testid="button-upload-draft"
               >
                 <Upload className="mr-2 h-4 w-4" />
-                Upload Draft Tax File
+                {t("invoiceMaker.uploadDraftTaxFile")}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => resolveHsCodes(lineItems)}
                 disabled={resolvingHs || lineItems.length === 0}
-                title="Fill empty TR HS codes from past tax calculations"
+                title={t("invoiceMaker.autoFillHsTitle")}
                 data-testid="button-resolve-hs"
               >
                 {resolvingHs ? (
@@ -1097,7 +1103,7 @@ export default function InvoiceMakerPage() {
                 ) : (
                   <Wand2 className="mr-2 h-4 w-4" />
                 )}
-                Auto-fill TR HS
+                {t("invoiceMaker.autoFillHs")}
               </Button>
               <Button
                 variant="outline"
@@ -1106,7 +1112,7 @@ export default function InvoiceMakerPage() {
                 data-testid="button-add-row"
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Add Row
+                {t("invoiceMaker.addRow")}
               </Button>
               {lineItems.length > 0 && (
                 <Button
@@ -1116,7 +1122,7 @@ export default function InvoiceMakerPage() {
                   className="text-muted-foreground"
                   data-testid="button-clear-rows"
                 >
-                  Clear
+                  {t("invoiceMaker.clear")}
                 </Button>
               )}
             </div>
@@ -1126,18 +1132,20 @@ export default function InvoiceMakerPage() {
               <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed p-10 text-center">
                 <FileSpreadsheet className="h-10 w-10 text-muted-foreground/60" />
                 <div className="text-sm text-muted-foreground">
-                  Upload a <span className="font-medium">Draft Tax File</span>{" "}
-                  to generate invoice lines automatically
+                  {t("invoiceMaker.emptyStateLine1Prefix")}{" "}
+                  <span className="font-medium">
+                    {t("invoiceMaker.emptyStateDraftTerm")}
+                  </span>{" "}
+                  {t("invoiceMaker.emptyStateLine1Suffix")}
                   <br />
-                  (grouped by Style + Made In + Cost), or add rows manually.
+                  {t("invoiceMaker.emptyStateLine2")}
                 </div>
               </div>
             ) : (
               <>
                 {missingHsCount > 0 && (
                   <p className="mb-3 text-sm font-medium text-destructive">
-                    {missingHsCount} line(s) missing TR HS CODE — fill the
-                    highlighted cells before export.
+                    {t("invoiceMaker.missingHsWarning", { count: missingHsCount })}
                   </p>
                 )}
                 <div className="overflow-x-auto rounded-md border">
@@ -1145,25 +1153,25 @@ export default function InvoiceMakerPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-8">#</TableHead>
-                        <TableHead className="min-w-[110px]">Style No.</TableHead>
+                        <TableHead className="min-w-[110px]">{t("invoiceMaker.colStyleNo")}</TableHead>
                         <TableHead className="min-w-[170px]">
-                          Style Description
+                          {t("invoiceMaker.colStyleDescription")}
                         </TableHead>
-                        <TableHead className="min-w-[160px]">HTS CODE</TableHead>
+                        <TableHead className="min-w-[160px]">{t("invoiceMaker.colHtsCode")}</TableHead>
                         <TableHead className="min-w-[260px]">
-                          Composition Of Material
+                          {t("invoiceMaker.colComposition")}
                         </TableHead>
-                        <TableHead className="min-w-[80px]">Made In</TableHead>
+                        <TableHead className="min-w-[80px]">{t("invoiceMaker.colMadeIn")}</TableHead>
                         <TableHead className="min-w-[80px] text-right">
-                          Qty
+                          {t("invoiceMaker.colQty")}
                         </TableHead>
-                        <TableHead className="min-w-[70px]">UOM</TableHead>
-                        <TableHead className="min-w-[80px]">Currency</TableHead>
+                        <TableHead className="min-w-[70px]">{t("invoiceMaker.colUom")}</TableHead>
+                        <TableHead className="min-w-[80px]">{t("invoiceMaker.colCurrency")}</TableHead>
                         <TableHead className="min-w-[100px] text-right">
-                          Unit Price
+                          {t("invoiceMaker.colUnitPrice")}
                         </TableHead>
                         <TableHead className="min-w-[110px] text-right">
-                          Amount
+                          {t("invoiceMaker.colAmount")}
                         </TableHead>
                         <TableHead className="w-10" />
                       </TableRow>
@@ -1210,10 +1218,10 @@ export default function InvoiceMakerPage() {
                                 onChange={(e) =>
                                   updateLineItem(li.id, "htsCode", e.target.value)
                                 }
-                                placeholder="TR HS code"
+                                placeholder={t("invoiceMaker.trHsCodePlaceholder")}
                                 title={
                                   li.hsSource === "db"
-                                    ? "Auto-filled from past tax calculations"
+                                    ? t("invoiceMaker.autoFilledTitle")
                                     : undefined
                                 }
                               />
@@ -1295,7 +1303,7 @@ export default function InvoiceMakerPage() {
                                 size="icon"
                                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
                                 onClick={() => removeLineItem(li.id)}
-                                title="Remove row"
+                                title={t("invoiceMaker.removeRow")}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -1305,7 +1313,7 @@ export default function InvoiceMakerPage() {
                       })}
                       <TableRow className="bg-muted/40 font-medium">
                         <TableCell />
-                        <TableCell>Grand Total</TableCell>
+                        <TableCell>{t("invoiceMaker.grandTotal")}</TableCell>
                         <TableCell colSpan={4} />
                         <TableCell className="text-right tabular-nums">
                           {lineTotals.qty.toLocaleString("en-US")}
@@ -1337,32 +1345,32 @@ export default function InvoiceMakerPage() {
             ) : (
               <Download className="mr-2 h-5 w-5" />
             )}
-            Export Excel (CI &amp; PL)
+            {t("invoiceMaker.exportExcel")}
           </Button>
         </div>
 
         {/* ------------------------------------------------------ History */}
         <Card className="mb-10">
           <CardHeader>
-            <CardTitle className="text-lg">Generated Invoices</CardTitle>
+            <CardTitle className="text-lg">{t("invoiceMaker.generatedInvoices")}</CardTitle>
           </CardHeader>
           <CardContent>
             {history.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
-                No invoices exported yet.
+                {t("invoiceMaker.noInvoicesYet")}
               </p>
             ) : (
               <div className="overflow-x-auto rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="min-w-[140px]">Invoice No</TableHead>
-                      <TableHead className="min-w-[150px]">Date</TableHead>
+                      <TableHead className="min-w-[140px]">{t("invoiceMaker.histInvoiceNo")}</TableHead>
+                      <TableHead className="min-w-[150px]">{t("invoiceMaker.histDate")}</TableHead>
                       <TableHead className="min-w-[90px] text-right">
-                        Quantity
+                        {t("invoiceMaker.histQuantity")}
                       </TableHead>
                       <TableHead className="min-w-[120px] text-right">
-                        Total
+                        {t("invoiceMaker.histTotal")}
                       </TableHead>
                       <TableHead className="w-12" />
                     </TableRow>
@@ -1389,7 +1397,7 @@ export default function InvoiceMakerPage() {
                             className="h-8 w-8"
                             onClick={() => handleHistoryDownload(row)}
                             disabled={downloadingId === row.id}
-                            title={`Download ${row.filename}`}
+                            title={t("invoiceMaker.downloadFile", { filename: row.filename })}
                           >
                             {downloadingId === row.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />

@@ -33,6 +33,7 @@ import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
 import type { TaxCalculation } from "@shared/schema";
 
 function formatCurrency(value: string | number | null | undefined): string {
@@ -86,6 +87,7 @@ const items = [
 ];
 
 export default function TaxCalculationPage() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [isImporting, setIsImporting] = useState(false);
@@ -104,14 +106,14 @@ export default function TaxCalculationPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tax-calculation/calculations"] });
       toast({
-        title: "Success",
-        description: "Calculation deleted successfully",
+        title: t('common.success'),
+        description: t('taxCalc.toast.deleteSuccess'),
       });
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to delete calculation",
+        title: t('common.error'),
+        description: t('taxCalc.toast.deleteError'),
         variant: "destructive",
       });
     },
@@ -139,28 +141,28 @@ export default function TaxCalculationPage() {
       if (result.stats) {
         const { newlyImported, duplicatesInExcel, alreadyInDatabase, totalInExcel } = result.stats;
         toast({
-          title: "Import Complete",
+          title: t('taxCalc.toast.importComplete'),
           description: (
             <div className="space-y-1">
-              <div>✅ New products imported: {newlyImported}</div>
-              {duplicatesInExcel > 0 && <div>⚠️ Duplicate styles in Excel: {duplicatesInExcel}</div>}
-              {alreadyInDatabase > 0 && <div>ℹ️ Already in database: {alreadyInDatabase}</div>}
-              <div className="text-xs text-muted-foreground mt-2">Total rows: {totalInExcel}</div>
+              <div>✅ {t('taxCalc.toast.newProductsImported', { count: newlyImported })}</div>
+              {duplicatesInExcel > 0 && <div>⚠️ {t('taxCalc.toast.duplicateStyles', { count: duplicatesInExcel })}</div>}
+              {alreadyInDatabase > 0 && <div>ℹ️ {t('taxCalc.toast.alreadyInDatabase', { count: alreadyInDatabase })}</div>}
+              <div className="text-xs text-muted-foreground mt-2">{t('taxCalc.toast.totalRows', { count: totalInExcel })}</div>
             </div>
           ),
           duration: 5000,
         });
       } else {
         toast({
-          title: "Success",
+          title: t('common.success'),
           description: `✅ ${result.message}`,
         });
       }
-      
+
     } catch (error) {
       toast({
-        title: "Error",
-        description: `❌ Failed to import products: ${error instanceof Error ? error.message : String(error)}`,
+        title: t('common.error'),
+        description: `❌ ${t('taxCalc.toast.importProductsError', { error: error instanceof Error ? error.message : String(error) })}`,
         variant: "destructive",
       });
     } finally {
@@ -190,14 +192,14 @@ export default function TaxCalculationPage() {
       }
       
       toast({
-        title: "Success",
+        title: t('common.success'),
         description: `✅ ${result.message}`,
       });
-      
+
     } catch (error) {
       toast({
-        title: "Error",
-        description: `❌ Failed to import HS codes: ${error instanceof Error ? error.message : String(error)}`,
+        title: t('common.error'),
+        description: `❌ ${t('taxCalc.toast.importHsCodesError', { error: error instanceof Error ? error.message : String(error) })}`,
         variant: "destructive",
       });
     } finally {
@@ -216,19 +218,19 @@ export default function TaxCalculationPage() {
 
   const getStatusBadge = (status: string) => {
     const statusMap = {
-      draft: { label: "Draft", className: "bg-gray-500" },
-      calculated: { label: "Calculated", className: "bg-blue-500" },
-      completed: { label: "Completed", className: "bg-green-500" },
+      draft: { label: t('taxCalc.status.draft'), className: "bg-gray-500" },
+      calculated: { label: t('taxCalc.status.calculated'), className: "bg-blue-500" },
+      completed: { label: t('taxCalc.status.completed'), className: "bg-green-500" },
     };
     const statusInfo = statusMap[status as keyof typeof statusMap] || statusMap.draft;
     return <Badge className={statusInfo.className}>{statusInfo.label}</Badge>;
   };
 
   return (
-    <PageLayout title="Tax Calculation" navItems={items}>
+    <PageLayout title={t('nav.taxCalculation')} navItems={items}>
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Tax Calculations</h1>
+          <h1 className="text-3xl font-bold">{t('taxCalc.list.title')}</h1>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -237,7 +239,7 @@ export default function TaxCalculationPage() {
               data-testid="button-import-products"
             >
               <Upload className="mr-2 h-4 w-4" />
-              {isImporting ? "Importing..." : "Import Products"}
+              {isImporting ? t('taxCalc.list.importing') : t('taxCalc.list.importProducts')}
             </Button>
             <Button
               variant="outline"
@@ -246,12 +248,12 @@ export default function TaxCalculationPage() {
               data-testid="button-import-hs-codes"
             >
               <Database className="mr-2 h-4 w-4" />
-              {isImporting ? "Importing..." : "Import HS Codes"}
+              {isImporting ? t('taxCalc.list.importing') : t('taxCalc.list.importHsCodes')}
             </Button>
             <Link href="/tax-calculation/new">
               <Button data-testid="button-new-calculation">
                 <Plus className="mr-2 h-4 w-4" />
-                New Calculation
+                {t('taxCalc.list.newCalculation')}
               </Button>
             </Link>
           </div>
@@ -283,7 +285,7 @@ export default function TaxCalculationPage() {
 
         <div className="flex gap-4">
           <Input
-            placeholder="Search by reference..."
+            placeholder={t('taxCalc.list.searchPlaceholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="max-w-sm"
@@ -295,26 +297,26 @@ export default function TaxCalculationPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Reference</TableHead>
-                <TableHead>Invoice No</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Total Value</TableHead>
-                <TableHead>Total Pieces</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('taxCalc.list.colReference')}</TableHead>
+                <TableHead>{t('taxCalc.list.colInvoiceNo')}</TableHead>
+                <TableHead>{t('taxCalc.list.colDate')}</TableHead>
+                <TableHead>{t('taxCalc.list.colTotalValue')}</TableHead>
+                <TableHead>{t('taxCalc.list.colTotalPieces')}</TableHead>
+                <TableHead>{t('taxCalc.list.colStatus')}</TableHead>
+                <TableHead>{t('taxCalc.list.colActions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8">
-                    Loading...
+                    {t('common.loading')}
                   </TableCell>
                 </TableRow>
               ) : filteredCalculations.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    No calculations found
+                    {t('taxCalc.list.noCalculations')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -335,7 +337,7 @@ export default function TaxCalculationPage() {
                         {calc.procedure_id && (
                           <Badge className="bg-emerald-600 flex items-center gap-1" data-testid={`badge-procedure-${calc.id}`}>
                             <CheckCircle className="h-3 w-3" />
-                            Procedure Created
+                            {t('taxCalc.list.procedureCreated')}
                           </Badge>
                         )}
                       </div>
@@ -357,7 +359,7 @@ export default function TaxCalculationPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                              if (confirm("Are you sure you want to delete this calculation?")) {
+                              if (confirm(t('taxCalc.list.deleteConfirm'))) {
                                 deleteMutation.mutate(calc.id);
                               }
                             }}

@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, Package, TrendingUp, Receipt, FileText, Landmark, Calculator } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 function formatCurrency(value: number): string {
   return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -26,13 +27,14 @@ export function CalculationSummary({
   totalTaxUSD,
   totalTaxTL,
 }: CalculationSummaryProps) {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <DollarSign className="h-4 w-4 text-muted-foreground" />
-            Total Value
+            {t('taxCalcComp.summary.totalValue')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -46,7 +48,7 @@ export function CalculationSummary({
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Package className="h-4 w-4 text-muted-foreground" />
-            Total Pieces
+            {t('taxCalcComp.summary.totalPieces')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -60,7 +62,7 @@ export function CalculationSummary({
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Receipt className="h-4 w-4 text-muted-foreground" />
-            Total Customs Tax
+            {t('taxCalcComp.summary.totalCustomsTax')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -74,7 +76,7 @@ export function CalculationSummary({
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <FileText className="h-4 w-4 text-muted-foreground" />
-            Total Add. Customs Tax
+            {t('taxCalcComp.summary.totalAdditionalTax')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -88,7 +90,7 @@ export function CalculationSummary({
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Landmark className="h-4 w-4 text-muted-foreground" />
-            Total KKDF
+            {t('taxCalcComp.summary.totalKkdf')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -102,7 +104,7 @@ export function CalculationSummary({
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Calculator className="h-4 w-4 text-muted-foreground" />
-            Total VAT
+            {t('taxCalcComp.summary.totalVat')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -116,7 +118,7 @@ export function CalculationSummary({
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            Total Tax (USD)
+            {t('taxCalcComp.summary.totalTaxUsd')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -130,7 +132,7 @@ export function CalculationSummary({
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            Total Tax (TL)
+            {t('taxCalcComp.summary.totalTaxTl')}
           </CardTitle>
         </CardHeader>
         <CardContent>

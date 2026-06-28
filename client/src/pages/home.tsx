@@ -26,47 +26,49 @@ import {
 import { BackgroundPaths } from "@/components/ui/background-paths"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Text_03 } from "@/components/ui/wave-text"
+import { useTranslation } from "react-i18next"
 
 // Menu items
 const items = [
   {
-    title: "Dashboard",
+    titleKey: "nav.dashboard",
     url: "#",
     icon: Home,
   },
   {
-    title: "Procedures",
+    titleKey: "nav.procedures",
     url: "#",
     icon: Inbox,
   },
   {
-    title: "Expenses",
+    titleKey: "nav.expenses",
     url: "#",
     icon: Calendar,
   },
   {
-    title: "Payments",
+    titleKey: "nav.payments",
     url: "#",
     icon: Search,
   },
   {
-    title: "Reports",
+    titleKey: "nav.reports",
     url: "#",
     icon: Calendar,
   },
   {
-    title: "Ask CNC?",
+    titleKey: "nav.askCnc",
     url: "/ask",
     icon: Sparkles,
   },
   {
-    title: "Settings",
+    titleKey: "nav.settings",
     url: "#",
     icon: Settings,
   },
 ]
 
 export default function HomePage() {
+  const { t } = useTranslation();
   return (
     <div className="relative w-full min-h-screen">
       {/* Background component - positioned absolutely to fill the entire screen */}
@@ -80,16 +82,16 @@ export default function HomePage() {
             <SidebarContent>
               <SidebarGroup>
                 <div className="flex justify-center mt-6 mb-8">
-                  <img src="/Company Logo.png" alt="Company Logo" className="w-full px-4 dark:invert" />
+                  <img src="/Company Logo.png" alt={t('homePage.companyLogoAlt')} className="w-full px-4 dark:invert" />
                 </div>
                 <SidebarGroupContent>
                   <SidebarMenu className="pl-[15%]">
                     {items.map((item) => (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild tooltip={item.title} className="text-[1.1em]">
+                      <SidebarMenuItem key={item.titleKey}>
+                        <SidebarMenuButton asChild tooltip={t(item.titleKey)} className="text-[1.1em]">
                           <a href={item.url}>
                             <item.icon />
-                            <span>{item.title}</span>
+                            <span>{t(item.titleKey)}</span>
                           </a>
                         </SidebarMenuButton>
                       </SidebarMenuItem>

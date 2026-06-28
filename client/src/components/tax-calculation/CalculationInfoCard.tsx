@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Pencil, Save, X, Loader2 } from "lucide-react";
 import type { TaxCalculation } from "@shared/schema";
+import { useTranslation } from "react-i18next";
 
 interface FormState {
   reference: string;
@@ -74,6 +75,7 @@ interface Props {
 }
 
 export function CalculationInfoCard({ calculation, calculationQueryKey }: Props) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState<FormState>(() => fromCalculation(calculation));
@@ -98,16 +100,16 @@ export function CalculationInfoCard({ calculation, calculationQueryKey }: Props)
       };
       const putRes = await apiRequest("PUT", `/api/tax-calculation/calculations/${calculation.id}`, body);
       if (!putRes.ok) {
-        const t = await putRes.text();
-        let msg = "Update failed";
-        try { msg = JSON.parse(t).error ?? JSON.parse(t).message ?? msg; } catch {}
+        const txt = await putRes.text();
+        let msg = t('taxCalcComp.calcInfo.updateFailed');
+        try { msg = JSON.parse(txt).error ?? JSON.parse(txt).message ?? msg; } catch {}
         throw new Error(msg);
       }
       const calcRes = await apiRequest("POST", `/api/tax-calculation/calculations/${calculation.id}/calculate`, {});
       if (!calcRes.ok) {
-        const t = await calcRes.text();
-        let msg = "Recalculation failed";
-        try { msg = JSON.parse(t).error ?? JSON.parse(t).message ?? msg; } catch {}
+        const txt = await calcRes.text();
+        let msg = t('taxCalcComp.calcInfo.recalcFailed');
+        try { msg = JSON.parse(txt).error ?? JSON.parse(txt).message ?? msg; } catch {}
         throw new Error(msg);
       }
       return calcRes.json();
@@ -117,13 +119,13 @@ export function CalculationInfoCard({ calculation, calculationQueryKey }: Props)
       if (data?.procedureSynced) {
         queryClient.invalidateQueries({ queryKey: ["/api/procedures"] });
       }
-      toast({ title: "Saved", description: "Calculation updated and taxes recalculated" });
+      toast({ title: t('taxCalcComp.calcInfo.savedTitle'), description: t('taxCalcComp.calcInfo.savedDesc') });
       setEditMode(false);
     },
     onError: (err: any) => {
       toast({
-        title: "Error",
-        description: err?.message ?? "Failed to save",
+        title: t('common.error'),
+        description: err?.message ?? t('taxCalcComp.calcInfo.failedToSave'),
         variant: "destructive",
       });
     },
@@ -146,7 +148,7 @@ export function CalculationInfoCard({ calculation, calculationQueryKey }: Props)
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>Calculation Info</CardTitle>
+        <CardTitle>{t('taxCalcComp.calcInfo.title')}</CardTitle>
         {!editMode ? (
           <Button
             variant="outline"
@@ -154,7 +156,7 @@ export function CalculationInfoCard({ calculation, calculationQueryKey }: Props)
             onClick={() => setEditMode(true)}
             data-testid="button-edit-calc-info"
           >
-            <Pencil className="mr-2 h-4 w-4" /> Edit
+            <Pencil className="mr-2 h-4 w-4" /> {t('taxCalcComp.calcInfo.edit')}
           </Button>
         ) : (
           <div className="flex gap-2">
@@ -165,7 +167,7 @@ export function CalculationInfoCard({ calculation, calculationQueryKey }: Props)
               disabled={saveMutation.isPending}
               data-testid="button-cancel-calc-info"
             >
-              <X className="mr-2 h-4 w-4" /> Cancel
+              <X className="mr-2 h-4 w-4" /> {t('taxCalcComp.calcInfo.cancel')}
             </Button>
             <Button
               size="sm"
@@ -178,7 +180,7 @@ export function CalculationInfoCard({ calculation, calculationQueryKey }: Props)
               ) : (
                 <Save className="mr-2 h-4 w-4" />
               )}
-              Save & Recalculate
+              {t('taxCalcComp.calcInfo.saveRecalculate')}
             </Button>
           </div>
         )}
@@ -187,24 +189,24 @@ export function CalculationInfoCard({ calculation, calculationQueryKey }: Props)
       <CardContent>
         {!editMode ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {renderRead("Reference", calculation.reference, "calc-info-reference")}
-            {renderRead("Invoice No", calculation.invoice_no || "", "calc-info-invoice-no")}
+            {renderRead(t('taxCalcComp.calcInfo.reference'), calculation.reference, "calc-info-reference")}
+            {renderRead(t('taxCalcComp.calcInfo.invoiceNo'), calculation.invoice_no || "", "calc-info-invoice-no")}
             {renderRead(
-              "Invoice Date",
+              t('taxCalcComp.calcInfo.invoiceDate'),
               isoDateInput((calculation as any).invoice_date)
                 ? new Date(isoDateInput((calculation as any).invoice_date)).toLocaleDateString()
                 : "",
               "calc-info-invoice-date"
             )}
-            {renderRead("Currency Rate", formatTry(calculation.currency_rate), "calc-info-currency-rate")}
-            {renderRead("Transport Cost", formatUsd(calculation.transport_cost), "calc-info-transport-cost")}
-            {renderRead("Insurance Cost", formatUsd(calculation.insurance_cost), "calc-info-insurance-cost")}
-            {renderRead("Storage Cost", formatUsd(calculation.storage_cost), "calc-info-storage-cost")}
+            {renderRead(t('taxCalcComp.calcInfo.currencyRate'), formatTry(calculation.currency_rate), "calc-info-currency-rate")}
+            {renderRead(t('taxCalcComp.calcInfo.transportCost'), formatUsd(calculation.transport_cost), "calc-info-transport-cost")}
+            {renderRead(t('taxCalcComp.calcInfo.insuranceCost'), formatUsd(calculation.insurance_cost), "calc-info-insurance-cost")}
+            {renderRead(t('taxCalcComp.calcInfo.storageCost'), formatUsd(calculation.storage_cost), "calc-info-storage-cost")}
             {renderRead(
-              "Flags",
+              t('taxCalcComp.calcInfo.flags'),
               [
-                calculation.is_prepaid ? "Prepaid" : null,
-                calculation.is_atr ? "ATR" : null,
+                calculation.is_prepaid ? t('taxCalcComp.calcInfo.prepaid') : null,
+                calculation.is_atr ? t('taxCalcComp.calcInfo.atr') : null,
               ].filter(Boolean).join(", ") || "",
               "calc-info-flags"
             )}
@@ -212,41 +214,41 @@ export function CalculationInfoCard({ calculation, calculationQueryKey }: Props)
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <Label htmlFor="reference">Reference</Label>
+              <Label htmlFor="reference">{t('taxCalcComp.calcInfo.reference')}</Label>
               <Input id="reference" value={form.reference} onChange={onChangeText("reference")} data-testid="input-reference" />
             </div>
             <div>
-              <Label htmlFor="invoice_no">Invoice No</Label>
+              <Label htmlFor="invoice_no">{t('taxCalcComp.calcInfo.invoiceNo')}</Label>
               <Input id="invoice_no" value={form.invoice_no} onChange={onChangeText("invoice_no")} data-testid="input-invoice-no" />
             </div>
             <div>
-              <Label htmlFor="invoice_date">Invoice Date</Label>
+              <Label htmlFor="invoice_date">{t('taxCalcComp.calcInfo.invoiceDate')}</Label>
               <Input id="invoice_date" type="date" value={form.invoice_date} onChange={onChangeText("invoice_date")} data-testid="input-invoice-date" />
             </div>
             <div>
-              <Label htmlFor="currency_rate">Currency Rate</Label>
+              <Label htmlFor="currency_rate">{t('taxCalcComp.calcInfo.currencyRate')}</Label>
               <Input id="currency_rate" type="number" step="0.0001" value={form.currency_rate} onChange={onChangeText("currency_rate")} data-testid="input-currency-rate" />
             </div>
             <div>
-              <Label htmlFor="transport_cost">Transport Cost</Label>
+              <Label htmlFor="transport_cost">{t('taxCalcComp.calcInfo.transportCost')}</Label>
               <Input id="transport_cost" type="number" step="0.01" value={form.transport_cost} onChange={onChangeText("transport_cost")} data-testid="input-transport-cost" />
             </div>
             <div>
-              <Label htmlFor="insurance_cost">Insurance Cost</Label>
+              <Label htmlFor="insurance_cost">{t('taxCalcComp.calcInfo.insuranceCost')}</Label>
               <Input id="insurance_cost" type="number" step="0.01" value={form.insurance_cost} onChange={onChangeText("insurance_cost")} data-testid="input-insurance-cost" />
             </div>
             <div>
-              <Label htmlFor="storage_cost">Storage Cost</Label>
+              <Label htmlFor="storage_cost">{t('taxCalcComp.calcInfo.storageCost')}</Label>
               <Input id="storage_cost" type="number" step="0.01" value={form.storage_cost} onChange={onChangeText("storage_cost")} data-testid="input-storage-cost" />
             </div>
             <div className="flex items-end gap-6 pb-2">
               <div className="flex items-center gap-2">
                 <Checkbox id="is_prepaid" checked={form.is_prepaid} onCheckedChange={onChangeBool("is_prepaid")} data-testid="checkbox-is-prepaid" />
-                <Label htmlFor="is_prepaid" className="cursor-pointer">Prepaid</Label>
+                <Label htmlFor="is_prepaid" className="cursor-pointer">{t('taxCalcComp.calcInfo.prepaid')}</Label>
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox id="is_atr" checked={form.is_atr} onCheckedChange={onChangeBool("is_atr")} data-testid="checkbox-is-atr" />
-                <Label htmlFor="is_atr" className="cursor-pointer">ATR</Label>
+                <Label htmlFor="is_atr" className="cursor-pointer">{t('taxCalcComp.calcInfo.atr')}</Label>
               </div>
             </div>
           </div>

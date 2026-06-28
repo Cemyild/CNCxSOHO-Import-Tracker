@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { useTranslation } from "react-i18next";
 
 interface RequirementsBadgeProps {
   requirements?: {
@@ -9,30 +10,31 @@ interface RequirementsBadgeProps {
 }
 
 export function RequirementsBadge({ requirements }: RequirementsBadgeProps) {
+  const { t } = useTranslation();
   if (!requirements) return null;
 
   const badges = [];
-  
+
   if (requirements.ex_registry_form) {
     badges.push(
       <Badge key="ex-registry" variant="destructive" className="bg-red-500">
-        🔴 EX REGISTRY FORM
+        🔴 {t('taxCalcComp.requirements.exRegistryForm')}
       </Badge>
     );
   }
-  
+
   if (requirements.azo_dye_test) {
     badges.push(
       <Badge key="azo-dye" variant="destructive" className="bg-orange-500">
-        🟠 AZO DYE TEST
+        🟠 {t('taxCalcComp.requirements.azoDyeTest')}
       </Badge>
     );
   }
-  
+
   if (requirements.special_custom) {
     badges.push(
       <Badge key="special-custom" variant="destructive" className="bg-red-600">
-        🔴 SPECIAL CUSTOM
+        🔴 {t('taxCalcComp.requirements.specialCustom')}
       </Badge>
     );
   }

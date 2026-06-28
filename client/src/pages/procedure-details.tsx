@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { 
+import {
   Calendar,
   Home,
   Inbox,
@@ -236,6 +237,7 @@ function getFileIcon(fileType: string) {
 }
 
 export default function ProcedureDetailsPage() {
+  const { t } = useTranslation();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -308,7 +310,7 @@ export default function ProcedureDetailsPage() {
   // Fetch procedure data
   useEffect(() => {
     if (!reference) {
-      setError("No procedure reference provided");
+      setError(t("procedurePages.details.noReferenceProvided"));
       setIsLoading(false);
       return;
     }
@@ -375,7 +377,7 @@ export default function ProcedureDetailsPage() {
         console.log("[fetchProcedureData] Retrieved procedure:", procedureData.procedures[0]);
         setProcedure(procedureData.procedures[0]);
       } else {
-        setError(`No procedure found with reference ${referenceNumber}`);
+        setError(t("procedurePages.details.noProcedureFound", { reference: referenceNumber }));
         setIsLoading(false);
         return;
       }
@@ -428,7 +430,7 @@ export default function ProcedureDetailsPage() {
       setIsLoading(false);
     } catch (error) {
       console.error("[fetchProcedureData] Error:", error);
-      setError("Failed to load procedure data. Please try again.");
+      setError(t("procedurePages.details.loadFailed"));
       setIsLoading(false);
     }
   };
@@ -437,8 +439,8 @@ export default function ProcedureDetailsPage() {
   const handleExcelExport = async () => {
     if (!reference) {
       toast({
-        title: "Error",
-        description: "Procedure reference is required",
+        title: t("common.error"),
+        description: t("procedurePages.details.referenceRequired"),
         variant: "destructive",
       });
       return;
@@ -446,7 +448,7 @@ export default function ProcedureDetailsPage() {
 
     try {
       const url = `/api/procedures/${encodeURIComponent(reference)}/export/excel`;
-      
+
       // Create a temporary link to download the file
       const link = document.createElement('a');
       link.href = url;
@@ -454,16 +456,16 @@ export default function ProcedureDetailsPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       toast({
-        title: "Excel Export",
-        description: "Your Excel file is downloading.",
+        title: t("procedurePages.details.excelExportTitle"),
+        description: t("procedurePages.details.excelExportDownloading"),
       });
     } catch (error) {
       console.error('Error exporting to Excel:', error);
       toast({
-        title: "Excel Export Failed",
-        description: "There was an error exporting to Excel.",
+        title: t("procedurePages.details.excelExportFailedTitle"),
+        description: t("procedurePages.details.excelExportFailedDescription"),
         variant: "destructive",
       });
     }
@@ -473,8 +475,8 @@ export default function ProcedureDetailsPage() {
   const handleFinalBalancePdf = async () => {
     if (!reference) {
       toast({
-        title: "Error",
-        description: "Procedure reference is required",
+        title: t("common.error"),
+        description: t("procedurePages.details.referenceRequired"),
         variant: "destructive",
       });
       return;
@@ -484,19 +486,19 @@ export default function ProcedureDetailsPage() {
 
     try {
       const url = `/api/procedures/${encodeURIComponent(reference)}/export/final-balance-pdf`;
-      
+
       // Open in new tab for viewing
       window.open(url, '_blank');
-      
+
       toast({
-        title: "Final Balance Report",
-        description: "Your Final Balance Report is opening in a new tab.",
+        title: t("procedurePages.details.finalBalanceReport"),
+        description: t("procedurePages.details.finalBalanceOpening"),
       });
     } catch (error) {
       console.error('Error generating Final Balance PDF:', error);
       toast({
-        title: "PDF Generation Failed",
-        description: "There was an error generating the Final Balance Report.",
+        title: t("procedurePages.details.pdfGenerationFailedTitle"),
+        description: t("procedurePages.details.pdfGenerationFailedDescription"),
         variant: "destructive",
       });
     } finally {
@@ -577,8 +579,8 @@ export default function ProcedureDetailsPage() {
       // Only administrators can change status details
       if (!isAdmin) {
         toast({
-          title: "Permission Denied",
-          description: "Only administrators can change status details",
+          title: t("procedurePages.details.permissionDeniedTitle"),
+          description: t("procedurePages.details.permissionDeniedStatusDetails"),
           variant: "destructive",
         });
         return;
@@ -602,8 +604,10 @@ export default function ProcedureDetailsPage() {
         ));
 
         toast({
-          title: "Status Updated",
-          description: `Status detail has been ${updatedStatusDetail.isActive ? 'activated' : 'deactivated'}`,
+          title: t("procedurePages.details.statusUpdatedTitle"),
+          description: updatedStatusDetail.isActive
+            ? t("procedurePages.details.statusDetailActivated")
+            : t("procedurePages.details.statusDetailDeactivated"),
         });
       } else {
         throw new Error("Failed to update status");
@@ -611,8 +615,8 @@ export default function ProcedureDetailsPage() {
     } catch (error) {
       console.error("Error updating status detail:", error);
       toast({
-        title: "Update Failed",
-        description: "Could not update status detail. Please try again.",
+        title: t("procedurePages.details.updateFailedTitle"),
+        description: t("procedurePages.details.statusDetailUpdateFailed"),
         variant: "destructive",
       });
     }
@@ -624,8 +628,8 @@ export default function ProcedureDetailsPage() {
 
     if (!isAdmin) {
       toast({
-        title: "Permission Denied",
-        description: "Only administrators can update procedure status.",
+        title: t("procedurePages.details.permissionDeniedTitle"),
+        description: t("procedurePages.details.permissionDeniedUpdateStatus"),
         variant: "destructive",
       });
       return;
@@ -633,16 +637,16 @@ export default function ProcedureDetailsPage() {
 
     if (!procedure?.reference) {
       toast({
-        title: "Error",
-        description: "Procedure reference not found",
+        title: t("common.error"),
+        description: t("procedurePages.details.referenceNotFound"),
         variant: "destructive",
       });
       return;
     }
 
     toast({
-      title: "Updating Status",
-      description: "Please wait while we update the procedure status...",
+      title: t("procedurePages.details.updatingStatusTitle"),
+      description: t("procedurePages.details.updatingStatusDescription"),
     });
 
     // Prepare update data based on status type
@@ -666,8 +670,8 @@ export default function ProcedureDetailsPage() {
       console.log("[updateProcedureStatus] Response data:", responseData);
 
       toast({
-        title: "Status Updated",
-        description: `The ${statusType.replace('_', ' ')} has been updated successfully.`,
+        title: t("procedurePages.details.statusUpdatedTitle"),
+        description: t("procedurePages.details.statusUpdatedSuccess"),
         variant: "default",
       });
 
@@ -680,11 +684,22 @@ export default function ProcedureDetailsPage() {
     } catch (error) {
       console.error("[updateProcedureStatus] Error:", error);
       toast({
-        title: "Update Failed",
-        description: "There was a problem updating the status. Please try again.",
+        title: t("procedurePages.details.updateFailedTitle"),
+        description: t("procedurePages.details.statusUpdateProblem"),
         variant: "destructive",
       });
     }
+  };
+
+  // Translate a known status enum value to its localized label.
+  // Falls back to a title-cased version for any unmapped status.
+  const statusLabel = (status: string) => {
+    const key = `procedurePages.statusLabels.${status}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+    return status.split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
   };
 
   // Format status badge
@@ -692,15 +707,13 @@ export default function ProcedureDetailsPage() {
     if (!status) {
       return (
         <Badge className="bg-gray-500/20 text-gray-700 dark:text-gray-400">
-          Unknown
+          {t("procedurePages.details.statusUnknown")}
         </Badge>
       );
     }
 
     let badgeClass = "";
-    let formattedStatus = status.split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ');
+    let formattedStatus = statusLabel(status);
 
     // Shipment status colors
     if (["created", "import_started", "tareks_application", "tax_calc_insurance_sent", "transit_started", "transit_in_process"].includes(status)) {
@@ -778,8 +791,8 @@ export default function ProcedureDetailsPage() {
     } else {
       // Show error toast if neither method is available
       toast({
-        title: "Download Failed",
-        description: "Document not found in storage",
+        title: t("procedurePages.details.downloadFailedTitle"),
+        description: t("procedurePages.details.documentNotFound"),
         variant: "destructive",
       });
     }
@@ -812,12 +825,12 @@ export default function ProcedureDetailsPage() {
 
   if (isLoading) {
     return (
-      <PageLayout title="Procedure Details" navItems={items}>
+      <PageLayout title={t("procedurePages.details.title")} navItems={items}>
         <div className="container mx-auto p-6">
           <div className="mb-6 flex items-center">
             <Button variant="outline" size="sm" onClick={() => setLocation('/procedures')}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Procedures
+              {t("procedurePages.backToProcedures")}
             </Button>
           </div>
 
@@ -856,17 +869,17 @@ export default function ProcedureDetailsPage() {
 
   if (error) {
     return (
-      <PageLayout title="Procedure Details" navItems={items}>
+      <PageLayout title={t("procedurePages.details.title")} navItems={items}>
         <div className="container mx-auto p-6">
           <div className="mb-6 flex items-center">
             <Button variant="outline" size="sm" onClick={() => setLocation('/procedures')}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Procedures
+              {t("procedurePages.backToProcedures")}
             </Button>
           </div>
 
           <Alert variant="destructive" className="mb-6">
-            <AlertTitle>Error</AlertTitle>
+            <AlertTitle>{t("common.error")}</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         </div>
@@ -876,18 +889,18 @@ export default function ProcedureDetailsPage() {
 
   if (!procedure) {
     return (
-      <PageLayout title="Procedure Details" navItems={items}>
+      <PageLayout title={t("procedurePages.details.title")} navItems={items}>
         <div className="container mx-auto p-6">
           <div className="mb-6 flex items-center">
             <Button variant="outline" size="sm" onClick={() => setLocation('/procedures')}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Procedures
+              {t("procedurePages.backToProcedures")}
             </Button>
           </div>
 
           <Alert variant="destructive" className="mb-6">
-            <AlertTitle>Not Found</AlertTitle>
-            <AlertDescription>No procedure details available.</AlertDescription>
+            <AlertTitle>{t("procedurePages.details.notFoundTitle")}</AlertTitle>
+            <AlertDescription>{t("procedurePages.details.notFoundDescription")}</AlertDescription>
           </Alert>
         </div>
       </PageLayout>
@@ -906,12 +919,12 @@ export default function ProcedureDetailsPage() {
   };
 
   return (
-    <PageLayout title="Procedure Details" navItems={items}>
+    <PageLayout title={t("procedurePages.details.title")} navItems={items}>
       <div className="container mx-auto p-6">
         <div className="mb-6 flex items-center justify-between">
           <Button variant="outline" size="sm" onClick={() => setLocation('/procedures')}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Procedures
+            {t("procedurePages.backToProcedures")}
           </Button>
 
           <div className="flex items-center gap-2">
@@ -923,7 +936,7 @@ export default function ProcedureDetailsPage() {
               data-testid="button-export-excel"
             >
               <Download className="mr-2 h-4 w-4" />
-              Export to Excel
+              {t("procedurePages.details.exportToExcel")}
             </Button>
 
             <AddToMasterExcelButton procedureReference={procedure.reference} />
@@ -937,20 +950,20 @@ export default function ProcedureDetailsPage() {
               {isGeneratingFinalBalance ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating...
+                  {t("procedurePages.details.generating")}
                 </>
               ) : (
                 <>
                   <Receipt className="mr-2 h-4 w-4" />
-                  Final Balance Report
+                  {t("procedurePages.details.finalBalanceReport")}
                 </>
               )}
             </Button>
-            
+
             {isAdmin && (
               <Link href={`/expense-entry?reference=${procedure.reference}`}>
                 <Button>
-                  Add or Edit Expenses
+                  {t("procedurePages.details.addOrEditExpenses")}
                 </Button>
               </Link>
             )}
@@ -965,9 +978,9 @@ export default function ProcedureDetailsPage() {
               <div className="p-4 md:p-6 rounded-lg flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-6">
                 {/* Logo Section */}
                 <div className="flex-shrink-0">
-                  <img 
+                  <img
                     src={getCompanyLogo(procedure.reference)}
-                    alt="Company Logo"
+                    alt={t("procedurePages.details.companyLogoAlt")}
                     className="h-20 w-20 md:h-24 md:w-24 object-contain"
                   />
                 </div>
@@ -975,20 +988,20 @@ export default function ProcedureDetailsPage() {
                 {/* Text Section */}
                 <div className="flex-grow text-center sm:text-left">
                   <h1 className="text-2xl font-bold">{procedure.reference}</h1>
-                  <p className="text-muted-foreground mt-1">Overview of procedure details and status</p>
+                  <p className="text-muted-foreground mt-1">{t("procedurePages.details.overviewSubtitle")}</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium whitespace-nowrap">Shipment Status:</span>
+                  <span className="text-sm font-medium whitespace-nowrap">{t("procedurePages.details.shipmentStatusLabel")}</span>
                   {formatStatusBadge(procedure.shipment_status)}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium whitespace-nowrap">Payment Status:</span>
+                  <span className="text-sm font-medium whitespace-nowrap">{t("procedurePages.details.paymentStatusLabel")}</span>
                   {formatStatusBadge(procedure.payment_status)}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium whitespace-nowrap">Document Status:</span>
+                  <span className="text-sm font-medium whitespace-nowrap">{t("procedurePages.details.documentStatusLabel")}</span>
                   {formatStatusBadge(procedure.document_status)}
                 </div>
               </div>
@@ -997,76 +1010,76 @@ export default function ProcedureDetailsPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"> {/* Increased to 4 columns */}
               <div>
-                <h4 className="text-lg font-medium mb-2 underline">Shipper Information</h4>
+                <h4 className="text-lg font-medium mb-2 underline">{t("procedurePages.details.shipperInformation")}</h4>
                 <div className="space-y-2">
                   <div>
-                    <span className="text-sm text-muted-foreground">Shipper:</span>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.shipperField")}</span>
                     <p className="font-medium">{procedure.shipper}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-muted-foreground">Invoice Number:</span>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.invoiceNumberField")}</span>
                     <p className="font-medium">{procedure.invoice_no}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-muted-foreground">Invoice Date:</span>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.invoiceDateField")}</span>
                     <p className="font-medium">{formatDateWithFallback(procedure.invoice_date)}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-muted-foreground">Invoice Amount:</span>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.invoiceAmountField")}</span>
                     <p className="font-medium">{formatCurrency(procedure.amount, procedure.currency)}</p>
                   </div>
                 </div>
               </div>
 
               <div>
-                <h4 className="text-lg font-medium mb-2 underline">Shipment Details</h4>
+                <h4 className="text-lg font-medium mb-2 underline">{t("procedurePages.details.shipmentDetails")}</h4>
                 <div className="space-y-2">
                   <div>
-                    <span className="text-sm text-muted-foreground">Package Type:</span>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.packageTypeField")}</span>
                     <p className="font-medium">{procedure.package}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-muted-foreground">Weight:</span>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.weightField")}</span>
                     <p className="font-medium">{procedure.kg} kg</p>
                   </div>
                   <div>
-                    <span className="text-sm text-muted-foreground">Pieces:</span>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.piecesField")}</span>
                     <p className="font-medium">{procedure.piece}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-muted-foreground">Arrival Date:</span>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.arrivalDateField")}</span>
                     <p className="font-medium">{formatDateWithFallback(procedure.arrival_date)}</p>
                   </div>
                 </div>
               </div>
 
               <div>
-                <h4 className="text-lg font-medium mb-2 underline">Transportation Details</h4>
+                <h4 className="text-lg font-medium mb-2 underline">{t("procedurePages.details.transportationDetails")}</h4>
                 <div className="space-y-2">
                   <div>
-                    <span className="text-sm text-muted-foreground">AWB Number:</span>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.awbNumberField")}</span>
                     <p className="font-medium">{procedure.awb_number}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-muted-foreground">Carrier:</span>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.carrierField")}</span>
                     <p className="font-medium">{procedure.carrier}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-muted-foreground">Customs Office:</span>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.customsOfficeField")}</span>
                     <p className="font-medium">{procedure.customs}</p>
                   </div>
                 </div>
               </div>
 
               <div>
-                <h4 className="text-lg font-medium mb-2 underline">Import Declaration</h4>
+                <h4 className="text-lg font-medium mb-2 underline">{t("procedurePages.details.importDeclaration")}</h4>
                 <div className="space-y-2">
                   <div>
-                    <span className="text-sm text-muted-foreground">Declaration Number:</span>
-                    <p className="font-medium">{procedure.import_dec_number || "Not available"}</p>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.declarationNumberField")}</span>
+                    <p className="font-medium">{procedure.import_dec_number || t("procedurePages.details.notAvailable")}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-muted-foreground">Declaration Date:</span>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.declarationDateField")}</span>
                     <p className="font-medium">{formatDateWithFallback(procedure.import_dec_date)}</p>
                   </div>
                 </div>
@@ -1078,9 +1091,9 @@ export default function ProcedureDetailsPage() {
         {/* Status Details Section */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Status Details</CardTitle>
+            <CardTitle>{t("procedurePages.details.statusDetailsTitle")}</CardTitle>
             <CardDescription>
-              Detailed status information for shipping, payment, and documentation
+              {t("procedurePages.details.statusDetailsDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1088,22 +1101,22 @@ export default function ProcedureDetailsPage() {
               {/* Shipment Status */}
               <div className="border rounded-lg p-4">
                 <h4 className="text-lg font-medium mb-4 text-blue-700 dark:text-blue-300 flex items-center">
-                  Shipment Status
+                  {t("procedurePages.details.shipmentStatusHeading")}
                 </h4>
                 <div className="space-y-3">
                   {/* Shipment Status Steps - in sequential order */}
                   {[
-                    { status: "created", label: "Created" },
-                    { status: "tax_calc_insurance_sent", label: "Tax Calc & Insurance Sent" },
-                    { status: "arrived", label: "Arrived" },
-                    { status: "transit_started", label: "Transit Started" },
-                    { status: "transit_in_process", label: "Transit in Process" },
-                    { status: "tareks_application", label: "Tareks Application" },
-                    { status: "tareks_approved", label: "Tareks Approved" },
-                    { status: "import_started", label: "Import Started" },
-                    { status: "import_finished", label: "Import Finished" },
-                    { status: "delivered", label: "Delivered" },
-                    { status: "closed", label: "Closed" }
+                    { status: "created" },
+                    { status: "tax_calc_insurance_sent" },
+                    { status: "arrived" },
+                    { status: "transit_started" },
+                    { status: "transit_in_process" },
+                    { status: "tareks_application" },
+                    { status: "tareks_approved" },
+                    { status: "import_started" },
+                    { status: "import_finished" },
+                    { status: "delivered" },
+                    { status: "closed" }
                   ].map((step, index, steps) => {
                     // Find the active status of the procedure
                     const activeStatus = procedure?.shipment_status || "";
@@ -1161,7 +1174,7 @@ export default function ProcedureDetailsPage() {
                           </div>
                           <div className="ml-2 flex-1">
                             <Badge className={cn(badgeClass, "break-normal w-full text-center")}>
-                              {step.label}
+                              {statusLabel(step.status)}
                             </Badge>
                           </div>
                         </div>
@@ -1174,17 +1187,17 @@ export default function ProcedureDetailsPage() {
               {/* Payment Status */}
               <div className="border rounded-lg p-4">
                 <h4 className="text-lg font-medium mb-4 text-green-700 dark:text-green-300 flex items-center">
-                  Payment Status
+                  {t("procedurePages.details.paymentStatusHeading")}
                 </h4>
                 <div className="space-y-3">
                   {/* Payment Status Steps - in sequential order */}
                   {[
-                    { status: "taxletter_sent", label: "Taxletter Sent" },
-                    { status: "waiting_adv_payment", label: "Waiting Adv. Payment" },
-                    { status: "advance_payment_received", label: "Advance Payment Received" },
-                    { status: "final_balance_letter_sent", label: "Final Balance Letter Sent" },
-                    { status: "balance_received", label: "Balance Received" },
-                    { status: "closed", label: "Closed" }
+                    { status: "taxletter_sent" },
+                    { status: "waiting_adv_payment" },
+                    { status: "advance_payment_received" },
+                    { status: "final_balance_letter_sent" },
+                    { status: "balance_received" },
+                    { status: "closed" }
                   ].map((step, index, steps) => {
                     // Find the active status of the procedure
                     const activeStatus = procedure?.payment_status || "";
@@ -1239,7 +1252,7 @@ export default function ProcedureDetailsPage() {
                           </div>
                           <div className="ml-2 flex-1">
                             <Badge className={cn(badgeClass, "break-normal w-full text-center")}>
-                              {step.label}
+                              {statusLabel(step.status)}
                             </Badge>
                           </div>
                         </div>
@@ -1252,16 +1265,16 @@ export default function ProcedureDetailsPage() {
               {/* Document Status */}
               <div className="border rounded-lg p-4">
                 <h4 className="text-lg font-medium mb-4 text-amber-700 dark:text-amber-300 flex items-center">
-                  Document Status
+                  {t("procedurePages.details.documentStatusHeading")}
                 </h4>
                 <div className="space-y-3">
                   {/* Document Status Steps - in sequential order */}
                   {[
-                    { status: "import_doc_pending", label: "Import Doc. Pending" },
-                    { status: "import_doc_received", label: "Import Doc. Received" },
-                    { status: "pod_sent", label: "POD Sent" },
-                    { status: "expense_documents_sent", label: "Expense & Documents Sent" },
-                    { status: "closed", label: "Closed" }
+                    { status: "import_doc_pending" },
+                    { status: "import_doc_received" },
+                    { status: "pod_sent" },
+                    { status: "expense_documents_sent" },
+                    { status: "closed" }
                   ].map((step, index, steps) => {
                     // Find the active status of the procedure
                     const activeStatus = procedure?.document_status || "";
@@ -1313,7 +1326,7 @@ export default function ProcedureDetailsPage() {
                           </div>
                           <div className="ml-2 flex-1">
                             <Badge className={cn(badgeClass, "break-normal w-full text-center")}>
-                              {step.label}
+                              {statusLabel(step.status)}
                             </Badge>
                           </div>
                         </div>
@@ -1329,9 +1342,9 @@ export default function ProcedureDetailsPage() {
         {/* Import Documents Section */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Import Documents</CardTitle>
+            <CardTitle>{t("procedurePages.details.importDocumentsTitle")}</CardTitle>
             <CardDescription>
-              All documents related to this import procedure
+              {t("procedurePages.details.importDocumentsDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1339,10 +1352,10 @@ export default function ProcedureDetailsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-1/4">Document Type</TableHead>
-                    <TableHead className="w-2/5">Document Name</TableHead>
-                    <TableHead className="w-1/4">Details</TableHead>
-                    <TableHead className="w-24 text-center">Actions</TableHead>
+                    <TableHead className="w-1/4">{t("procedurePages.details.documentType")}</TableHead>
+                    <TableHead className="w-2/5">{t("procedurePages.details.documentName")}</TableHead>
+                    <TableHead className="w-1/4">{t("procedurePages.details.detailsColumn")}</TableHead>
+                    <TableHead className="w-24 text-center">{t("procedurePages.details.actionsColumn")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1353,7 +1366,7 @@ export default function ProcedureDetailsPage() {
                           .split('_')
                           .map(word => word.charAt(0).toUpperCase() + word.slice(1))
                           .join(' ')
-                      : 'Other';
+                      : t("procedurePages.details.otherType");
                       
                     return (
                       <TableRow key={doc.id}>
@@ -1380,7 +1393,7 @@ export default function ProcedureDetailsPage() {
                               onClick={() => handleDownloadDocument(doc)}
                             >
                               <Download className="h-4 w-4 mr-2" />
-                              Download
+                              {t("procedurePages.details.download")}
                             </Button>
                           </div>
                         </TableCell>
@@ -1391,9 +1404,9 @@ export default function ProcedureDetailsPage() {
               </Table>
             ) : (
               <Alert>
-                <AlertTitle>No Import Documents</AlertTitle>
+                <AlertTitle>{t("procedurePages.details.noImportDocumentsTitle")}</AlertTitle>
                 <AlertDescription>
-                  No import documents have been uploaded for this procedure yet.
+                  {t("procedurePages.details.noImportDocumentsDescription")}
                 </AlertDescription>
               </Alert>
             )}
@@ -1403,9 +1416,9 @@ export default function ProcedureDetailsPage() {
         {/* Tax Details Section */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Tax Details</CardTitle>
+            <CardTitle>{t("procedurePages.details.taxDetailsTitle")}</CardTitle>
             <CardDescription>
-              Tax information related to this procedure
+              {t("procedurePages.details.taxDetailsDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1414,35 +1427,35 @@ export default function ProcedureDetailsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Tax Type</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>{t("procedurePages.details.taxType")}</TableHead>
+                      <TableHead className="text-right">{t("procedurePages.details.amount")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     <TableRow>
-                      <TableCell>Customs Tax</TableCell>
+                      <TableCell>{t("procedurePages.details.customsTax")}</TableCell>
                       <TableCell className="text-right">{formatTaxAmount(tax.customsTax)}</TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell>Additional Customs Tax</TableCell>
+                      <TableCell>{t("procedurePages.details.additionalCustomsTax")}</TableCell>
                       <TableCell className="text-right">{formatTaxAmount(tax.additionalCustomsTax)}</TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell>KKDF</TableCell>
+                      <TableCell>{t("procedurePages.details.kkdf")}</TableCell>
                       <TableCell className="text-right">{formatTaxAmount(tax.kkdf)}</TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell>VAT</TableCell>
+                      <TableCell>{t("procedurePages.details.vat")}</TableCell>
                       <TableCell className="text-right">{formatTaxAmount(tax.vat)}</TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell>Stamp Tax</TableCell>
+                      <TableCell>{t("procedurePages.details.stampTax")}</TableCell>
                       <TableCell className="text-right">{formatTaxAmount(tax.stampTax)}</TableCell>
                     </TableRow>
                   </TableBody>
                   <TableCaption>
                     <div className="mt-6 flex justify-end text-lg font-semibold text-[#0C0A09]">
-                      <span className="mr-4">Tax Total:</span>
+                      <span className="mr-4">{t("procedurePages.details.taxTotal")}</span>
                       <span>
                         {formatTaxAmount(
                           (parseFloat(tax.customsTax) || 0) +
@@ -1459,7 +1472,7 @@ export default function ProcedureDetailsPage() {
                 {/* Tax Documents */}
                 {tax.id && getDocumentsForExpense('tax', tax.id).length > 0 && (
                   <div className="mt-6">
-                    <h4 className="text-sm font-medium mb-3">Tax Documents</h4>
+                    <h4 className="text-sm font-medium mb-3">{t("procedurePages.details.taxDocuments")}</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {getDocumentsForExpense('tax', tax.id).map((doc) => (
                         <div 
@@ -1484,7 +1497,7 @@ export default function ProcedureDetailsPage() {
                             onClick={() => handleDownloadDocument(doc)}
                           >
                             <Download className="h-4 w-4 mr-2" />
-                            Download
+                            {t("procedurePages.details.download")}
                           </Button>
                         </div>
                       ))}
@@ -1494,9 +1507,9 @@ export default function ProcedureDetailsPage() {
               </div>
             ) : (
               <Alert>
-                <AlertTitle>No Tax Data</AlertTitle>
+                <AlertTitle>{t("procedurePages.details.noTaxDataTitle")}</AlertTitle>
                 <AlertDescription>
-                  No tax information has been recorded for this procedure yet.
+                  {t("procedurePages.details.noTaxDataDescription")}
                 </AlertDescription>
               </Alert>
             )}
@@ -1506,9 +1519,9 @@ export default function ProcedureDetailsPage() {
         {/* Import Expenses Section */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Import Expenses List</CardTitle>
+            <CardTitle>{t("procedurePages.details.importExpensesTitle")}</CardTitle>
             <CardDescription>
-              Added expenses for this shipment
+              {t("procedurePages.details.importExpensesDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1517,11 +1530,11 @@ export default function ProcedureDetailsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Details</TableHead>
-                      <TableHead className="text-center">Download</TableHead>
+                      <TableHead>{t("procedurePages.details.category")}</TableHead>
+                      <TableHead>{t("procedurePages.details.amount")}</TableHead>
+                      <TableHead>{t("procedurePages.details.date")}</TableHead>
+                      <TableHead>{t("procedurePages.details.detailsColumn")}</TableHead>
+                      <TableHead className="text-center">{t("procedurePages.details.download")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1540,28 +1553,28 @@ export default function ProcedureDetailsPage() {
                           <div className="space-y-1">
                             {expense.policyNumber && (
                               <p className="text-sm">
-                                Policy: {expense.policyNumber}
+                                {t("procedurePages.details.policyLabel")} {expense.policyNumber}
                                 {expense.issuer && (
-                                  <><br />Issuer: {expense.issuer}</>
+                                  <><br />{t("procedurePages.details.issuerLabel")} {expense.issuer}</>
                                 )}
                               </p>
                             )}
                             {expense.invoiceNumber && (
                               <p className="text-sm">
-                                Invoice: {expense.invoiceNumber}
+                                {t("procedurePages.details.invoiceLabel")} {expense.invoiceNumber}
                                 {expense.issuer && !expense.policyNumber && (
-                                  <><br />Issuer: {expense.issuer}</>
+                                  <><br />{t("procedurePages.details.issuerLabel")} {expense.issuer}</>
                                 )}
                               </p>
                             )}
                             {expense.documentNumber && (
                               <p className="text-sm">
-                                Doc #: {expense.documentNumber}
+                                {t("procedurePages.details.docLabel")} {expense.documentNumber}
                               </p>
                             )}
                             {!expense.policyNumber && !expense.invoiceNumber && expense.issuer && (
                               <p className="text-sm">
-                                Issuer: {expense.issuer}
+                                {t("procedurePages.details.issuerLabel")} {expense.issuer}
                               </p>
                             )}
                           </div>
@@ -1581,11 +1594,11 @@ export default function ProcedureDetailsPage() {
                                           onClick={() => handleDownloadDocument(doc)}
                                         >
                                           <Download className="h-4 w-4 mr-2" />
-                                          Download
+                                          {t("procedurePages.details.download")}
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
-                                        <p>Download {doc.originalFilename}</p>
+                                        <p>{t("procedurePages.details.downloadFile", { filename: doc.originalFilename })}</p>
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
@@ -1593,7 +1606,7 @@ export default function ProcedureDetailsPage() {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-sm text-muted-foreground">No documents</span>
+                            <span className="text-sm text-muted-foreground">{t("procedurePages.details.noDocuments")}</span>
                           )}
                         </TableCell>
                       </TableRow>
@@ -1603,16 +1616,16 @@ export default function ProcedureDetailsPage() {
               </>
             ) : (
               <Alert>
-                <AlertTitle>No Import Expenses</AlertTitle>
+                <AlertTitle>{t("procedurePages.details.noImportExpensesTitle")}</AlertTitle>
                 <AlertDescription>
-                  No import expenses have been recorded for this procedure yet.
+                  {t("procedurePages.details.noImportExpensesDescription")}
                 </AlertDescription>
               </Alert>
             )}
 
             {importExpenses.length > 0 && (
               <div className="mt-6 flex justify-end text-lg font-semibold text-[#0C0A09]">
-                <span className="mr-4">Import Expenses Total:</span>
+                <span className="mr-4">{t("procedurePages.details.importExpensesTotal")}</span>
                 <span>
                   {formatTaxAmount(
                     importExpenses.reduce((total, expense) => total + parseFloat(expense.amount), 0)
@@ -1626,9 +1639,9 @@ export default function ProcedureDetailsPage() {
         {/* Import Service Invoice Section */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Service Invoices</CardTitle>
+            <CardTitle>{t("procedurePages.details.serviceInvoicesTitle")}</CardTitle>
             <CardDescription>
-              Service invoices related to this procedure
+              {t("procedurePages.details.serviceInvoicesDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1637,11 +1650,11 @@ export default function ProcedureDetailsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Invoice Number</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Notes</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="text-right">Documents</TableHead>
+                      <TableHead>{t("procedurePages.details.invoiceNumberColumn")}</TableHead>
+                      <TableHead>{t("procedurePages.details.date")}</TableHead>
+                      <TableHead>{t("procedurePages.details.notes")}</TableHead>
+                      <TableHead className="text-right">{t("procedurePages.details.amount")}</TableHead>
+                      <TableHead className="text-right">{t("procedurePages.details.documents")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1668,11 +1681,11 @@ export default function ProcedureDetailsPage() {
                                           onClick={() => handleDownloadDocument(doc)}
                                         >
                                           <Download className="h-4 w-4 mr-2" />
-                                          Download
+                                          {t("procedurePages.details.download")}
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
-                                        <p>Download {doc.originalFilename}</p>
+                                        <p>{t("procedurePages.details.downloadFile", { filename: doc.originalFilename })}</p>
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
@@ -1680,7 +1693,7 @@ export default function ProcedureDetailsPage() {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-sm text-muted-foreground">No documents</span>
+                            <span className="text-sm text-muted-foreground">{t("procedurePages.details.noDocuments")}</span>
                           )}
                         </TableCell>
                       </TableRow>
@@ -1689,7 +1702,7 @@ export default function ProcedureDetailsPage() {
                 </Table>
 
                 <div className="mt-6 flex justify-end text-lg font-semibold text-[#0C0A09]">
-                  <span className="mr-4">Service Invoices Total:</span>
+                  <span className="mr-4">{t("procedurePages.details.serviceInvoicesTotal")}</span>
                   <span>
                     {formatTaxAmount(
                       serviceInvoices.reduce((total, invoice) => total + parseFloat(invoice.amount), 0)
@@ -1699,9 +1712,9 @@ export default function ProcedureDetailsPage() {
               </>
             ) : (
               <Alert>
-                <AlertTitle>No Service Invoices</AlertTitle>
+                <AlertTitle>{t("procedurePages.details.noServiceInvoicesTitle")}</AlertTitle>
                 <AlertDescription>
-                  No service invoices have been recorded for this procedure yet.
+                  {t("procedurePages.details.noServiceInvoicesDescription")}
                 </AlertDescription>
               </Alert>
             )}
@@ -1715,26 +1728,26 @@ export default function ProcedureDetailsPage() {
         {/* Financial Summary Section */}
         <Card>
           <CardHeader>
-            <CardTitle>Financial Summary</CardTitle>
+            <CardTitle>{t("procedurePages.details.financialSummaryTitle")}</CardTitle>
             <CardDescription>
-              Overview of all financial aspects of this procedure
+              {t("procedurePages.details.financialSummaryDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <h3 className="text-lg font-semibold mb-4">Expense Breakdown</h3>
+                <h3 className="text-lg font-semibold mb-4">{t("procedurePages.details.expenseBreakdown")}</h3>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>{t("procedurePages.details.category")}</TableHead>
+                      <TableHead className="text-right">{t("procedurePages.details.amount")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {tax && (
                       <TableRow>
-                        <TableCell>Taxes</TableCell>
+                        <TableCell>{t("procedurePages.details.taxesRow")}</TableCell>
                         <TableCell className="text-right">
                           {formatTaxAmount(
                             (parseFloat(tax.customsTax) || 0) +
@@ -1748,7 +1761,7 @@ export default function ProcedureDetailsPage() {
                     )}
                     {importExpenses.length > 0 && (
                       <TableRow>
-                        <TableCell>Import Expenses</TableCell>
+                        <TableCell>{t("procedurePages.details.importExpensesRow")}</TableCell>
                         <TableCell className="text-right">
                           {formatTaxAmount(
                             importExpenses.reduce((total, expense) => total + parseFloat(expense.amount), 0)
@@ -1758,7 +1771,7 @@ export default function ProcedureDetailsPage() {
                     )}
                     {serviceInvoices.length > 0 && (
                       <TableRow>
-                        <TableCell>Service Invoices</TableCell>
+                        <TableCell>{t("procedurePages.details.serviceInvoicesRow")}</TableCell>
                         <TableCell className="text-right">
                           {formatTaxAmount(
                             serviceInvoices.reduce((total, invoice) => total + parseFloat(invoice.amount), 0)
@@ -1767,23 +1780,23 @@ export default function ProcedureDetailsPage() {
                       </TableRow>
                     )}
                     <TableRow className="font-bold text-red-600">
-                      <TableCell><span className="underline">Total Expenses</span></TableCell>
+                      <TableCell><span className="underline">{t("procedurePages.details.totalExpenses")}</span></TableCell>
                       <TableCell className="text-right underline">{formatTaxAmount(totalValue)}</TableCell>
                     </TableRow>
                     <TableRow className="text-[#0C0A09]">
-                      <TableCell>Advance Payment</TableCell>
+                      <TableCell>{t("procedurePages.details.advancePayment")}</TableCell>
                       <TableCell className="text-right font-medium">{formatTaxAmount(advancePayment)}</TableCell>
                     </TableRow>
                     <TableRow className="text-[#0C0A09]">
-                      <TableCell>Balance Payment</TableCell>
+                      <TableCell>{t("procedurePages.details.balancePayment")}</TableCell>
                       <TableCell className="text-right font-medium">{formatTaxAmount(balancePayment)}</TableCell>
                     </TableRow>
                     <TableRow className="font-bold text-green-600">
-                      <TableCell><span className="underline">Total Payments</span></TableCell>
+                      <TableCell><span className="underline">{t("procedurePages.details.totalPayments")}</span></TableCell>
                       <TableCell className="text-right font-bold underline">{formatTaxAmount(totalPayments)}</TableCell>
                     </TableRow>
                     <TableRow className={remainingBalance > 0 ? "text-red-500 font-bold" : "text-green-500 font-bold"}>
-                      <TableCell><span className="underline">{remainingBalance > 0 ? "Remaining Balance" : "Excess Payment"}</span></TableCell>
+                      <TableCell><span className="underline">{remainingBalance > 0 ? t("procedurePages.details.remainingBalance") : t("procedurePages.details.excessPayment")}</span></TableCell>
                       <TableCell className="text-right underline">{formatTaxAmount(Math.abs(remainingBalance))}</TableCell>
                     </TableRow>
                   </TableBody>
@@ -1792,10 +1805,10 @@ export default function ProcedureDetailsPage() {
 
               <div>
                 <div className="flex flex-col h-full">
-                  <h3 className="text-lg font-semibold mb-3">Payment Progress</h3>
+                  <h3 className="text-lg font-semibold mb-3">{t("procedurePages.details.paymentProgress")}</h3>
                   <div className="mb-4">
                     <div className="flex justify-between mb-1">
-                      <span className="text-sm">Payment Progress</span>
+                      <span className="text-sm">{t("procedurePages.details.paymentProgress")}</span>
                       <span className="text-sm">
                         {Math.min(100, Math.round((totalPayments / totalValue) * 100))}%
                       </span>
@@ -1815,44 +1828,44 @@ export default function ProcedureDetailsPage() {
                         onClick={() => setIsViewDistributionsOpen(true)}
                       >
                         <BarChart2 className="h-4 w-4 mr-2" />
-                        View Payment Distributions ({paymentDistributions.length})
+                        {t("procedurePages.details.viewPaymentDistributions", { count: paymentDistributions.length })}
                       </Button>
                     </div>
                   ) : null}
 
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="border rounded-md p-4 text-center text-red-600">
-                      <p className="text-sm underline font-bold">Total Expenses</p>
+                      <p className="text-sm underline font-bold">{t("procedurePages.details.totalExpenses")}</p>
                       <p className="text-xl font-bold underline">{formatTaxAmount(totalValue)}</p>
                     </div>
                     <div className="border rounded-md p-4 text-center text-green-600">
-                      <p className="text-sm underline font-bold">Total Payments</p>
+                      <p className="text-sm underline font-bold">{t("procedurePages.details.totalPayments")}</p>
                       <p className="text-xl font-bold underline">{formatTaxAmount(totalPayments)}</p>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="border rounded-md p-4 text-center">
-                      <p className="text-sm text-[#0C0A09] dark:text-[#0C0A09]">Advance Payment</p>
+                      <p className="text-sm text-[#0C0A09] dark:text-[#0C0A09]">{t("procedurePages.details.advancePayment")}</p>
                       <p className="text-xl font-bold text-[#0C0A09] dark:text-[#0C0A09]">{formatTaxAmount(advancePayment)}</p>
                     </div>
                     <div className="border rounded-md p-4 text-center">
-                      <p className="text-sm text-[#0C0A09] dark:text-[#0C0A09]">Balance Payment</p>
+                      <p className="text-sm text-[#0C0A09] dark:text-[#0C0A09]">{t("procedurePages.details.balancePayment")}</p>
                       <p className="text-xl font-bold text-[#0C0A09] dark:text-[#0C0A09]">{formatTaxAmount(balancePayment)}</p>
                     </div>
                   </div>
 
                   <div className={`border rounded-md p-4 mt-auto ${remainingBalance > 0 ? "bg-red-50 dark:bg-red-950 border-red-200" : "bg-green-50 dark:bg-green-950 border-green-200"}`}>
                     <div className="flex justify-between items-center">
-                      <p className="font-medium underline">{remainingBalance > 0 ? "Remaining Balance" : "Excess Payment"}</p>
+                      <p className="font-medium underline">{remainingBalance > 0 ? t("procedurePages.details.remainingBalance") : t("procedurePages.details.excessPayment")}</p>
                       <p className={`text-2xl font-bold underline ${remainingBalance > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
                         {formatTaxAmount(Math.abs(remainingBalance))}
                       </p>
                     </div>
                     <p className="text-sm mt-2">
-                      {remainingBalance > 0 
-                        ? "Additional payment required to cover all expenses."
-                        : "Client has paid more than the current expense total."}
+                      {remainingBalance > 0
+                        ? t("procedurePages.details.additionalPaymentRequired")
+                        : t("procedurePages.details.clientOverpaid")}
                     </p>
                   </div>
                 </div>
@@ -1865,20 +1878,20 @@ export default function ProcedureDetailsPage() {
         {taxProducts.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Products</CardTitle>
+              <CardTitle>{t("procedurePages.details.productsTitle")}</CardTitle>
               <CardDescription>
-                Products included in this procedure's tax calculation
+                {t("procedurePages.details.productsDescription")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Style No</TableHead>
-                    <TableHead className="text-right">Cost (USD)</TableHead>
-                    <TableHead className="text-right">Unit</TableHead>
-                    <TableHead className="text-right">Total Value (USD)</TableHead>
-                    <TableHead>TR HS Code</TableHead>
+                    <TableHead>{t("procedurePages.details.styleNo")}</TableHead>
+                    <TableHead className="text-right">{t("procedurePages.details.costUsd")}</TableHead>
+                    <TableHead className="text-right">{t("procedurePages.details.unit")}</TableHead>
+                    <TableHead className="text-right">{t("procedurePages.details.totalValueUsd")}</TableHead>
+                    <TableHead>{t("procedurePages.details.trHsCode")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

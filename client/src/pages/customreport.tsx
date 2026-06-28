@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
 import { apiRequest } from "@/lib/queryClient"
@@ -228,6 +229,7 @@ export default function CustomReportPage() {
   const [reportData, setReportData] = useState<any[] | null>(null)
   const [showWizard, setShowWizard] = useState(false)
   const { toast } = useToast()
+  const { t } = useTranslation()
 
   // Turkish Lira formatting function
   const formatTurkishLira = (value: any): string => {
@@ -386,8 +388,8 @@ export default function CustomReportPage() {
   const exportToExcel = async () => {
     if (!reportData || reportData.length === 0) {
       toast({
-        title: "No Data to Export",
-        description: "Please generate a report first before exporting to Excel.",
+        title: t('reportsPages.custom.noDataToExportTitle'),
+        description: t('reportsPages.custom.noDataToExportDesc'),
         variant: "destructive",
       })
       return
@@ -447,14 +449,14 @@ export default function CustomReportPage() {
       window.URL.revokeObjectURL(url)
 
       toast({
-        title: "Excel Export Successful",
-        description: `Successfully exported ${reportData.length} rows to Excel.`,
+        title: t('reportsPages.custom.exportSuccessTitle'),
+        description: t('reportsPages.custom.exportSuccessDesc', { count: reportData.length }),
       })
     } catch (error) {
       console.error('Error exporting to Excel:', error)
       toast({
-        title: "Export Failed",
-        description: error instanceof Error ? error.message : "Failed to export to Excel. Please try again.",
+        title: t('reportsPages.custom.exportFailedTitle'),
+        description: error instanceof Error ? error.message : t('reportsPages.custom.exportFailedDesc'),
         variant: "destructive",
       })
     } finally {
@@ -465,8 +467,8 @@ export default function CustomReportPage() {
   const generateReport = async () => {
     if (!selectedReportType) {
       toast({
-        title: "Report Type Required",
-        description: "Please select a report type to generate the report.",
+        title: t('reportsPages.custom.reportTypeRequiredTitle'),
+        description: t('reportsPages.custom.reportTypeRequiredDesc'),
         variant: "destructive",
       })
       return
@@ -502,8 +504,8 @@ export default function CustomReportPage() {
       if (result.success) {
         setReportData(result.data)
         toast({
-          title: "Report Generated",
-          description: `Successfully generated ${result.totalRows} rows of data.`,
+          title: t('reportsPages.custom.reportGeneratedTitle'),
+          description: t('reportsPages.custom.reportGeneratedDesc', { count: result.totalRows }),
         })
       } else {
         throw new Error(result.error || 'Failed to generate report')
@@ -511,8 +513,8 @@ export default function CustomReportPage() {
     } catch (error) {
       console.error('Error generating report:', error)
       toast({
-        title: "Generation Failed",
-        description: error instanceof Error ? error.message : "Failed to generate report. Please try again.",
+        title: t('reportsPages.custom.generationFailedTitle'),
+        description: error instanceof Error ? error.message : t('reportsPages.custom.generationFailedDesc'),
         variant: "destructive",
       })
     } finally {
@@ -535,8 +537,8 @@ export default function CustomReportPage() {
     setShowWizard(false)
 
     toast({
-      title: "Report Configuration Applied",
-      description: "Your custom report configuration has been set up successfully.",
+      title: t('reportsPages.custom.configAppliedTitle'),
+      description: t('reportsPages.custom.configAppliedDesc'),
     })
   }
 
@@ -549,7 +551,7 @@ export default function CustomReportPage() {
     if (value.length === 1) {
       return shipperOptions.find((s: BaseOption) => s.value === value[0])?.label
     }
-    return `${value.length} shippers selected`
+    return t('reportsPages.custom.shippersSelected', { count: value.length })
   }
 
   const renderSelectedCategories = (value: string[]) => {
@@ -557,26 +559,26 @@ export default function CustomReportPage() {
     if (value.length === 1) {
       return currentCategoryOptions.find((c: BaseOption) => c.value === value[0])?.label
     }
-    return `${value.length} columns selected`
+    return t('reportsPages.custom.columnsSelected', { count: value.length })
   }
   return (
-    <PageLayout title="Custom Reports" navItems={items}>
+    <PageLayout title={t('reportsPages.custom.pageTitle')} navItems={items}>
       <div className="container mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Custom Reports</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{t('reportsPages.custom.heading')}</h1>
             <p className="text-muted-foreground mt-2">
-              Build and save custom reports with specific metrics and filters
+              {t('reportsPages.custom.subtitle')}
             </p>
           </div>
           <div className="flex gap-2">
-            <Button 
+            <Button
               onClick={() => setShowWizard(true)}
               className="flex items-center gap-2"
               variant="outline"
             >
               <Wand2 className="h-4 w-4" />
-              Smart Wizard
+              {t('reportsPages.custom.smartWizard')}
             </Button>
           </div>
         </div>
@@ -588,16 +590,16 @@ export default function CustomReportPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" />
-                  Report Builder
+                  {t('reportsPages.custom.reportBuilder')}
                 </CardTitle>
                 <CardDescription>
-                  Configure your custom report parameters and filters
+                  {t('reportsPages.custom.reportBuilderDesc')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Report Type Selection */}
                 <div>
-                  <h3 className="text-lg font-semibold mb-3">Report Type</h3>
+                  <h3 className="text-lg font-semibold mb-3">{t('reportsPages.custom.reportType')}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div 
                       className={`border rounded-lg p-4 cursor-pointer hover:bg-muted/50 transition-colors ${
@@ -608,9 +610,9 @@ export default function CustomReportPage() {
                       <div className="flex items-center gap-3">
                         <Inbox className="h-6 w-6 text-primary" />
                         <div>
-                          <h4 className="font-medium">Import Procedures Summary</h4>
+                          <h4 className="font-medium">{t('reportsPages.custom.typeImportProceduresTitle')}</h4>
                           <p className="text-sm text-muted-foreground">
-                            Overview of all import procedure details
+                            {t('reportsPages.custom.typeImportProceduresDesc')}
                           </p>
                         </div>
                       </div>
@@ -624,9 +626,9 @@ export default function CustomReportPage() {
                       <div className="flex items-center gap-3">
                         <Calendar className="h-6 w-6 text-primary" />
                         <div>
-                          <h4 className="font-medium">Tax Details Summary</h4>
+                          <h4 className="font-medium">{t('reportsPages.custom.typeTaxDetailsTitle')}</h4>
                           <p className="text-sm text-muted-foreground">
-                            Comprehensive tax breakdown and analysis
+                            {t('reportsPages.custom.typeTaxDetailsDesc')}
                           </p>
                         </div>
                       </div>
@@ -640,9 +642,9 @@ export default function CustomReportPage() {
                       <div className="flex items-center gap-3">
                         <BarChart2 className="h-6 w-6 text-primary" />
                         <div>
-                          <h4 className="font-medium">Import Expenses Summary</h4>
+                          <h4 className="font-medium">{t('reportsPages.custom.typeImportExpensesTitle')}</h4>
                           <p className="text-sm text-muted-foreground">
-                            Detailed breakdown of import-related expenses
+                            {t('reportsPages.custom.typeImportExpensesDesc')}
                           </p>
                         </div>
                       </div>
@@ -656,9 +658,9 @@ export default function CustomReportPage() {
                       <div className="flex items-center gap-3">
                         <Search className="h-6 w-6 text-primary" />
                         <div>
-                          <h4 className="font-medium">Payment and Expense Summary</h4>
+                          <h4 className="font-medium">{t('reportsPages.custom.typePaymentExpenseTitle')}</h4>
                           <p className="text-sm text-muted-foreground">
-                            Combined view of payments and expenses
+                            {t('reportsPages.custom.typePaymentExpenseDesc')}
                           </p>
                         </div>
                       </div>
@@ -672,9 +674,9 @@ export default function CustomReportPage() {
                       <div className="flex items-center gap-3">
                         <FileText className="h-6 w-6 text-primary" />
                         <div>
-                          <h4 className="font-medium">All Details Summary</h4>
+                          <h4 className="font-medium">{t('reportsPages.custom.typeAllDetailsTitle')}</h4>
                           <p className="text-sm text-muted-foreground">
-                            Comprehensive report with all available data
+                            {t('reportsPages.custom.typeAllDetailsDesc')}
                           </p>
                         </div>
                       </div>
@@ -686,12 +688,12 @@ export default function CustomReportPage() {
                 <div>
                   <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
                     <Filter className="h-5 w-5" />
-                    Filters
+                    {t('reportsPages.custom.filters')}
                   </h3>
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-sm font-medium mb-2 block">Date Range (Import Declaration Date)</label>
+                        <label className="text-sm font-medium mb-2 block">{t('reportsPages.custom.dateRangeLabel')}</label>
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button
@@ -713,7 +715,7 @@ export default function CustomReportPage() {
                                   format(dateRange.from, "LLL dd, y")
                                 )
                               ) : (
-                                <span>Pick a date range</span>
+                                <span>{t('reportsPages.custom.pickDateRange')}</span>
                               )}
                             </Button>
                           </PopoverTrigger>
@@ -730,29 +732,29 @@ export default function CustomReportPage() {
                         </Popover>
                       </div>
                       <div>
-                        <label className="text-sm font-medium mb-2 block">Shipper</label>
+                        <label className="text-sm font-medium mb-2 block">{t('reportsPages.custom.shipper')}</label>
                         <MultiSelectCombobox
-                          label="Shipper"
+                          label={t('reportsPages.custom.shipper')}
                           options={shipperOptions}
                           value={selectedShippers}
                           onChange={setSelectedShippers}
                           renderItem={renderShipperItem}
                           renderSelectedItem={renderSelectedShippers}
-                          placeholder="Search shippers..."
+                          placeholder={t('reportsPages.custom.searchShippers')}
                         />
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-sm font-medium mb-2 block">Category</label>
+                        <label className="text-sm font-medium mb-2 block">{t('reportsPages.custom.category')}</label>
                         <MultiSelectCombobox
-                          label="Category"
+                          label={t('reportsPages.custom.category')}
                           options={currentCategoryOptions}
                           value={selectedCategories}
                           onChange={setSelectedCategories}
                           renderItem={renderCategoryItem}
                           renderSelectedItem={renderSelectedCategories}
-                          placeholder={selectedReportType ? "Search categories..." : "Select a report type first"}
+                          placeholder={selectedReportType ? t('reportsPages.custom.searchCategories') : t('reportsPages.custom.selectReportTypeFirst')}
                         />
                       </div>
                     </div>
@@ -770,9 +772,9 @@ export default function CustomReportPage() {
         <div className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Report Preview</CardTitle>
+              <CardTitle>{t('reportsPages.custom.reportPreview')}</CardTitle>
               <CardDescription>
-                Preview your report before generating the final version
+                {t('reportsPages.custom.reportPreviewDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -780,10 +782,10 @@ export default function CustomReportPage() {
                 <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center">
                   <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                    No Report Generated
+                    {t('reportsPages.custom.noReportGenerated')}
                   </h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Configure your report settings above and click "Generate Report" to see the preview
+                    {t('reportsPages.custom.noReportGeneratedHint')}
                   </p>
                   <div className="flex gap-2 justify-center">
                     <Button 
@@ -794,30 +796,30 @@ export default function CustomReportPage() {
                       {isGenerating ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          Generating...
+                          {t('reportsPages.custom.generating')}
                         </>
                       ) : (
                         <>
                           <BarChart2 className="h-4 w-4" />
-                          Generate Report
+                          {t('reportsPages.custom.generateReport')}
                         </>
                       )}
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={exportToExcel} 
+                    <Button
+                      variant="outline"
+                      onClick={exportToExcel}
                       disabled={!selectedReportType || isExporting}
                       className="flex items-center gap-2"
                     >
                       {isExporting ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                          Exporting...
+                          {t('reportsPages.custom.exporting')}
                         </>
                       ) : (
                         <>
                           <Download className="h-4 w-4" />
-                          Export Excel
+                          {t('reportsPages.custom.exportExcel')}
                         </>
                       )}
                     </Button>
@@ -827,9 +829,9 @@ export default function CustomReportPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <div>
-                      <h3 className="text-lg font-medium">Report Generated Successfully</h3>
+                      <h3 className="text-lg font-medium">{t('reportsPages.custom.reportGeneratedSuccess')}</h3>
                       <p className="text-sm text-muted-foreground">
-                        {reportData.length} rows of data generated
+                        {t('reportsPages.custom.rowsGenerated', { count: reportData.length })}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -843,17 +845,17 @@ export default function CustomReportPage() {
                         {isGenerating ? (
                           <>
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                            Regenerating...
+                            {t('reportsPages.custom.regenerating')}
                           </>
                         ) : (
                           <>
                             <BarChart2 className="h-4 w-4" />
-                            Regenerate
+                            {t('reportsPages.custom.regenerate')}
                           </>
                         )}
                       </Button>
-                      <Button 
-                        onClick={exportToExcel} 
+                      <Button
+                        onClick={exportToExcel}
                         disabled={isExporting}
                         size="sm"
                         className="flex items-center gap-2"
@@ -861,12 +863,12 @@ export default function CustomReportPage() {
                         {isExporting ? (
                           <>
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            Exporting...
+                            {t('reportsPages.custom.exporting')}
                           </>
                         ) : (
                           <>
                             <Download className="h-4 w-4" />
-                            Export Excel
+                            {t('reportsPages.custom.exportExcel')}
                           </>
                         )}
                       </Button>
@@ -874,25 +876,25 @@ export default function CustomReportPage() {
                   </div>
 
                   <div className="border rounded-lg p-4 bg-muted/20">
-                    <h4 className="font-medium mb-2">Report Summary</h4>
+                    <h4 className="font-medium mb-2">{t('reportsPages.custom.reportSummary')}</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="text-muted-foreground">Report Type:</span>
+                        <span className="text-muted-foreground">{t('reportsPages.custom.reportTypeLabel')}</span>
                         <p className="font-medium capitalize">{selectedReportType?.replace('_', ' ')}</p>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Total Rows:</span>
+                        <span className="text-muted-foreground">{t('reportsPages.custom.totalRowsLabel')}</span>
                         <p className="font-medium">{reportData.length}</p>
                       </div>
                       {selectedShippers.length > 0 && (
                         <div>
-                          <span className="text-muted-foreground">Shippers:</span>
-                          <p className="font-medium">{selectedShippers.length} selected</p>
+                          <span className="text-muted-foreground">{t('reportsPages.custom.shippersLabel')}</span>
+                          <p className="font-medium">{t('reportsPages.custom.countSelected', { count: selectedShippers.length })}</p>
                         </div>
                       )}
                       {dateRange && (
                         <div>
-                          <span className="text-muted-foreground">Date Range:</span>
+                          <span className="text-muted-foreground">{t('reportsPages.custom.dateRangeSummaryLabel')}</span>
                           <p className="font-medium text-xs">
                             {format(dateRange.from!, 'dd/MM/yyyy')} - {format(dateRange.to!, 'dd/MM/yyyy')}
                           </p>
@@ -929,7 +931,7 @@ export default function CustomReportPage() {
                     </table>
                     {tableData.rows.length > 10 && (
                       <div className="p-2 text-center text-sm text-muted-foreground bg-muted/20">
-                        Showing first 10 rows of {tableData.rows.length} total rows (Excel export will include all {tableData.rows.length} rows)
+                        {t('reportsPages.custom.showingFirstRows', { total: tableData.rows.length })}
                       </div>
                     )}
                   </div>

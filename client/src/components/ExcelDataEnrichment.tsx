@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Upload, FileSpreadsheet, Check, AlertCircle, ArrowRight } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
+import { useTranslation } from "react-i18next";
 
 interface EnrichmentPreviewItem {
   procedureId: number;
@@ -41,6 +42,7 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
   const [step, setStep] = useState<'upload' | 'preview'>('upload');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -71,22 +73,22 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
       
       if (data.matches.length === 0) {
         toast({
-          title: "No matches found",
-          description: "Could not match any rows in the Excel file with existing database records.",
+          title: t('taxCalcComp.enrichment.noMatchesTitle'),
+          description: t('taxCalcComp.enrichment.noMatchesDesc'),
           variant: "destructive",
         });
       } else {
         setStep('preview');
         toast({
-          title: "Analysis Complete",
-          description: `Found ${data.matches.length} matching records that need updates.`,
+          title: t('taxCalcComp.enrichment.analysisCompleteTitle'),
+          description: t('taxCalcComp.enrichment.foundMatching', { count: data.matches.length }),
         });
       }
 
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to process the Excel file.",
+        title: t('common.error'),
+        description: t('taxCalcComp.enrichment.failedToProcess'),
         variant: "destructive",
       });
       console.error(error);
@@ -127,8 +129,8 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
       const result = await response.json();
       
       toast({
-        title: "Success",
-        description: "Database records have been successfully enriched!",
+        title: t('common.success'),
+        description: t('taxCalcComp.enrichment.enrichedSuccess'),
         variant: "default", // or "success" if you have that variant
       });
 
@@ -141,8 +143,8 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
 
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to apply updates.",
+        title: t('common.error'),
+        description: t('taxCalcComp.enrichment.failedToApply'),
         variant: "destructive",
       });
     } finally {
@@ -175,15 +177,14 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
       <DialogTrigger asChild>
         <Button variant="outline" className="gap-2">
           <FileSpreadsheet className="h-4 w-4" />
-          Enrich Data (Excel)
+          {t('taxCalcComp.enrichment.triggerButton')}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Data Enrichment from Excel</DialogTitle>
+          <DialogTitle>{t('taxCalcComp.enrichment.title')}</DialogTitle>
           <DialogDescription>
-            Upload an Excel file to fill missing information in existing procedures.
-            System will match by Invoice No or Amount.
+            {t('taxCalcComp.enrichment.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -194,8 +195,8 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
                 <Upload className="h-8 w-8 text-muted-foreground" />
               </div>
               <div className="text-center">
-                <p className="font-medium">Click to upload or drag and drop</p>
-                <p className="text-sm text-muted-foreground">Excel files (.xlsx, .xls)</p>
+                <p className="font-medium">{t('taxCalcComp.enrichment.clickToUpload')}</p>
+                <p className="text-sm text-muted-foreground">{t('taxCalcComp.enrichment.excelFilesHint')}</p>
               </div>
               <input
                 ref={fileInputRef}
@@ -205,7 +206,7 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
                 onChange={handleFileChange}
               />
               <Button onClick={() => fileInputRef.current?.click()}>
-                Select File
+                {t('taxCalcComp.enrichment.selectFile')}
               </Button>
               {file && (
                 <div className="flex items-center gap-2 text-sm bg-background px-3 py-1 rounded border">
@@ -218,10 +219,10 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
             <div className="h-full flex flex-col gap-4">
               <div className="flex items-center justify-between text-sm">
                 <div className="font-medium text-muted-foreground">
-                  Found {previewData.length} records to update
+                  {t('taxCalcComp.enrichment.recordsToUpdate', { count: previewData.length })}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                    Selected: {selectedIds.length}
+                    {t('taxCalcComp.enrichment.selected', { count: selectedIds.length })}
                 </div>
               </div>
               
@@ -236,9 +237,9 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
                             onCheckedChange={toggleAll}
                           />
                         </TableHead>
-                        <TableHead>Reference</TableHead>
-                        <TableHead>Match Method</TableHead>
-                        <TableHead>Changes (Field: Old &rarr; New)</TableHead>
+                        <TableHead>{t('taxCalcComp.enrichment.reference')}</TableHead>
+                        <TableHead>{t('taxCalcComp.enrichment.matchMethod')}</TableHead>
+                        <TableHead>{t('taxCalcComp.enrichment.changesHeader')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -264,7 +265,7 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
                                             <div key={idx} className="text-sm grid grid-cols-[120px_1fr] gap-2 items-center">
                                                 <span className="font-mono text-xs text-muted-foreground">{change.field}:</span>
                                                 <div className="flex items-center gap-1.5 ">
-                                                    <span className="text-red-400 line-through text-xs">{change.oldValue || "(empty)"}</span>
+                                                    <span className="text-red-400 line-through text-xs">{change.oldValue || t('taxCalcComp.enrichment.empty')}</span>
                                                     <ArrowRight className="h-3 w-3 text-muted-foreground" />
                                                     <span className="text-green-600 font-medium">{change.newValue}</span>
                                                 </div>
@@ -285,13 +286,13 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
         <DialogFooter>
           {step === 'upload' ? (
              <Button onClick={handleUpload} disabled={!file || loading}>
-                {loading ? "Analyzing..." : "Preview Changes"}
+                {loading ? t('taxCalcComp.enrichment.analyzing') : t('taxCalcComp.enrichment.previewChanges')}
              </Button>
           ) : (
             <div className="flex w-full justify-between">
-                <Button variant="ghost" onClick={reset}>Back to Upload</Button>
+                <Button variant="ghost" onClick={reset}>{t('taxCalcComp.enrichment.backToUpload')}</Button>
                 <Button onClick={handleApply} disabled={selectedIds.length === 0 || loading}>
-                    {loading ? "Updating..." : `Apply ${selectedIds.length} Updates`}
+                    {loading ? t('taxCalcComp.enrichment.updating') : t('taxCalcComp.enrichment.applyUpdates', { count: selectedIds.length })}
                 </Button>
             </div>
           )}

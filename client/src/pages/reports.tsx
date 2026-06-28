@@ -1,5 +1,6 @@
 import { BarChart2, Receipt, SlidersHorizontal, ArrowRight } from "lucide-react"
 import { Link } from "wouter"
+import { useTranslation } from "react-i18next"
 import { PageLayout } from "@/components/layout/PageLayout"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { buttonVariants } from "@/components/ui/button"
@@ -12,34 +13,36 @@ type ReportCard = {
   icon: typeof BarChart2
 }
 
-const reportCards: ReportCard[] = [
-  {
-    title: "Expense Analytics",
-    description: "Analyze expense patterns and distribution across procedures.",
-    href: "/analytics",
-    cta: "View Analytics",
-    icon: BarChart2,
-  },
-  {
-    title: "Tax Analytics",
-    description: "View and analyze all the taxes paid and distribution across procedures.",
-    href: "/taxreport",
-    cta: "View Taxes",
-    icon: Receipt,
-  },
-  {
-    title: "Custom Reports",
-    description: "Build tailored reports with specific metrics, filters, and date ranges.",
-    href: "/customreport",
-    cta: "Create Report",
-    icon: SlidersHorizontal,
-  },
-]
-
 export default function ReportsPage() {
+  const { t } = useTranslation()
+
+  const reportCards: ReportCard[] = [
+    {
+      title: t('reportsPages.hub.expenseAnalyticsTitle'),
+      description: t('reportsPages.hub.expenseAnalyticsDesc'),
+      href: "/analytics",
+      cta: t('reportsPages.hub.viewAnalytics'),
+      icon: BarChart2,
+    },
+    {
+      title: t('reportsPages.hub.taxAnalyticsTitle'),
+      description: t('reportsPages.hub.taxAnalyticsDesc'),
+      href: "/taxreport",
+      cta: t('reportsPages.hub.viewTaxes'),
+      icon: Receipt,
+    },
+    {
+      title: t('reportsPages.hub.customReportsTitle'),
+      description: t('reportsPages.hub.customReportsDesc'),
+      href: "/customreport",
+      cta: t('reportsPages.hub.createReport'),
+      icon: SlidersHorizontal,
+    },
+  ]
+
   return (
-    <PageLayout title="Reports">
-      <h1 className="text-3xl font-bold tracking-tight mb-6">Reports Dashboard</h1>
+    <PageLayout title={t('nav.reports')}>
+      <h1 className="text-3xl font-bold tracking-tight mb-6">{t('reportsPages.hub.dashboardTitle')}</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {reportCards.map(({ title, description, href, cta, icon: Icon }) => (

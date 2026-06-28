@@ -1,6 +1,7 @@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useTranslation } from "react-i18next";
 
 interface InvoiceData {
   reference: string | null;
@@ -20,11 +21,12 @@ interface InvoiceInfoFormProps {
 }
 
 export function InvoiceInfoForm({ data, onChange }: InvoiceInfoFormProps) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <Label htmlFor="reference">Reference *</Label>
+          <Label htmlFor="reference">{t('taxCalcComp.invoiceForm.referenceRequired')}</Label>
           <Input
             id="reference"
             value={data.reference ?? ""}
@@ -34,7 +36,7 @@ export function InvoiceInfoForm({ data, onChange }: InvoiceInfoFormProps) {
           />
         </div>
         <div>
-          <Label htmlFor="invoice_no">Invoice No</Label>
+          <Label htmlFor="invoice_no">{t('taxCalcComp.invoiceForm.invoiceNo')}</Label>
           <Input
             id="invoice_no"
             value={data.invoice_no ?? ""}
@@ -44,7 +46,7 @@ export function InvoiceInfoForm({ data, onChange }: InvoiceInfoFormProps) {
           />
         </div>
         <div>
-          <Label htmlFor="invoice_date">Invoice Date</Label>
+          <Label htmlFor="invoice_date">{t('taxCalcComp.invoiceForm.invoiceDate')}</Label>
           <Input
             id="invoice_date"
             type="date"
@@ -57,7 +59,7 @@ export function InvoiceInfoForm({ data, onChange }: InvoiceInfoFormProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
-          <Label htmlFor="transport_cost">Transport Cost ($)</Label>
+          <Label htmlFor="transport_cost">{t('taxCalcComp.invoiceForm.transportCost')}</Label>
           <Input
             id="transport_cost"
             type="number"
@@ -68,7 +70,7 @@ export function InvoiceInfoForm({ data, onChange }: InvoiceInfoFormProps) {
           />
         </div>
         <div>
-          <Label htmlFor="insurance_cost">Insurance Cost ($)</Label>
+          <Label htmlFor="insurance_cost">{t('taxCalcComp.invoiceForm.insuranceCost')}</Label>
           <Input
             id="insurance_cost"
             type="number"
@@ -79,7 +81,7 @@ export function InvoiceInfoForm({ data, onChange }: InvoiceInfoFormProps) {
           />
         </div>
         <div>
-          <Label htmlFor="storage_cost">Storage Cost ($)</Label>
+          <Label htmlFor="storage_cost">{t('taxCalcComp.invoiceForm.storageCost')}</Label>
           <Input
             id="storage_cost"
             type="number"
@@ -90,7 +92,7 @@ export function InvoiceInfoForm({ data, onChange }: InvoiceInfoFormProps) {
           />
         </div>
         <div>
-          <Label htmlFor="currency_rate">Currency Rate (TL/USD)</Label>
+          <Label htmlFor="currency_rate">{t('taxCalcComp.invoiceForm.currencyRate')}</Label>
           <Input
             id="currency_rate"
             type="number"
@@ -110,7 +112,7 @@ export function InvoiceInfoForm({ data, onChange }: InvoiceInfoFormProps) {
             onCheckedChange={(checked) => onChange("is_prepaid", checked as boolean)}
             data-testid="checkbox-prepaid"
           />
-          <Label htmlFor="is_prepaid">Peşin Ödeme (Prepaid Payment)</Label>
+          <Label htmlFor="is_prepaid">{t('taxCalcComp.invoiceForm.prepaidPayment')}</Label>
         </div>
         <div className="flex items-center space-x-2">
           <Checkbox

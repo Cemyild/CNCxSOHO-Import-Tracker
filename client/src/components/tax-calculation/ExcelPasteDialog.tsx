@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ClipboardPaste, Upload, CheckCircle2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { useTranslation } from "react-i18next";
 
 interface ProductItem {
   tempId?: string;
@@ -35,6 +36,7 @@ interface ExcelPasteDialogProps {
 }
 
 export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDialogProps) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [pasteData, setPasteData] = useState("");
   const [parsedData, setParsedData] = useState<ProductItem[]>([]);
@@ -62,18 +64,18 @@ export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDia
   };
 
   const validateProduct = (product: ProductItem, rowNum: number): string | null => {
-    if (!product.style) return `Row ${rowNum}: Missing style`;
+    if (!product.style) return t('taxCalcComp.excelPaste.rowMissingStyle', { row: rowNum });
     const cost = parseFloat(product.cost);
-    if (isNaN(cost) || cost <= 0) return `Row ${rowNum}: Invalid or zero cost`;
-    if (product.unit_count <= 0) return `Row ${rowNum}: Invalid or zero units`;
+    if (isNaN(cost) || cost <= 0) return t('taxCalcComp.excelPaste.rowInvalidCost', { row: rowNum });
+    if (product.unit_count <= 0) return t('taxCalcComp.excelPaste.rowInvalidUnits', { row: rowNum });
     return null;
   };
 
   const parseExcelData = () => {
     if (!pasteData.trim()) {
       toast({
-        title: "Error",
-        description: "Please paste some data first",
+        title: t('common.error'),
+        description: t('taxCalcComp.excelPaste.pasteFirst'),
         variant: "destructive",
       });
       return;
@@ -82,8 +84,8 @@ export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDia
     const lines = pasteData.trim().split('\n').filter(line => line.trim());
     if (lines.length === 0) {
       toast({
-        title: "Error",
-        description: "No data found",
+        title: t('common.error'),
+        description: t('taxCalcComp.excelPaste.noDataFound'),
         variant: "destructive",
       });
       return;
@@ -99,7 +101,7 @@ export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDia
 
       // Expected 8 columns: HTS Code, Country, Style, Color, Category, Fabric, Cost, Units
       if (columns.length < 5) {
-        warnings.push(`Row ${rowNum}: Too few columns (expected 8, got ${columns.length})`);
+        warnings.push(t('taxCalcComp.excelPaste.rowTooFewColumns', { row: rowNum, got: columns.length }));
         return;
       }
 
@@ -131,8 +133,8 @@ export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDia
 
     if (products.length === 0) {
       toast({
-        title: "Error",
-        description: "No valid products found. Check that each row has Style, Cost, and Units.",
+        title: t('common.error'),
+        description: t('taxCalcComp.excelPaste.noValidProducts'),
         variant: "destructive",
       });
       return;
@@ -144,14 +146,14 @@ export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDia
 
     if (warnings.length > 0) {
       toast({
-        title: "Warning",
-        description: `Parsed ${products.length} products, but ${warnings.length} rows were skipped`,
+        title: t('taxCalcComp.excelPaste.warningTitle'),
+        description: t('taxCalcComp.excelPaste.parsedWithSkipped', { count: products.length, skipped: warnings.length }),
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Success",
-        description: `✅ Found ${products.length} products with 8 columns each`,
+        title: t('common.success'),
+        description: t('taxCalcComp.excelPaste.foundProducts8Cols', { count: products.length }),
       });
     }
   };
@@ -159,8 +161,8 @@ export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDia
   const handleImport = () => {
     if (parsedData.length === 0) {
       toast({
-        title: "Error",
-        description: "No data to import",
+        title: t('common.error'),
+        description: t('taxCalcComp.excelPaste.noDataToImport'),
         variant: "destructive",
       });
       return;
@@ -168,8 +170,8 @@ export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDia
 
     onImport(parsedData);
     toast({
-      title: "Success",
-      description: `Imported ${parsedData.length} products successfully`,
+      title: t('common.success'),
+      description: t('taxCalcComp.excelPaste.importedSuccessfully', { count: parsedData.length }),
     });
     
     setPasteData("");
@@ -197,10 +199,10 @@ export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDia
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ClipboardPaste className="h-5 w-5" />
-            Paste from Excel
+            {t('taxCalcComp.excelPaste.title')}
           </DialogTitle>
           <DialogDescription>
-            Paste tab-separated data with 8 columns: HTS Code, Country, Style, Color, Category, Fabric Content, Cost, Units
+            {t('taxCalcComp.excelPaste.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -217,10 +219,10 @@ export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDia
             <div className="flex gap-2">
               <Button onClick={parseExcelData} data-testid="button-parse-data">
                 <Upload className="mr-2 h-4 w-4" />
-                Parse Data
+                {t('taxCalcComp.excelPaste.parseData')}
               </Button>
               <Button variant="outline" onClick={handleCancel}>
-                Cancel
+                {t('taxCalcComp.excelPaste.cancel')}
               </Button>
             </div>
           </div>
@@ -230,25 +232,25 @@ export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDia
               {parseWarnings.length === 0 ? (
                 <Badge variant="default" className="bg-green-600">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
-                  {parsedData.length} products parsed successfully
+                  {t('taxCalcComp.excelPaste.productsParsedBadge', { count: parsedData.length })}
                 </Badge>
               ) : (
                 <Badge variant="destructive">
                   <AlertCircle className="h-3 w-3 mr-1" />
-                  {parseWarnings.length} rows skipped
+                  {t('taxCalcComp.excelPaste.rowsSkippedBadge', { count: parseWarnings.length })}
                 </Badge>
               )}
             </div>
 
             {parseWarnings.length > 0 && (
               <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-xs">
-                <p className="font-semibold text-yellow-800 dark:text-yellow-200 mb-1">Warnings:</p>
+                <p className="font-semibold text-yellow-800 dark:text-yellow-200 mb-1">{t('taxCalcComp.excelPaste.warningsLabel')}</p>
                 <ul className="list-disc list-inside space-y-1 text-yellow-700 dark:text-yellow-300">
                   {parseWarnings.slice(0, 5).map((warning, i) => (
                     <li key={i}>{warning}</li>
                   ))}
                   {parseWarnings.length > 5 && (
-                    <li>...and {parseWarnings.length - 5} more</li>
+                    <li>{t('taxCalcComp.excelPaste.andMore', { count: parseWarnings.length - 5 })}</li>
                   )}
                 </ul>
               </div>
@@ -259,15 +261,15 @@ export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDia
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead className="min-w-[110px]">HTS Code</TableHead>
-                    <TableHead className="min-w-[80px]">Country</TableHead>
-                    <TableHead className="min-w-[100px]">Style</TableHead>
-                    <TableHead className="min-w-[80px]">Color</TableHead>
-                    <TableHead className="min-w-[120px]">Category</TableHead>
-                    <TableHead className="min-w-[120px]">Fabric</TableHead>
-                    <TableHead className="min-w-[80px] text-right">Cost</TableHead>
-                    <TableHead className="min-w-[70px] text-right">Units</TableHead>
-                    <TableHead className="min-w-[100px] text-right">Total Value</TableHead>
+                    <TableHead className="min-w-[110px]">{t('taxCalcComp.table.htsCode')}</TableHead>
+                    <TableHead className="min-w-[80px]">{t('taxCalcComp.table.country')}</TableHead>
+                    <TableHead className="min-w-[100px]">{t('taxCalcComp.table.style')}</TableHead>
+                    <TableHead className="min-w-[80px]">{t('taxCalcComp.table.color')}</TableHead>
+                    <TableHead className="min-w-[120px]">{t('taxCalcComp.table.category')}</TableHead>
+                    <TableHead className="min-w-[120px]">{t('taxCalcComp.table.fabric')}</TableHead>
+                    <TableHead className="min-w-[80px] text-right">{t('taxCalcComp.table.cost')}</TableHead>
+                    <TableHead className="min-w-[70px] text-right">{t('taxCalcComp.table.units')}</TableHead>
+                    <TableHead className="min-w-[100px] text-right">{t('taxCalcComp.table.totalValue')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -291,10 +293,10 @@ export function ExcelPasteDialog({ open, onOpenChange, onImport }: ExcelPasteDia
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowPreview(false)}>
-                Back
+                {t('taxCalcComp.excelPaste.back')}
               </Button>
               <Button onClick={handleImport} data-testid="button-import-data">
-                Import {parsedData.length} Products
+                {t('taxCalcComp.excelPaste.importProducts', { count: parsedData.length })}
               </Button>
             </DialogFooter>
           </div>

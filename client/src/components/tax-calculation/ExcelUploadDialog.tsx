@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Upload, FileSpreadsheet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from "xlsx";
+import { useTranslation } from "react-i18next";
 
 interface ProductItem {
   tempId?: string;
@@ -35,6 +36,7 @@ interface ExcelUploadDialogProps {
 }
 
 export function ExcelUploadDialog({ open, onOpenChange, onImport }: ExcelUploadDialogProps) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [parsedData, setParsedData] = useState<ProductItem[]>([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -57,8 +59,8 @@ export function ExcelUploadDialog({ open, onOpenChange, onImport }: ExcelUploadD
 
         if (jsonData.length < 2) {
           toast({
-            title: "Error",
-            description: "Excel file must have at least a header row and one data row",
+            title: t('common.error'),
+            description: t('taxCalcComp.excelUpload.needHeaderAndRow'),
             variant: "destructive",
           });
           return;
@@ -114,13 +116,13 @@ export function ExcelUploadDialog({ open, onOpenChange, onImport }: ExcelUploadD
         setShowPreview(true);
 
         toast({
-          title: "Success",
-          description: `Parsed ${products.length} products from ${file.name}`,
+          title: t('common.success'),
+          description: t('taxCalcComp.excelUpload.parsedProducts', { count: products.length, file: file.name }),
         });
       } catch (error) {
         toast({
-          title: "Error",
-          description: "Failed to parse Excel file",
+          title: t('common.error'),
+          description: t('taxCalcComp.excelUpload.failedToParse'),
           variant: "destructive",
         });
       }
@@ -132,8 +134,8 @@ export function ExcelUploadDialog({ open, onOpenChange, onImport }: ExcelUploadD
   const handleImport = () => {
     if (parsedData.length === 0) {
       toast({
-        title: "Error",
-        description: "No data to import",
+        title: t('common.error'),
+        description: t('taxCalcComp.excelUpload.noDataToImport'),
         variant: "destructive",
       });
       return;
@@ -141,8 +143,8 @@ export function ExcelUploadDialog({ open, onOpenChange, onImport }: ExcelUploadD
 
     onImport(parsedData);
     toast({
-      title: "Success",
-      description: `Imported ${parsedData.length} products`,
+      title: t('common.success'),
+      description: t('taxCalcComp.excelUpload.importedProducts', { count: parsedData.length }),
     });
     
     setParsedData([]);
@@ -164,10 +166,10 @@ export function ExcelUploadDialog({ open, onOpenChange, onImport }: ExcelUploadD
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            Upload Excel File
+            {t('taxCalcComp.excelUpload.title')}
           </DialogTitle>
           <DialogDescription>
-            Upload an Excel file (.xlsx, .xls) with product data. Expected columns: Style, Color, Category, Fabric, Cost, Unit, Country, HTS Code
+            {t('taxCalcComp.excelUpload.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -184,14 +186,14 @@ export function ExcelUploadDialog({ open, onOpenChange, onImport }: ExcelUploadD
             
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleCancel}>
-                Cancel
+                {t('taxCalcComp.excelUpload.cancel')}
               </Button>
             </div>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="text-sm text-muted-foreground">
-              File: <span className="font-medium">{fileName}</span> ({parsedData.length} products)
+              {t('taxCalcComp.excelUpload.fileLabel')} <span className="font-medium">{fileName}</span> ({t('taxCalcComp.excelUpload.productsCount', { count: parsedData.length })})
             </div>
 
             <div className="border rounded-lg overflow-x-auto max-h-[400px]">
@@ -199,15 +201,15 @@ export function ExcelUploadDialog({ open, onOpenChange, onImport }: ExcelUploadD
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead className="min-w-[100px]">Style</TableHead>
-                    <TableHead className="min-w-[80px]">Color</TableHead>
-                    <TableHead className="min-w-[120px]">Category</TableHead>
-                    <TableHead className="min-w-[120px]">Fabric</TableHead>
-                    <TableHead className="min-w-[80px] text-right">Cost</TableHead>
-                    <TableHead className="min-w-[70px] text-right">Units</TableHead>
-                    <TableHead className="min-w-[80px]">Country</TableHead>
-                    <TableHead className="min-w-[110px]">HTS Code</TableHead>
-                    <TableHead className="min-w-[100px] text-right">Total Value</TableHead>
+                    <TableHead className="min-w-[100px]">{t('taxCalcComp.table.style')}</TableHead>
+                    <TableHead className="min-w-[80px]">{t('taxCalcComp.table.color')}</TableHead>
+                    <TableHead className="min-w-[120px]">{t('taxCalcComp.table.category')}</TableHead>
+                    <TableHead className="min-w-[120px]">{t('taxCalcComp.table.fabric')}</TableHead>
+                    <TableHead className="min-w-[80px] text-right">{t('taxCalcComp.table.cost')}</TableHead>
+                    <TableHead className="min-w-[70px] text-right">{t('taxCalcComp.table.units')}</TableHead>
+                    <TableHead className="min-w-[80px]">{t('taxCalcComp.table.country')}</TableHead>
+                    <TableHead className="min-w-[110px]">{t('taxCalcComp.table.htsCode')}</TableHead>
+                    <TableHead className="min-w-[100px] text-right">{t('taxCalcComp.table.totalValue')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -231,10 +233,10 @@ export function ExcelUploadDialog({ open, onOpenChange, onImport }: ExcelUploadD
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowPreview(false)}>
-                Back
+                {t('taxCalcComp.excelUpload.back')}
               </Button>
               <Button onClick={handleImport} data-testid="button-import-excel">
-                Import {parsedData.length} Products
+                {t('taxCalcComp.excelUpload.importProducts', { count: parsedData.length })}
               </Button>
             </DialogFooter>
           </div>

@@ -5,9 +5,10 @@ import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
-import { 
-  CalendarIcon, 
-  ArrowLeft, 
+import { useTranslation } from "react-i18next";
+import {
+  CalendarIcon,
+  ArrowLeft,
   Save, 
   XCircle,
   Home,
@@ -101,6 +102,7 @@ const procedureSchema = z.object({
 type ProcedureFormData = z.infer<typeof procedureSchema>;
 
 export default function EditProcedurePage() {
+  const { t } = useTranslation();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -201,8 +203,8 @@ export default function EditProcedurePage() {
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Procedure updated successfully!",
+        title: t("common.success"),
+        description: t("procedurePages.edit.updateSuccess"),
       });
       queryClient.invalidateQueries({ queryKey: ['/api/procedures'] });
       queryClient.invalidateQueries({ queryKey: [`/api/procedures/reference/${procedureReference}`] });
@@ -210,8 +212,8 @@ export default function EditProcedurePage() {
     },
     onError: (error) => {
       toast({
-        title: "Error",
-        description: error.message || "Failed to update procedure",
+        title: t("common.error"),
+        description: error.message || t("procedurePages.edit.updateError"),
         variant: "destructive",
       });
     },
@@ -223,17 +225,17 @@ export default function EditProcedurePage() {
 
   if (!procedureReference) {
     return (
-      <PageLayout title="Edit Procedure" navItems={items}>
+      <PageLayout title={t("procedurePages.edit.title")} navItems={items}>
         <div className="container mx-auto p-6">
           <Card>
             <CardHeader>
-              <CardTitle>Error</CardTitle>
-              <CardDescription>No procedure reference provided</CardDescription>
+              <CardTitle>{t("common.error")}</CardTitle>
+              <CardDescription>{t("procedurePages.edit.noReference")}</CardDescription>
             </CardHeader>
             <CardContent>
               <Button variant="outline" onClick={() => setLocation('/procedures')}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Procedures
+                {t("procedurePages.backToProcedures")}
               </Button>
             </CardContent>
           </Card>
@@ -244,12 +246,12 @@ export default function EditProcedurePage() {
 
   if (isLoading) {
     return (
-      <PageLayout title="Edit Procedure" navItems={items}>
+      <PageLayout title={t("procedurePages.edit.title")} navItems={items}>
         <div className="container mx-auto p-6">
           <Card>
             <CardHeader>
-              <CardTitle>Loading...</CardTitle>
-              <CardDescription>Fetching procedure details</CardDescription>
+              <CardTitle>{t("common.loading")}</CardTitle>
+              <CardDescription>{t("procedurePages.edit.fetchingDetails")}</CardDescription>
             </CardHeader>
           </Card>
         </div>
@@ -258,20 +260,20 @@ export default function EditProcedurePage() {
   }
 
   return (
-    <PageLayout title="Edit Procedure" navItems={items}>
+    <PageLayout title={t("procedurePages.edit.title")} navItems={items}>
       <div className="container mx-auto p-6">
         <div className="mb-6 flex items-center">
           <Button variant="outline" size="sm" onClick={() => setLocation('/procedures')}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Procedures
+            {t("procedurePages.backToProcedures")}
           </Button>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Edit Procedure</CardTitle>
+            <CardTitle>{t("procedurePages.edit.cardTitle")}</CardTitle>
             <CardDescription>
-              Update procedure details below. Fields marked with * are required.
+              {t("procedurePages.edit.cardDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -284,11 +286,11 @@ export default function EditProcedurePage() {
                     name="reference"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="required">Reference</FormLabel>
+                        <FormLabel className="required">{t("procedurePages.form.reference")}</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter procedure reference" {...field} disabled />
+                          <Input placeholder={t("procedurePages.form.referencePlaceholder")} {...field} disabled />
                         </FormControl>
-                        <FormDescription>Reference cannot be changed</FormDescription>
+                        <FormDescription>{t("procedurePages.edit.referenceLocked")}</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -300,9 +302,9 @@ export default function EditProcedurePage() {
                     name="shipper"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Shipper</FormLabel>
+                        <FormLabel>{t("procedurePages.form.shipper")}</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter shipper name" {...field} />
+                          <Input placeholder={t("procedurePages.form.shipperPlaceholder")} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -315,9 +317,9 @@ export default function EditProcedurePage() {
                     name="invoice_no"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Invoice No</FormLabel>
+                        <FormLabel>{t("procedurePages.form.invoiceNo")}</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter invoice number" {...field} />
+                          <Input placeholder={t("procedurePages.form.invoiceNoPlaceholder")} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -330,7 +332,7 @@ export default function EditProcedurePage() {
                     name="invoice_date"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>Invoice Date</FormLabel>
+                        <FormLabel>{t("procedurePages.form.invoiceDate")}</FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
@@ -344,7 +346,7 @@ export default function EditProcedurePage() {
                                 {field.value ? (
                                   format(field.value, "PPP")
                                 ) : (
-                                  <span>Select date</span>
+                                  <span>{t("procedurePages.form.selectDate")}</span>
                                 )}
                                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                               </Button>
@@ -372,7 +374,7 @@ export default function EditProcedurePage() {
                         name="amount"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Invoice Amount</FormLabel>
+                            <FormLabel>{t("procedurePages.form.invoiceAmount")}</FormLabel>
                             <FormControl>
                               <Input placeholder="0.00" type="number" step="0.01" min="0" {...field} />
                             </FormControl>
@@ -387,11 +389,11 @@ export default function EditProcedurePage() {
                         name="currency"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Currency</FormLabel>
+                            <FormLabel>{t("procedurePages.form.currency")}</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Select currency" />
+                                  <SelectValue placeholder={t("procedurePages.form.currencyPlaceholder")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -415,7 +417,7 @@ export default function EditProcedurePage() {
                     name="piece"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Piece</FormLabel>
+                        <FormLabel>{t("procedurePages.form.piece")}</FormLabel>
                         <FormControl>
                           <Input placeholder="0" type="number" min="0" {...field} />
                         </FormControl>
@@ -430,9 +432,9 @@ export default function EditProcedurePage() {
                     name="package"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Package</FormLabel>
+                        <FormLabel>{t("procedurePages.form.package")}</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter package details" {...field} />
+                          <Input placeholder={t("procedurePages.form.packagePlaceholder")} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -445,7 +447,7 @@ export default function EditProcedurePage() {
                     name="kg"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>KG</FormLabel>
+                        <FormLabel>{t("procedurePages.form.kg")}</FormLabel>
                         <FormControl>
                           <Input placeholder="0.00" type="number" step="0.01" min="0" {...field} />
                         </FormControl>
@@ -460,9 +462,9 @@ export default function EditProcedurePage() {
                     name="awb_number"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>AWB #</FormLabel>
+                        <FormLabel>{t("procedurePages.form.awbNumber")}</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter AWB number" {...field} />
+                          <Input placeholder={t("procedurePages.form.awbNumberPlaceholder")} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -475,7 +477,7 @@ export default function EditProcedurePage() {
                     name="arrival_date"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>Arrival Date</FormLabel>
+                        <FormLabel>{t("procedurePages.form.arrivalDate")}</FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
@@ -489,7 +491,7 @@ export default function EditProcedurePage() {
                                 {field.value ? (
                                   format(field.value, "PPP")
                                 ) : (
-                                  <span>Select date</span>
+                                  <span>{t("procedurePages.form.selectDate")}</span>
                                 )}
                                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                               </Button>
@@ -515,9 +517,9 @@ export default function EditProcedurePage() {
                     name="carrier"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Carrier</FormLabel>
+                        <FormLabel>{t("procedurePages.form.carrier")}</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter carrier name" {...field} />
+                          <Input placeholder={t("procedurePages.form.carrierPlaceholder")} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -530,9 +532,9 @@ export default function EditProcedurePage() {
                     name="import_dec_number"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Import Declaration #</FormLabel>
+                        <FormLabel>{t("procedurePages.form.importDecNumber")}</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter import declaration number" {...field} />
+                          <Input placeholder={t("procedurePages.form.importDecNumberPlaceholder")} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -545,7 +547,7 @@ export default function EditProcedurePage() {
                     name="import_dec_date"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>Import Declaration Date</FormLabel>
+                        <FormLabel>{t("procedurePages.form.importDecDate")}</FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
@@ -559,7 +561,7 @@ export default function EditProcedurePage() {
                                 {field.value ? (
                                   format(field.value, "PPP")
                                 ) : (
-                                  <span>Select date</span>
+                                  <span>{t("procedurePages.form.selectDate")}</span>
                                 )}
                                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                               </Button>
@@ -585,9 +587,9 @@ export default function EditProcedurePage() {
                     name="customs"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Customs</FormLabel>
+                        <FormLabel>{t("procedurePages.form.customs")}</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter customs information" {...field} />
+                          <Input placeholder={t("procedurePages.form.customsPlaceholder")} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -600,18 +602,18 @@ export default function EditProcedurePage() {
                     name="usdtl_rate"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>USD/TL Exchange Rate</FormLabel>
+                        <FormLabel>{t("procedurePages.form.usdtlRate")}</FormLabel>
                         <FormControl>
-                          <Input 
-                            placeholder="0.0000" 
-                            type="number" 
-                            step="0.0001" 
-                            min="0" 
-                            {...field} 
+                          <Input
+                            placeholder="0.0000"
+                            type="number"
+                            step="0.0001"
+                            min="0"
+                            {...field}
                           />
                         </FormControl>
                         <FormDescription>
-                          Current USD to TL exchange rate (up to 4 decimal places)
+                          {t("procedurePages.form.usdtlRateHint")}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -627,11 +629,11 @@ export default function EditProcedurePage() {
                     disabled={updateMutation.isPending}
                   >
                     <XCircle className="mr-2 h-4 w-4" />
-                    Cancel
+                    {t("procedurePages.form.cancel")}
                   </Button>
                   <Button type="submit" disabled={updateMutation.isPending}>
                     <Save className="mr-2 h-4 w-4" />
-                    {updateMutation.isPending ? 'Updating...' : 'Save Procedure'}
+                    {updateMutation.isPending ? t("procedurePages.edit.updating") : t("procedurePages.form.saveProcedure")}
                   </Button>
                 </div>
               </form>

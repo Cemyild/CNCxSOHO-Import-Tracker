@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,6 +81,7 @@ function isBodyReady(body: BulkBody): boolean {
 }
 
 export default function BulkDownloadPage() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [mode, setMode] = useState<Mode>("single");
   const [singleId, setSingleId] = useState<number | null>(null);
@@ -155,7 +157,7 @@ export default function BulkDownloadPage() {
     if (count && count.totalBytes > 500 * 1024 * 1024) {
       const mb = Math.round(count.totalBytes / (1024 * 1024));
       const proceed = window.confirm(
-        `This will download about ${mb} MB and may take several minutes. Continue?`,
+        t('bulkDownload.largeDownloadConfirm', { mb }),
       );
       if (!proceed) return;
     }
@@ -195,7 +197,7 @@ export default function BulkDownloadPage() {
       triggerBlobDownload(blob, filename);
     } catch (err) {
       toast({
-        title: "Download failed",
+        title: t('bulkDownload.downloadFailed'),
         description: err instanceof Error ? err.message : String(err),
         variant: "destructive",
       });
@@ -206,29 +208,29 @@ export default function BulkDownloadPage() {
   }
 
   const summaryText = !ready
-    ? "Make a selection to see what will be downloaded"
+    ? t('bulkDownload.summary.makeSelection')
     : count
-      ? `${count.procedureCount} procedure${count.procedureCount === 1 ? "" : "s"} · ${count.fileCount} file${count.fileCount === 1 ? "" : "s"} · ~${formatBytes(count.totalBytes)}` +
-        (count.excludedNoDecDate > 0 ? `  ·  ${count.excludedNoDecDate} excluded (no declaration date)` : "")
-      : "Calculating…";
+      ? `${t('bulkDownload.summary.procedures', { count: count.procedureCount })} · ${t('bulkDownload.summary.files', { count: count.fileCount })} · ~${formatBytes(count.totalBytes)}` +
+        (count.excludedNoDecDate > 0 ? `  ·  ${t('bulkDownload.summary.excluded', { count: count.excludedNoDecDate })}` : "")
+      : t('bulkDownload.summary.calculating');
 
   return (
-    <PageLayout title="Bulk Document Download">
+    <PageLayout title={t('bulkDownload.title')}>
       <Card className="max-w-4xl mx-auto">
         <CardHeader>
-          <CardTitle>Bulk Document Download</CardTitle>
+          <CardTitle>{t('bulkDownload.title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
             <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="single">Single</TabsTrigger>
-              <TabsTrigger value="multi">Multi-select</TabsTrigger>
-              <TabsTrigger value="dateRange">Date Range</TabsTrigger>
-              <TabsTrigger value="all">Everything</TabsTrigger>
+              <TabsTrigger value="single">{t('bulkDownload.tabs.single')}</TabsTrigger>
+              <TabsTrigger value="multi">{t('bulkDownload.tabs.multi')}</TabsTrigger>
+              <TabsTrigger value="dateRange">{t('bulkDownload.tabs.dateRange')}</TabsTrigger>
+              <TabsTrigger value="all">{t('bulkDownload.tabs.all')}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="single" className="pt-4 space-y-2">
-              <label className="text-sm font-medium">Procedure</label>
+              <label className="text-sm font-medium">{t('bulkDownload.procedure')}</label>
               <Popover open={singleOpen} onOpenChange={setSingleOpen}>
                 <PopoverTrigger asChild>
                   <Button
@@ -238,15 +240,15 @@ export default function BulkDownloadPage() {
                   >
                     {singleSelected
                       ? `${singleSelected.reference}${singleSelected.shipper ? " — " + singleSelected.shipper : ""}`
-                      : "Pick a procedure…"}
+                      : t('bulkDownload.pickProcedure')}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[min(640px,90vw)] p-0">
                   <Command>
-                    <CommandInput placeholder="Search reference or shipper…" />
+                    <CommandInput placeholder={t('bulkDownload.searchPlaceholder')} />
                     <CommandList>
-                      <CommandEmpty>No matches.</CommandEmpty>
+                      <CommandEmpty>{t('bulkDownload.noMatches')}</CommandEmpty>
                       <CommandGroup>
                         {procedureList.map((p) => (
                           <CommandItem
@@ -271,7 +273,7 @@ export default function BulkDownloadPage() {
             <TabsContent value="multi" className="pt-4 space-y-3">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Search reference or shipper…"
+                  placeholder={t('bulkDownload.searchPlaceholder')}
                   value={multiSearch}
                   onChange={(e) => setMultiSearch(e.target.value)}
                   className="flex-1"
@@ -289,16 +291,16 @@ export default function BulkDownloadPage() {
                     }
                   }}
                 >
-                  {allFilteredSelected ? "Deselect visible" : "Select visible"}
+                  {allFilteredSelected ? t('bulkDownload.deselectVisible') : t('bulkDownload.selectVisible')}
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setMultiIds([])} disabled={multiIds.length === 0}>
-                  Clear
+                  {t('bulkDownload.clear')}
                 </Button>
               </div>
 
               <div className="max-h-[360px] overflow-y-auto border rounded-md divide-y">
                 {filteredForMulti.length === 0 && (
-                  <div className="p-4 text-sm text-muted-foreground">No procedures match.</div>
+                  <div className="p-4 text-sm text-muted-foreground">{t('bulkDownload.noProceduresMatch')}</div>
                 )}
                 {filteredForMulti.map((p) => (
                   <label
@@ -322,13 +324,13 @@ export default function BulkDownloadPage() {
               </div>
 
               <div className="text-xs text-muted-foreground">
-                {multiIds.length} selected ({filteredForMulti.length} visible / {procedureList.length} total)
+                {t('bulkDownload.selectionCounter', { selected: multiIds.length, visible: filteredForMulti.length, total: procedureList.length })}
               </div>
             </TabsContent>
             <TabsContent value="dateRange" className="pt-4 space-y-3">
               <div className="flex gap-4 items-end">
                 <div className="flex-1">
-                  <label className="text-sm font-medium block mb-1">From (Import Declaration Date)</label>
+                  <label className="text-sm font-medium block mb-1">{t('bulkDownload.fromDate')}</label>
                   <Input
                     type="date"
                     value={dateFrom}
@@ -337,7 +339,7 @@ export default function BulkDownloadPage() {
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="text-sm font-medium block mb-1">To</label>
+                  <label className="text-sm font-medium block mb-1">{t('bulkDownload.toDate')}</label>
                   <Input
                     type="date"
                     value={dateTo}
@@ -347,11 +349,11 @@ export default function BulkDownloadPage() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Procedures without an Import Declaration Date are excluded from this filter.
+                {t('bulkDownload.dateRangeNote')}
               </p>
             </TabsContent>
             <TabsContent value="all" className="pt-4">
-              <p className="text-sm">Download every procedure's documents in one ZIP.</p>
+              <p className="text-sm">{t('bulkDownload.allDescription')}</p>
             </TabsContent>
           </Tabs>
 
@@ -360,7 +362,7 @@ export default function BulkDownloadPage() {
               <div className="text-sm text-muted-foreground">{summaryText}</div>
               <Button disabled={!ready || downloading} onClick={handleDownload}>
                 <Download className="mr-2 h-4 w-4" />
-                {downloading ? "Downloading…" : "Download ZIP"}
+                {downloading ? t('bulkDownload.downloading') : t('bulkDownload.downloadZip')}
               </Button>
             </div>
             {downloading && (

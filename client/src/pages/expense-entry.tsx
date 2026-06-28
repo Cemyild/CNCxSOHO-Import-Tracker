@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -373,6 +374,7 @@ export default function ExpenseEntryPage() {
   const taxCategories = ['customs_tax', 'additional_customs_tax', 'kkdf', 'vat', 'stamp_tax'];
   const allCategories = [...taxCategories, ...expenseCategories];
   
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -491,8 +493,8 @@ export default function ExpenseEntryPage() {
     } catch (error) {
       console.error("Error loading procedure data:", error);
       showToast({
-        title: "Error",
-        description: "Failed to load procedure data",
+        title: t('common.error'),
+        description: t('expenseEntry.toastLoadProcedureFailed'),
         variant: "destructive",
       });
     }
@@ -513,8 +515,8 @@ export default function ExpenseEntryPage() {
       
       if (!foundProcedure) {
         showToast({
-          title: "Procedure not found",
-          description: `No procedure found with reference ${reference}`,
+          title: t('expenseEntry.toastProcedureNotFoundTitle'),
+          description: t('expenseEntry.toastProcedureNotFoundDesc', { reference }),
           variant: "destructive",
         });
         setProcedure(null);
@@ -528,14 +530,14 @@ export default function ExpenseEntryPage() {
       await loadProcedureData(reference);
       
       showToast({
-        title: "Procedure found",
-        description: `Loaded procedure with reference ${reference}`,
+        title: t('expenseEntry.toastProcedureFoundTitle'),
+        description: t('expenseEntry.toastProcedureFoundDesc', { reference }),
       });
     } catch (error) {
       console.error("Error searching for procedure:", error);
       showToast({
-        title: "Error",
-        description: "Failed to search for procedure",
+        title: t('common.error'),
+        description: t('expenseEntry.toastSearchProcedureFailed'),
         variant: "destructive",
       });
     } finally {
@@ -552,13 +554,13 @@ export default function ExpenseEntryPage() {
   const onSubmitTaxForm = async (data: any) => {
     if (!procedure) {
       showToast({
-        title: "Error",
-        description: "No procedure selected",
+        title: t('common.error'),
+        description: t('expenseEntry.toastNoProcedureSelected'),
         variant: "destructive",
       });
       return;
     }
-    
+
     setIsSubmitting(true);
     try {
       // Check if we're updating or creating
@@ -566,8 +568,8 @@ export default function ExpenseEntryPage() {
         // Update existing tax record
         await apiRequest("PUT", `/api/taxes/${taxData.id}`, data);
         showToast({
-          title: "Success",
-          description: "Tax information updated successfully",
+          title: t('common.success'),
+          description: t('expenseEntry.toastTaxUpdated'),
         });
       } else {
         // Create new tax record
@@ -578,18 +580,18 @@ export default function ExpenseEntryPage() {
         const responseData = await response.json();
         setTaxData(responseData.tax);
         showToast({
-          title: "Success",
-          description: "Tax information saved successfully",
+          title: t('common.success'),
+          description: t('expenseEntry.toastTaxSaved'),
         });
       }
-      
+
       // Reload procedure data
       await loadProcedureData(procedure.reference);
     } catch (error) {
       console.error("Error saving tax information:", error);
       showToast({
-        title: "Error",
-        description: "Failed to save tax information",
+        title: t('common.error'),
+        description: t('expenseEntry.toastTaxSaveFailed'),
         variant: "destructive",
       });
     } finally {
@@ -602,27 +604,28 @@ export default function ExpenseEntryPage() {
     console.log('Add expense clicked:', data);
     if (!procedure) {
       showToast({
-        title: "Error",
-        description: "No procedure selected",
+        title: t('common.error'),
+        description: t('expenseEntry.toastNoProcedureSelected'),
         variant: "destructive",
       });
       return;
     }
-    
+
     // Check for required fields based on category
     const requiredFields = categoryRequiredFields[data.category as keyof typeof categoryRequiredFields] || [];
     let missingFields = [];
-    
+
     for (const field of requiredFields) {
       if (!data[field]) {
         missingFields.push(field);
       }
     }
-    
+
     if (missingFields.length > 0) {
+      const missingLabels = missingFields.map((f) => t(`expenseEntry.field.${f}`)).join(", ");
       showToast({
-        title: "Missing fields",
-        description: `Required fields for this category: ${missingFields.join(", ")}`,
+        title: t('expenseEntry.toastMissingFieldsTitle'),
+        description: t('expenseEntry.toastMissingFieldsDesc', { fields: missingLabels }),
         variant: "destructive",
       });
       return;
@@ -703,8 +706,8 @@ export default function ExpenseEntryPage() {
           if (attachResponse.ok) {
             console.log('[Auto-attach] PDF attached successfully');
             showToast({
-              title: "Document attached",
-              description: "The analyzed PDF has been automatically attached to the expense",
+              title: t('expenseEntry.toastDocumentAttachedTitle'),
+              description: t('expenseEntry.toastDocumentAttachedExpenseDesc'),
             });
           } else {
             console.error('[Auto-attach] Failed to attach PDF:', await attachResponse.text());
@@ -732,17 +735,17 @@ export default function ExpenseEntryPage() {
       });
       
       showToast({
-        title: "Expense added",
-        description: analyzedExpensePdf ? "Expense saved with attached PDF" : "Expense saved successfully to database",
+        title: t('expenseEntry.toastExpenseAddedTitle'),
+        description: analyzedExpensePdf ? t('expenseEntry.toastExpenseSavedWithPdf') : t('expenseEntry.toastExpenseSaved'),
       });
-      
+
       // Reload procedure data to ensure UI is in sync
       await loadProcedureData(procedure.reference);
     } catch (error) {
       console.error("Error saving expense:", error);
       showToast({
-        title: "Error",
-        description: "Failed to save expense to database",
+        title: t('common.error'),
+        description: t('expenseEntry.toastExpenseSaveFailed'),
         variant: "destructive",
       });
     } finally {
@@ -755,8 +758,8 @@ export default function ExpenseEntryPage() {
     console.log('Record all clicked');
     if (!procedure) {
       showToast({
-        title: "Error",
-        description: "No procedure selected",
+        title: t('common.error'),
+        description: t('expenseEntry.toastNoProcedureSelected'),
         variant: "destructive",
       });
       return;
@@ -800,21 +803,21 @@ export default function ExpenseEntryPage() {
       
       if (errorCount === 0) {
         showToast({
-          title: "Success",
-          description: `All ${successCount} items saved successfully`,
+          title: t('common.success'),
+          description: t('expenseEntry.toastAllItemsSaved', { count: successCount }),
         });
       } else {
         showToast({
-          title: "Partial Success",
-          description: `${successCount} items saved, ${errorCount} failed`,
+          title: t('expenseEntry.toastPartialSuccessTitle'),
+          description: t('expenseEntry.toastPartialSuccessDesc', { success: successCount, failed: errorCount }),
           variant: "destructive",
         });
       }
     } catch (error) {
       console.error("Error in Record All operation:", error);
       showToast({
-        title: "Error",
-        description: "Failed to save all expenses",
+        title: t('common.error'),
+        description: t('expenseEntry.toastSaveAllFailed'),
         variant: "destructive",
       });
     } finally {
@@ -827,8 +830,8 @@ export default function ExpenseEntryPage() {
     // Check if user is authenticated
     if (!currentUser) {
       toast({
-        title: "Authentication required",
-        description: "Please log in to upload documents",
+        title: t('expenseEntry.toastAuthRequiredTitle'),
+        description: t('expenseEntry.toastAuthRequiredDesc'),
         variant: "destructive",
       });
       return;
@@ -874,23 +877,23 @@ export default function ExpenseEntryPage() {
       // Show declaration info if available
       if (data.declarationNumber || data.declarationDate || data.currency) {
         const parts = [];
-        if (data.declarationNumber) parts.push(`Declaration: ${data.declarationNumber}`);
-        if (data.declarationDate) parts.push(`Date: ${data.declarationDate}`);
-        if (data.currency) parts.push(`Currency: ${data.currency}`);
+        if (data.declarationNumber) parts.push(`${t('expenseEntry.declarationLabel')}: ${data.declarationNumber}`);
+        if (data.declarationDate) parts.push(`${t('expenseEntry.dateLabel')}: ${data.declarationDate}`);
+        if (data.currency) parts.push(`${t('expenseEntry.currencyLabel')}: ${data.currency}`);
         setTaxDeclarationInfo(parts.join(', '));
       }
 
       toast({
-        title: "Tax data extracted successfully",
-        description: "Please review the values and click 'Save Tax Information'",
+        title: t('expenseEntry.toastTaxExtractedTitle'),
+        description: t('expenseEntry.toastTaxExtractedDesc'),
       });
 
     } catch (error: any) {
       console.error('Tax PDF analysis error:', error);
-      setPdfError(error.message || 'Failed to analyze PDF - please try again');
+      setPdfError(error.message || t('expenseEntry.errorAnalyzePdf'));
       toast({
-        title: "Analysis failed",
-        description: error.message || 'Failed to analyze PDF - please try again',
+        title: t('expenseEntry.toastAnalysisFailedTitle'),
+        description: error.message || t('expenseEntry.errorAnalyzePdf'),
         variant: "destructive",
       });
     } finally {
@@ -902,8 +905,8 @@ export default function ExpenseEntryPage() {
     // Check if user is authenticated
     if (!currentUser) {
       toast({
-        title: "Authentication required",
-        description: "Please log in to upload documents",
+        title: t('expenseEntry.toastAuthRequiredTitle'),
+        description: t('expenseEntry.toastAuthRequiredDesc'),
         variant: "destructive",
       });
       return;
@@ -956,17 +959,17 @@ export default function ExpenseEntryPage() {
       }
 
       toast({
-        title: "Expense data extracted successfully",
-        description: "Please review the values and click 'Add Expense'",
+        title: t('expenseEntry.toastExpenseExtractedTitle'),
+        description: t('expenseEntry.toastExpenseExtractedDesc'),
       });
 
     } catch (error: any) {
       console.error('Expense PDF analysis error:', error);
-      setPdfError(error.message || 'Failed to analyze PDF - please try again');
+      setPdfError(error.message || t('expenseEntry.errorAnalyzePdf'));
       setAnalyzedExpensePdf(null); // Clear any previous PDF reference on error
       toast({
-        title: "Analysis failed",
-        description: error.message || 'Failed to analyze PDF - please try again',
+        title: t('expenseEntry.toastAnalysisFailedTitle'),
+        description: error.message || t('expenseEntry.errorAnalyzePdf'),
         variant: "destructive",
       });
     } finally {
@@ -978,8 +981,8 @@ export default function ExpenseEntryPage() {
     // Check if user is authenticated
     if (!currentUser) {
       toast({
-        title: "Authentication required",
-        description: "Please log in to upload documents",
+        title: t('expenseEntry.toastAuthRequiredTitle'),
+        description: t('expenseEntry.toastAuthRequiredDesc'),
         variant: "destructive",
       });
       return;
@@ -1028,17 +1031,17 @@ export default function ExpenseEntryPage() {
       }
 
       toast({
-        title: "Invoice data extracted successfully",
-        description: "Please review the values and click 'Add Invoice'",
+        title: t('expenseEntry.toastInvoiceExtractedTitle'),
+        description: t('expenseEntry.toastInvoiceExtractedDesc'),
       });
 
     } catch (error: any) {
       console.error('Service PDF analysis error:', error);
-      setPdfError(error.message || 'Failed to analyze PDF - please try again');
+      setPdfError(error.message || t('expenseEntry.errorAnalyzePdf'));
       setAnalyzedServicePdf(null); // Clear any previous PDF reference on error
       toast({
-        title: "Analysis failed",
-        description: error.message || 'Failed to analyze PDF - please try again',
+        title: t('expenseEntry.toastAnalysisFailedTitle'),
+        description: error.message || t('expenseEntry.errorAnalyzePdf'),
         variant: "destructive",
       });
     } finally {
@@ -1050,8 +1053,8 @@ export default function ExpenseEntryPage() {
   const handleExpenseReceiptPdfUpload = async (files: FileList | File[]) => {
     if (!currentUser) {
       toast({
-        title: "Authentication required",
-        description: "Please log in to upload documents",
+        title: t('expenseEntry.toastAuthRequiredTitle'),
+        description: t('expenseEntry.toastAuthRequiredDesc'),
         variant: "destructive",
       });
       return;
@@ -1090,7 +1093,7 @@ export default function ExpenseEntryPage() {
         const file = fileArray[i];
         
         toast({
-          title: `Analyzing PDF ${i + 1} of ${fileArray.length}`,
+          title: t('expenseEntry.toastAnalyzingPdfProgress', { current: i + 1, total: fileArray.length }),
           description: file.name,
         });
 
@@ -1188,31 +1191,31 @@ export default function ExpenseEntryPage() {
         const serviceInvoiceCount = allItems.filter((i: RecognizedItem) => i.type === 'service_invoice').length;
         
         const parts = [];
-        if (taxCount > 0) parts.push(`${taxCount} tax(es)`);
-        if (expenseCount > 0) parts.push(`${expenseCount} expense(s)`);
-        if (serviceInvoiceCount > 0) parts.push(`${serviceInvoiceCount} service invoice(s)`);
-        
+        if (taxCount > 0) parts.push(t('expenseEntry.countTaxes', { count: taxCount }));
+        if (expenseCount > 0) parts.push(t('expenseEntry.countExpenses', { count: expenseCount }));
+        if (serviceInvoiceCount > 0) parts.push(t('expenseEntry.countServiceInvoices', { count: serviceInvoiceCount }));
+
         toast({
-          title: `Analyzed ${successCount} PDF(s)`,
-          description: `Found ${parts.join(', ')} total. Please review and categorize.`,
+          title: t('expenseEntry.toastAnalyzedPdfs', { count: successCount }),
+          description: t('expenseEntry.toastFoundItemsDesc', { items: parts.join(', ') }),
         });
       } else {
         toast({
-          title: "No items found",
-          description: "Could not find any taxes or expenses in the uploaded documents.",
+          title: t('expenseEntry.toastNoItemsFoundTitle'),
+          description: t('expenseEntry.toastNoItemsFoundDesc'),
           variant: "destructive",
         });
       }
 
       if (errorMessages.length > 0) {
-        setExpenseReceiptError(`Some files had errors:\n${errorMessages.join('\n')}`);
+        setExpenseReceiptError(`${t('expenseEntry.errorSomeFiles')}\n${errorMessages.join('\n')}`);
       }
     } catch (error: any) {
       console.error('Expense Receipt PDF analysis error:', error);
-      setExpenseReceiptError(error.message || 'Failed to analyze PDFs - please try again');
+      setExpenseReceiptError(error.message || t('expenseEntry.errorAnalyzePdfs'));
       toast({
-        title: "Analysis failed",
-        description: error.message || 'Failed to analyze expense receipts',
+        title: t('expenseEntry.toastAnalysisFailedTitle'),
+        description: error.message || t('expenseEntry.errorAnalyzeReceipts'),
         variant: "destructive",
       });
     } finally {
@@ -1310,23 +1313,23 @@ export default function ExpenseEntryPage() {
         }));
         
         setRecognizedItems(prev => [...prev, ...newItems]);
-        
+
         toast({
-          title: `Found ${newItems.length} item(s)`,
-          description: `Added ${newItems.length} expense(s) from page ${addMissingPageNumber}`,
+          title: t('expenseEntry.toastFoundItemsTitle', { count: newItems.length }),
+          description: t('expenseEntry.toastAddedFromPageDesc', { count: newItems.length, page: addMissingPageNumber }),
         });
       } else {
         toast({
-          title: "No items found",
-          description: `Could not find any expenses on page ${addMissingPageNumber}`,
+          title: t('expenseEntry.toastNoItemsFoundTitle'),
+          description: t('expenseEntry.toastNoItemsOnPageDesc', { page: addMissingPageNumber }),
           variant: "destructive",
         });
       }
     } catch (error: any) {
       console.error('Single page analysis error:', error);
       toast({
-        title: "Analysis failed",
-        description: error.message || 'Failed to analyze page',
+        title: t('expenseEntry.toastAnalysisFailedTitle'),
+        description: error.message || t('expenseEntry.errorAnalyzePage'),
         variant: "destructive",
       });
     } finally {
@@ -1337,23 +1340,23 @@ export default function ExpenseEntryPage() {
   // Format category name including tax categories
   const formatAllCategoryName = (category: string): string => {
     const categoryNames: Record<string, string> = {
-      customs_tax: 'Customs Tax (Gümrük Vergisi)',
-      additional_customs_tax: 'Additional Customs Tax',
-      kkdf: 'KKDF',
-      vat: 'VAT (KDV)',
-      stamp_tax: 'Stamp Tax (Damga Vergisi)',
-      export_registry_fee: 'Export Registry Fee',
-      insurance: 'Insurance',
-      awb_fee: 'AWB Fee',
-      airport_storage_fee: 'Airport Storage Fee',
-      bonded_warehouse_storage_fee: 'Bonded Warehouse Storage',
-      transportation: 'Transportation',
-      international_transportation: 'International Transportation',
-      tareks_fee: 'TAREKS Fee',
-      customs_inspection: 'Customs Inspection',
-      azo_test: 'AZO Test',
-      service_invoice: 'Service Invoice',
-      other: 'Other'
+      customs_tax: t('expenseEntry.category.customs_tax'),
+      additional_customs_tax: t('expenseEntry.category.additional_customs_tax'),
+      kkdf: t('expenseEntry.category.kkdf'),
+      vat: t('expenseEntry.category.vat'),
+      stamp_tax: t('expenseEntry.category.stamp_tax'),
+      export_registry_fee: t('expenseEntry.category.export_registry_fee'),
+      insurance: t('expenseEntry.category.insurance'),
+      awb_fee: t('expenseEntry.category.awb_fee'),
+      airport_storage_fee: t('expenseEntry.category.airport_storage_fee'),
+      bonded_warehouse_storage_fee: t('expenseEntry.category.bonded_warehouse_storage_fee'),
+      transportation: t('expenseEntry.category.transportation'),
+      international_transportation: t('expenseEntry.category.international_transportation'),
+      tareks_fee: t('expenseEntry.category.tareks_fee'),
+      customs_inspection: t('expenseEntry.category.customs_inspection'),
+      azo_test: t('expenseEntry.category.azo_test'),
+      service_invoice: t('expenseEntry.category.service_invoice'),
+      other: t('expenseEntry.category.other')
     };
     return categoryNames[category] || formatCategoryName(category);
   };
@@ -1362,19 +1365,19 @@ export default function ExpenseEntryPage() {
   const addSelectedItems = async () => {
     if (!procedure) {
       toast({
-        title: "Error",
-        description: "Please select a procedure first",
+        title: t('common.error'),
+        description: t('expenseEntry.toastSelectProcedureFirst'),
         variant: "destructive",
       });
       return;
     }
 
     const selectedItems = recognizedItems.filter(item => item.selected);
-    
+
     if (selectedItems.length === 0) {
       toast({
-        title: "No items selected",
-        description: "Please select at least one item to add",
+        title: t('expenseEntry.toastNoItemsSelectedTitle'),
+        description: t('expenseEntry.toastNoItemsSelectedDesc'),
         variant: "destructive",
       });
       return;
@@ -1572,15 +1575,15 @@ export default function ExpenseEntryPage() {
 
     // Show result messages
     const messages: string[] = [];
-    if (taxSuccess) messages.push('Taxes saved');
-    if (expenseSuccessCount > 0) messages.push(`${expenseSuccessCount} expense(s) added`);
-    if (serviceInvoiceSuccessCount > 0) messages.push(`${serviceInvoiceSuccessCount} service invoice(s) added`);
-    if (documentsAttached > 0) messages.push(`${documentsAttached} document(s) attached`);
-    if (errorCount > 0) messages.push(`${errorCount} failed`);
+    if (taxSuccess) messages.push(t('expenseEntry.resultTaxesSaved'));
+    if (expenseSuccessCount > 0) messages.push(t('expenseEntry.resultExpensesAdded', { count: expenseSuccessCount }));
+    if (serviceInvoiceSuccessCount > 0) messages.push(t('expenseEntry.resultServiceInvoicesAdded', { count: serviceInvoiceSuccessCount }));
+    if (documentsAttached > 0) messages.push(t('expenseEntry.resultDocumentsAttached', { count: documentsAttached }));
+    if (errorCount > 0) messages.push(t('expenseEntry.resultFailed', { count: errorCount }));
 
     if (taxSuccess || expenseSuccessCount > 0 || serviceInvoiceSuccessCount > 0) {
       toast({
-        title: "Items saved",
+        title: t('expenseEntry.toastItemsSavedTitle'),
         description: messages.join(', '),
       });
       await loadProcedureData(procedure.reference);
@@ -1588,8 +1591,8 @@ export default function ExpenseEntryPage() {
 
     if (errorCount > 0 && !taxSuccess && expenseSuccessCount === 0 && serviceInvoiceSuccessCount === 0) {
       toast({
-        title: "Error",
-        description: "Failed to save items",
+        title: t('common.error'),
+        description: t('expenseEntry.toastSaveItemsFailed'),
         variant: "destructive",
       });
     }
@@ -1605,8 +1608,8 @@ export default function ExpenseEntryPage() {
   const onShipmentSubmit = async (data: any) => {
     if (!procedure) {
       toast({
-        title: "Error",
-        description: "No procedure selected",
+        title: t('common.error'),
+        description: t('expenseEntry.toastNoProcedureSelected'),
         variant: "destructive",
       });
       return;
@@ -1641,15 +1644,15 @@ export default function ExpenseEntryPage() {
       setIsShipmentFormManuallyEdited(false);
 
       toast({
-        title: "Success",
-        description: "Shipment details updated successfully",
+        title: t('common.success'),
+        description: t('expenseEntry.toastShipmentUpdated'),
       });
 
     } catch (error: any) {
       console.error('Error updating shipment details:', error);
       toast({
-        title: "Error",
-        description: error.message || 'Failed to update shipment details',
+        title: t('common.error'),
+        description: error.message || t('expenseEntry.toastShipmentUpdateFailed'),
         variant: "destructive",
       });
     } finally {
@@ -1668,8 +1671,8 @@ export default function ExpenseEntryPage() {
       } catch (error) {
         console.error("Error fetching procedures:", error);
         showToast({
-          title: "Error",
-          description: "Failed to fetch procedures list",
+          title: t('common.error'),
+          description: t('expenseEntry.toastFetchProceduresFailed'),
           variant: "destructive",
         });
       }
@@ -1721,8 +1724,8 @@ export default function ExpenseEntryPage() {
   const onSubmitServiceInvoiceForm = async (data: any) => {
     if (!procedure) {
       showToast({
-        title: "Error",
-        description: "No procedure selected",
+        title: t('common.error'),
+        description: t('expenseEntry.toastNoProcedureSelected'),
         variant: "destructive",
       });
       return;
@@ -1781,8 +1784,8 @@ export default function ExpenseEntryPage() {
           if (attachResponse.ok) {
             console.log('[Auto-attach] Service invoice PDF attached successfully');
             showToast({
-              title: "Document attached",
-              description: "The analyzed PDF has been automatically attached to the invoice",
+              title: t('expenseEntry.toastDocumentAttachedTitle'),
+              description: t('expenseEntry.toastDocumentAttachedInvoiceDesc'),
             });
           } else {
             console.error('[Auto-attach] Failed to attach PDF:', await attachResponse.text());
@@ -1805,17 +1808,17 @@ export default function ExpenseEntryPage() {
       });
       
       showToast({
-        title: "Invoice added",
-        description: analyzedServicePdf ? "Invoice saved with attached PDF" : "Service invoice saved successfully",
+        title: t('expenseEntry.toastInvoiceAddedTitle'),
+        description: analyzedServicePdf ? t('expenseEntry.toastInvoiceSavedWithPdf') : t('expenseEntry.toastInvoiceSaved'),
       });
-      
+
       // Reload procedure data to ensure UI is in sync
       await loadProcedureData(procedure.reference);
     } catch (error) {
       console.error("Error saving service invoice:", error);
       showToast({
-        title: "Error",
-        description: "Failed to save service invoice to database",
+        title: t('common.error'),
+        description: t('expenseEntry.toastInvoiceSaveFailed'),
         variant: "destructive",
       });
     } finally {
@@ -1833,25 +1836,25 @@ export default function ExpenseEntryPage() {
       try {
         await apiRequest("DELETE", `/api/import-expenses/${expense.id}`);
         showToast({
-          title: "Expense deleted",
-          description: "Expense deleted successfully from the database",
+          title: t('expenseEntry.toastExpenseDeletedTitle'),
+          description: t('expenseEntry.toastExpenseDeletedDesc'),
         });
       } catch (error) {
         console.error("Error deleting expense:", error);
         showToast({
-          title: "Error",
-          description: "Failed to delete expense from the database",
+          title: t('common.error'),
+          description: t('expenseEntry.toastExpenseDeleteFailed'),
           variant: "destructive",
         });
         return; // Don't remove from UI if database delete failed
       }
     }
-    
+
     // Remove from UI array
     setImportExpenses(prev => prev.filter((_, i) => i !== index));
     showToast({
-      title: "Expense removed",
-      description: "Expense removed from the list",
+      title: t('expenseEntry.toastExpenseRemovedTitle'),
+      description: t('expenseEntry.toastExpenseRemovedDesc'),
     });
     
     // Reload procedure data to ensure UI is in sync with database
@@ -1928,8 +1931,8 @@ export default function ExpenseEntryPage() {
         // Update in database
         await apiRequest("PUT", `/api/import-expenses/${expense.id}`, cleanedData);
         showToast({
-          title: "Expense updated",
-          description: "Expense updated successfully in the database",
+          title: t('expenseEntry.toastExpenseUpdatedTitle'),
+          description: t('expenseEntry.toastExpenseUpdatedDesc'),
         });
       }
       
@@ -1968,13 +1971,13 @@ export default function ExpenseEntryPage() {
     } catch (error) {
       console.error("Error updating expense:", error);
       showToast({
-        title: "Error",
-        description: "Failed to update expense",
+        title: t('common.error'),
+        description: t('expenseEntry.toastExpenseUpdateFailed'),
         variant: "destructive",
       });
     }
   };
-  
+
   // Remove a service invoice from the list
   const removeServiceInvoice = async (index: number) => {
     console.log('Delete clicked for service invoice:', index, serviceInvoices[index]);
@@ -1985,25 +1988,25 @@ export default function ExpenseEntryPage() {
       try {
         await apiRequest("DELETE", `/api/service-invoices/${invoice.id}`);
         showToast({
-          title: "Invoice deleted",
-          description: "Service invoice deleted successfully from the database",
+          title: t('expenseEntry.toastInvoiceDeletedTitle'),
+          description: t('expenseEntry.toastInvoiceDeletedDesc'),
         });
       } catch (error) {
         console.error("Error deleting service invoice:", error);
         showToast({
-          title: "Error",
-          description: "Failed to delete service invoice from the database",
+          title: t('common.error'),
+          description: t('expenseEntry.toastInvoiceDeleteFailed'),
           variant: "destructive",
         });
         return; // Don't remove from UI if database delete failed
       }
     }
-    
+
     // Remove from UI array
     setServiceInvoices(prev => prev.filter((_, i) => i !== index));
     showToast({
-      title: "Invoice removed",
-      description: "Service invoice removed from the list",
+      title: t('expenseEntry.toastInvoiceRemovedTitle'),
+      description: t('expenseEntry.toastInvoiceRemovedDesc'),
     });
     
     // Reload procedure data to ensure UI is in sync with database
@@ -2065,10 +2068,10 @@ export default function ExpenseEntryPage() {
     });
     
     setIsConfirmDialogOpen(false);
-    
+
     showToast({
-      title: "Reset complete",
-      description: "All forms have been reset",
+      title: t('expenseEntry.toastResetCompleteTitle'),
+      description: t('expenseEntry.toastResetCompleteDesc'),
     });
   };
   
@@ -2112,25 +2115,25 @@ export default function ExpenseEntryPage() {
   const totals = computeTotals();
   
   return (
-    <PageLayout title="Expense Entry" navItems={items}>
+    <PageLayout title={t('expenseEntry.title')} navItems={items}>
       <div className="container mx-auto p-6">
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Shipment Details</CardTitle>
+            <CardTitle>{t('expenseEntry.shipmentDetails')}</CardTitle>
             <CardDescription>
-              Select a procedure from the dropdown or enter a reference number to load the shipment details
+              {t('expenseEntry.shipmentDetailsDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex gap-4 items-end mb-4">
               <div className="flex-1">
-                <Label htmlFor="procedure-select">Select Procedure</Label>
+                <Label htmlFor="procedure-select">{t('expenseEntry.selectProcedure')}</Label>
                 <Select
                   onValueChange={handleProcedureSelect}
                   disabled={isReadOnly || isLoadingProcedure}
                 >
                   <SelectTrigger id="procedure-select" className="w-full">
-                    <SelectValue placeholder="Choose a procedure" />
+                    <SelectValue placeholder={t('expenseEntry.chooseProcedure')} />
                   </SelectTrigger>
                   <SelectContent>
                     {procedures.map((proc) => (
@@ -2145,18 +2148,18 @@ export default function ExpenseEntryPage() {
             
             <div className="flex items-center mb-2">
               <div className="flex-grow border-t border-gray-300"></div>
-              <span className="px-3 text-gray-500 text-sm">OR</span>
+              <span className="px-3 text-gray-500 text-sm">{t('expenseEntry.or')}</span>
               <div className="flex-grow border-t border-gray-300"></div>
             </div>
-            
+
             <form onSubmit={shipmentForm.handleSubmit(onSubmitShipmentForm)} className="flex gap-4 items-end">
               <div className="flex-1">
-                <Label htmlFor="reference">Reference Number</Label>
+                <Label htmlFor="reference">{t('expenseEntry.referenceNumber')}</Label>
                 <Input
                   id="reference"
                   {...shipmentForm.register("reference")}
                   disabled={isReadOnly || isLoadingProcedure}
-                  placeholder="Enter shipment reference"
+                  placeholder={t('expenseEntry.referencePlaceholder')}
                 />
                 {shipmentForm.formState.errors.reference && (
                   <p className="text-sm text-red-500 mt-1">
@@ -2168,7 +2171,7 @@ export default function ExpenseEntryPage() {
                 {isLoadingProcedure ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
-                  "Search"
+                  t('expenseEntry.search')
                 )}
               </Button>
               {isReadOnly && (
@@ -2177,7 +2180,7 @@ export default function ExpenseEntryPage() {
                   variant="outline"
                   onClick={() => setIsReadOnly(false)}
                 >
-                  Edit
+                  {t('expenseEntry.edit')}
                 </Button>
               )}
             </form>
@@ -2189,19 +2192,19 @@ export default function ExpenseEntryPage() {
                 {/* Read-only Procedure Info */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   <div>
-                    <Label>Invoice Number</Label>
+                    <Label>{t('expenseEntry.invoiceNumber')}</Label>
                     <Input value={procedure.invoice_no || ""} readOnly />
                   </div>
                   <div>
-                    <Label>Invoice Date</Label>
+                    <Label>{t('expenseEntry.invoiceDate')}</Label>
                     <Input value={formatDate(procedure.invoice_date)} readOnly />
                   </div>
                   <div>
-                    <Label>Amount</Label>
+                    <Label>{t('expenseEntry.amount')}</Label>
                     <Input value={formatCurrency(procedure.amount, procedure.currency)} readOnly />
                   </div>
                   <div>
-                    <Label>Arrival Date</Label>
+                    <Label>{t('expenseEntry.arrivalDate')}</Label>
                     <Input value={formatDate(procedure.arrival_date)} readOnly />
                   </div>
                 </div>
@@ -2215,7 +2218,7 @@ export default function ExpenseEntryPage() {
                         name="shipper"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Shipper/Exporter</FormLabel>
+                            <FormLabel>{t('expenseEntry.shipperExporter')}</FormLabel>
                             <FormControl>
                               <Input {...field} placeholder="ALO HONG KONG LTD" data-testid="input-shipper" />
                             </FormControl>
@@ -2229,18 +2232,18 @@ export default function ExpenseEntryPage() {
                         name="package"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Package (Koli)</FormLabel>
+                            <FormLabel>{t('expenseEntry.package')}</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
-                                placeholder="Enter package count (Kap Adedi)"
+                              <Input
+                                type="number"
+                                placeholder={t('expenseEntry.packagePlaceholder')}
                                 {...field}
                                 onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                                 data-testid="input-package"
                               />
                             </FormControl>
                             <FormDescription>
-                              From "6 Kap Adedi" box on customs declaration
+                              {t('expenseEntry.packageDesc')}
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -2252,10 +2255,10 @@ export default function ExpenseEntryPage() {
                         name="weight"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Weight (KG)</FormLabel>
+                            <FormLabel>{t('expenseEntry.weight')}</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
+                              <Input
+                                type="number"
                                 step="0.01"
                                 {...field}
                                 onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
@@ -2272,10 +2275,10 @@ export default function ExpenseEntryPage() {
                         name="pieces"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Pieces (Adet)</FormLabel>
+                            <FormLabel>{t('expenseEntry.pieces')}</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
+                              <Input
+                                type="number"
                                 {...field}
                                 onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                                 data-testid="input-pieces"
@@ -2291,7 +2294,7 @@ export default function ExpenseEntryPage() {
                         name="awbNumber"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>AWB Number</FormLabel>
+                            <FormLabel>{t('expenseEntry.awbNumber')}</FormLabel>
                             <FormControl>
                               <Input {...field} placeholder="235-12345678" data-testid="input-awb-number" />
                             </FormControl>
@@ -2305,7 +2308,7 @@ export default function ExpenseEntryPage() {
                         name="customs"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Customs Office</FormLabel>
+                            <FormLabel>{t('expenseEntry.customsOffice')}</FormLabel>
                             <FormControl>
                               <Input {...field} placeholder="İstanbul Havalimanı Gümrüğü" data-testid="input-customs" />
                             </FormControl>
@@ -2319,7 +2322,7 @@ export default function ExpenseEntryPage() {
                         name="importDeclarationNumber"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Import Declaration Number</FormLabel>
+                            <FormLabel>{t('expenseEntry.importDeclarationNumber')}</FormLabel>
                             <FormControl>
                               <Input {...field} placeholder="25341453IM00684473" data-testid="input-import-declaration-number" />
                             </FormControl>
@@ -2333,7 +2336,7 @@ export default function ExpenseEntryPage() {
                         name="importDeclarationDate"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Import Declaration Date</FormLabel>
+                            <FormLabel>{t('expenseEntry.importDeclarationDate')}</FormLabel>
                             <FormControl>
                               <Input type="date" {...field} data-testid="input-import-declaration-date" />
                             </FormControl>
@@ -2347,10 +2350,10 @@ export default function ExpenseEntryPage() {
                         name="usdTlRate"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>USD/TL Exchange Rate</FormLabel>
+                            <FormLabel>{t('expenseEntry.usdTlRate')}</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
+                              <Input
+                                type="number"
                                 step="0.0001"
                                 placeholder="34.5678"
                                 {...field}
@@ -2368,10 +2371,10 @@ export default function ExpenseEntryPage() {
                       {isSubmittingShipment ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving...
+                          {t('expenseEntry.saving')}
                         </>
                       ) : (
-                        'Save Shipment Details'
+                        t('expenseEntry.saveShipmentDetails')
                       )}
                     </Button>
                   </form>
@@ -2387,10 +2390,10 @@ export default function ExpenseEntryPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-green-700">
                 <Upload className="h-5 w-5" />
-                Upload Expense Documents
+                {t('expenseEntry.uploadExpenseDocuments')}
               </CardTitle>
               <CardDescription>
-                Upload expense receipts and service invoices. Multiple PDFs can be selected at once.
+                {t('expenseEntry.uploadExpenseDocumentsDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -2402,7 +2405,7 @@ export default function ExpenseEntryPage() {
               >
                 <div className="flex flex-col items-center gap-1">
                   <FileText className="h-8 w-8" />
-                  <span>Click to Upload PDFs (Expense Receipts & Service Invoices)</span>
+                  <span>{t('expenseEntry.clickToUploadPdfs')}</span>
                 </div>
               </Button>
             </CardContent>
@@ -2413,9 +2416,9 @@ export default function ExpenseEntryPage() {
           <>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
               <TabsList className="grid grid-cols-3">
-                <TabsTrigger value="tax">Tax</TabsTrigger>
-                <TabsTrigger value="importExpense">Import Expenses</TabsTrigger>
-                <TabsTrigger value="serviceInvoice">Service Invoices</TabsTrigger>
+                <TabsTrigger value="tax">{t('expenseEntry.tabTax')}</TabsTrigger>
+                <TabsTrigger value="importExpense">{t('expenseEntry.tabImportExpenses')}</TabsTrigger>
+                <TabsTrigger value="serviceInvoice">{t('expenseEntry.tabServiceInvoices')}</TabsTrigger>
               </TabsList>
               
               <TabsContent value="tax">
@@ -2423,16 +2426,16 @@ export default function ExpenseEntryPage() {
                 {taxDeclarationInfo && (
                   <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <p className="text-sm text-blue-800">
-                      <strong>Declaration Info:</strong> {taxDeclarationInfo}
+                      <strong>{t('expenseEntry.declarationInfo')}:</strong> {taxDeclarationInfo}
                     </p>
                   </div>
                 )}
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Tax Information</CardTitle>
+                    <CardTitle>{t('expenseEntry.taxInformation')}</CardTitle>
                     <CardDescription>
-                      Enter tax information for this shipment
+                      {t('expenseEntry.taxInformationDesc')}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -2442,7 +2445,7 @@ export default function ExpenseEntryPage() {
                       className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
                     >
                       <div>
-                        <Label htmlFor="customsTax">Customs Tax</Label>
+                        <Label htmlFor="customsTax">{t('expenseEntry.customsTax')}</Label>
                         <Input
                           id="customsTax"
                           type="number"
@@ -2452,7 +2455,7 @@ export default function ExpenseEntryPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="additionalCustomsTax">Additional Customs Tax</Label>
+                        <Label htmlFor="additionalCustomsTax">{t('expenseEntry.additionalCustomsTax')}</Label>
                         <Input
                           id="additionalCustomsTax"
                           type="number"
@@ -2462,7 +2465,7 @@ export default function ExpenseEntryPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="kkdf">KKDF</Label>
+                        <Label htmlFor="kkdf">{t('expenseEntry.kkdf')}</Label>
                         <Input
                           id="kkdf"
                           type="number"
@@ -2472,7 +2475,7 @@ export default function ExpenseEntryPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="vat">VAT</Label>
+                        <Label htmlFor="vat">{t('expenseEntry.vat')}</Label>
                         <Input
                           id="vat"
                           type="number"
@@ -2482,7 +2485,7 @@ export default function ExpenseEntryPage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="stampTax">Stamp Tax</Label>
+                        <Label htmlFor="stampTax">{t('expenseEntry.stampTax')}</Label>
                         <Input
                           id="stampTax"
                           type="number"
@@ -2495,7 +2498,7 @@ export default function ExpenseEntryPage() {
                   </CardContent>
                   <CardFooter className="flex justify-between">
                     <div>
-                      <span className="text-sm font-semibold">Tax Total: </span>
+                      <span className="text-sm font-semibold">{t('expenseEntry.taxTotal')}: </span>
                       <span>{formatNumber(totals.taxTotal)}</span>
                     </div>
                     <Button
@@ -2506,9 +2509,9 @@ export default function ExpenseEntryPage() {
                       {isSubmitting ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : taxData?.id ? (
-                        "Update Tax Information"
+                        t('expenseEntry.updateTaxInformation')
                       ) : (
-                        "Save Tax Information"
+                        t('expenseEntry.saveTaxInformation')
                       )}
                     </Button>
                   </CardFooter>
@@ -2523,8 +2526,8 @@ export default function ExpenseEntryPage() {
                       expenseId={taxData.id}
                       onUploadComplete={() => {
                         showToast({
-                          title: "Document uploaded",
-                          description: "Your document has been uploaded successfully"
+                          title: t('expenseEntry.toastDocumentUploadedTitle'),
+                          description: t('expenseEntry.toastDocumentUploadedDesc')
                         });
                       }}
                     />
@@ -2535,9 +2538,9 @@ export default function ExpenseEntryPage() {
               <TabsContent value="importExpense">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Import Expenses</CardTitle>
+                    <CardTitle>{t('expenseEntry.importExpensesTitle')}</CardTitle>
                     <CardDescription>
-                      Add import-related expenses
+                      {t('expenseEntry.importExpensesDesc')}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -2547,18 +2550,18 @@ export default function ExpenseEntryPage() {
                       className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
                     >
                       <div>
-                        <Label htmlFor="category">Expense Category</Label>
+                        <Label htmlFor="category">{t('expenseEntry.expenseCategory')}</Label>
                         <Select
                           onValueChange={value => importExpenseForm.setValue("category", value)}
                           value={importExpenseForm.watch("category")}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select expense category" />
+                            <SelectValue placeholder={t('expenseEntry.selectExpenseCategory')} />
                           </SelectTrigger>
                           <SelectContent>
                             {expenseCategories.map(category => (
                               <SelectItem key={category} value={category}>
-                                {formatCategoryName(category)}
+                                {formatAllCategoryName(category)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -2571,7 +2574,7 @@ export default function ExpenseEntryPage() {
                       </div>
                       
                       <div>
-                        <Label htmlFor="amount">Amount</Label>
+                        <Label htmlFor="amount">{t('expenseEntry.amount')}</Label>
                         <Input
                           id="amount"
                           type="number"
@@ -2585,15 +2588,15 @@ export default function ExpenseEntryPage() {
                           </p>
                         )}
                       </div>
-                      
+
                       <div>
-                        <Label htmlFor="currency">Currency</Label>
+                        <Label htmlFor="currency">{t('expenseEntry.currency')}</Label>
                         <Select
                           onValueChange={value => importExpenseForm.setValue("currency", value)}
                           defaultValue={importExpenseForm.watch("currency")}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select currency" />
+                            <SelectValue placeholder={t('expenseEntry.selectCurrency')} />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="TRY">TRY</SelectItem>
@@ -2604,22 +2607,22 @@ export default function ExpenseEntryPage() {
                         </Select>
                       </div>
                       
-                      {(getCurrentCategoryRequiredFields().includes("invoiceNumber") || 
+                      {(getCurrentCategoryRequiredFields().includes("invoiceNumber") ||
                         !importExpenseForm.watch("category")) && (
                         <div>
-                          <Label htmlFor="invoiceNumber">Invoice Number</Label>
+                          <Label htmlFor="invoiceNumber">{t('expenseEntry.invoiceNumber')}</Label>
                           <Input
                             id="invoiceNumber"
                             {...importExpenseForm.register("invoiceNumber")}
-                            placeholder="Invoice number"
+                            placeholder={t('expenseEntry.invoiceNumberPlaceholder')}
                           />
                         </div>
                       )}
-                      
-                      {(getCurrentCategoryRequiredFields().includes("invoiceDate") || 
+
+                      {(getCurrentCategoryRequiredFields().includes("invoiceDate") ||
                         !importExpenseForm.watch("category")) && (
                         <div>
-                          <Label htmlFor="invoiceDate">Invoice Date</Label>
+                          <Label htmlFor="invoiceDate">{t('expenseEntry.invoiceDate')}</Label>
                           <Input
                             id="invoiceDate"
                             type="date"
@@ -2627,49 +2630,49 @@ export default function ExpenseEntryPage() {
                           />
                         </div>
                       )}
-                      
-                      {(getCurrentCategoryRequiredFields().includes("documentNumber") || 
+
+                      {(getCurrentCategoryRequiredFields().includes("documentNumber") ||
                         !importExpenseForm.watch("category")) && (
                         <div>
-                          <Label htmlFor="documentNumber">Document Number</Label>
+                          <Label htmlFor="documentNumber">{t('expenseEntry.documentNumber')}</Label>
                           <Input
                             id="documentNumber"
                             {...importExpenseForm.register("documentNumber")}
-                            placeholder="Document number"
+                            placeholder={t('expenseEntry.documentNumberPlaceholder')}
                           />
                         </div>
                       )}
-                      
-                      {(getCurrentCategoryRequiredFields().includes("policyNumber") || 
+
+                      {(getCurrentCategoryRequiredFields().includes("policyNumber") ||
                         !importExpenseForm.watch("category")) && (
                         <div>
-                          <Label htmlFor="policyNumber">Policy Number</Label>
+                          <Label htmlFor="policyNumber">{t('expenseEntry.policyNumber')}</Label>
                           <Input
                             id="policyNumber"
                             {...importExpenseForm.register("policyNumber")}
-                            placeholder="Policy number"
+                            placeholder={t('expenseEntry.policyNumberPlaceholder')}
                           />
                         </div>
                       )}
-                      
-                      {(getCurrentCategoryRequiredFields().includes("issuer") || 
+
+                      {(getCurrentCategoryRequiredFields().includes("issuer") ||
                         !importExpenseForm.watch("category")) && (
                         <div>
-                          <Label htmlFor="issuer">Issuer</Label>
+                          <Label htmlFor="issuer">{t('expenseEntry.issuer')}</Label>
                           <Input
                             id="issuer"
                             {...importExpenseForm.register("issuer")}
-                            placeholder="Issuer name"
+                            placeholder={t('expenseEntry.issuerPlaceholder')}
                           />
                         </div>
                       )}
-                      
+
                       <div className="md:col-span-2 lg:col-span-3">
-                        <Label htmlFor="notes">Notes</Label>
+                        <Label htmlFor="notes">{t('expenseEntry.notes')}</Label>
                         <Input
                           id="notes"
                           {...importExpenseForm.register("notes")}
-                          placeholder="Additional notes"
+                          placeholder={t('expenseEntry.notesPlaceholder')}
                         />
                       </div>
                     </form>
@@ -2682,7 +2685,7 @@ export default function ExpenseEntryPage() {
                         onClick={cancelEditExpense}
                       >
                         <CloseIcon className="mr-2 h-4 w-4" />
-                        Cancel
+                        {t('expenseEntry.cancel')}
                       </Button>
                     )}
                     <Button
@@ -2693,12 +2696,12 @@ export default function ExpenseEntryPage() {
                       {editingExpenseIndex !== null ? (
                         <>
                           <Save className="mr-2 h-4 w-4" />
-                          Update Expense
+                          {t('expenseEntry.updateExpense')}
                         </>
                       ) : (
                         <>
                           <Plus className="mr-2 h-4 w-4" />
-                          Add Expense
+                          {t('expenseEntry.addExpense')}
                         </>
                       )}
                     </Button>
@@ -2708,42 +2711,42 @@ export default function ExpenseEntryPage() {
                 {importExpenses.length > 0 && (
                   <Card className="mt-4">
                     <CardHeader>
-                      <CardTitle>Import Expenses List</CardTitle>
+                      <CardTitle>{t('expenseEntry.importExpensesListTitle')}</CardTitle>
                       <CardDescription>
-                        Added expenses for this shipment
+                        {t('expenseEntry.importExpensesListDesc')}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Category</TableHead>
-                            <TableHead>Amount</TableHead>
-                            <TableHead>Details</TableHead>
-                            <TableHead>Action</TableHead>
+                            <TableHead>{t('expenseEntry.colCategory')}</TableHead>
+                            <TableHead>{t('expenseEntry.colAmount')}</TableHead>
+                            <TableHead>{t('expenseEntry.colDetails')}</TableHead>
+                            <TableHead>{t('expenseEntry.colAction')}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {importExpenses.map((expense, index) => (
                             <TableRow key={expense.id || `new-${index}`}>
                               <TableCell className="font-medium">
-                                {formatCategoryName(expense.category)}
+                                {formatAllCategoryName(expense.category)}
                               </TableCell>
                               <TableCell>
                                 {formatCurrency(expense.amount, expense.currency)}
                               </TableCell>
                               <TableCell>
                                 {expense.invoiceNumber && (
-                                  <p>Invoice: {expense.invoiceNumber}</p>
+                                  <p>{t('expenseEntry.detailInvoice')}: {expense.invoiceNumber}</p>
                                 )}
                                 {expense.documentNumber && (
-                                  <p>Document: {expense.documentNumber}</p>
+                                  <p>{t('expenseEntry.detailDocument')}: {expense.documentNumber}</p>
                                 )}
                                 {expense.policyNumber && (
-                                  <p>Policy: {expense.policyNumber}</p>
+                                  <p>{t('expenseEntry.detailPolicy')}: {expense.policyNumber}</p>
                                 )}
                                 {expense.issuer && (
-                                  <p>Issuer: {expense.issuer}</p>
+                                  <p>{t('expenseEntry.detailIssuer')}: {expense.issuer}</p>
                                 )}
                               </TableCell>
                               <TableCell>
@@ -2762,7 +2765,7 @@ export default function ExpenseEntryPage() {
                                           </Button>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                          <p>Edit expense</p>
+                                          <p>{t('expenseEntry.tooltipEditExpense')}</p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </TooltipProvider>
@@ -2780,7 +2783,7 @@ export default function ExpenseEntryPage() {
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
-                                        <p>Remove expense</p>
+                                        <p>{t('expenseEntry.tooltipRemoveExpense')}</p>
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
@@ -2793,7 +2796,7 @@ export default function ExpenseEntryPage() {
                     </CardContent>
                     <CardFooter className="flex justify-between">
                       <div>
-                        <span className="text-sm font-semibold">Import Expenses Total: </span>
+                        <span className="text-sm font-semibold">{t('expenseEntry.importExpensesTotal')}: </span>
                         <span>{formatNumber(totals.importExpenseTotal)}</span>
                       </div>
                     </CardFooter>
@@ -2805,15 +2808,15 @@ export default function ExpenseEntryPage() {
                   <div className="mt-6">
                     <Card>
                       <CardHeader>
-                        <CardTitle>Expense Documents</CardTitle>
+                        <CardTitle>{t('expenseEntry.expenseDocuments')}</CardTitle>
                         <CardDescription>
-                          Select an expense to upload or view documents
+                          {t('expenseEntry.expenseDocumentsDesc')}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <div className="grid gap-4">
                           <div>
-                            <Label htmlFor="selectedExpense">Select Expense</Label>
+                            <Label htmlFor="selectedExpense">{t('expenseEntry.selectExpense')}</Label>
                             <Select
                               onValueChange={(value) => {
                                 const expense = importExpenses.find(e => e.id && e.id.toString() === value);
@@ -2823,18 +2826,18 @@ export default function ExpenseEntryPage() {
                               }}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="Select an expense to manage documents" />
+                                <SelectValue placeholder={t('expenseEntry.selectExpensePlaceholder')} />
                               </SelectTrigger>
                               <SelectContent>
                                 {importExpenses.filter(expense => expense.id).map((expense) => (
                                   <SelectItem key={expense.id} value={expense.id!.toString()}>
-                                    {formatCategoryName(expense.category)} - {formatCurrency(expense.amount, expense.currency)}
+                                    {formatAllCategoryName(expense.category)} - {formatCurrency(expense.amount, expense.currency)}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </div>
-                          
+
                           {selectedExpense?.id && (
                             <ExpenseDocumentUpload
                               procedureReference={procedure.reference}
@@ -2842,8 +2845,8 @@ export default function ExpenseEntryPage() {
                               expenseId={selectedExpense.id}
                               onUploadComplete={() => {
                                 showToast({
-                                  title: "Document uploaded",
-                                  description: "Your document has been uploaded successfully"
+                                  title: t('expenseEntry.toastDocumentUploadedTitle'),
+                                  description: t('expenseEntry.toastDocumentUploadedDesc')
                                 });
                               }}
                             />
@@ -2858,9 +2861,9 @@ export default function ExpenseEntryPage() {
               <TabsContent value="serviceInvoice">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Import Service Invoices</CardTitle>
+                    <CardTitle>{t('expenseEntry.serviceInvoicesTitle')}</CardTitle>
                     <CardDescription>
-                      Add import service invoices
+                      {t('expenseEntry.serviceInvoicesDesc')}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -2870,7 +2873,7 @@ export default function ExpenseEntryPage() {
                       className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
                     >
                       <div>
-                        <Label htmlFor="amount">Amount</Label>
+                        <Label htmlFor="amount">{t('expenseEntry.amount')}</Label>
                         <Input
                           id="amount"
                           type="number"
@@ -2884,15 +2887,15 @@ export default function ExpenseEntryPage() {
                           </p>
                         )}
                       </div>
-                      
+
                       <div>
-                        <Label htmlFor="currency">Currency</Label>
+                        <Label htmlFor="currency">{t('expenseEntry.currency')}</Label>
                         <Select
                           onValueChange={value => serviceInvoiceForm.setValue("currency", value)}
                           defaultValue={serviceInvoiceForm.watch("currency")}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select currency" />
+                            <SelectValue placeholder={t('expenseEntry.selectCurrency')} />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="TRY">TRY</SelectItem>
@@ -2902,13 +2905,13 @@ export default function ExpenseEntryPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      
+
                       <div>
-                        <Label htmlFor="invoiceNumber">Invoice Number</Label>
+                        <Label htmlFor="invoiceNumber">{t('expenseEntry.invoiceNumber')}</Label>
                         <Input
                           id="invoiceNumber"
                           {...serviceInvoiceForm.register("invoiceNumber")}
-                          placeholder="Invoice number"
+                          placeholder={t('expenseEntry.invoiceNumberPlaceholder')}
                         />
                         {serviceInvoiceForm.formState.errors.invoiceNumber && (
                           <p className="text-sm text-red-500 mt-1">
@@ -2916,9 +2919,9 @@ export default function ExpenseEntryPage() {
                           </p>
                         )}
                       </div>
-                      
+
                       <div>
-                        <Label htmlFor="date">Date</Label>
+                        <Label htmlFor="date">{t('expenseEntry.date')}</Label>
                         <Input
                           id="date"
                           type="date"
@@ -2930,13 +2933,13 @@ export default function ExpenseEntryPage() {
                           </p>
                         )}
                       </div>
-                      
+
                       <div className="md:col-span-2 lg:col-span-3">
-                        <Label htmlFor="notes">Notes</Label>
+                        <Label htmlFor="notes">{t('expenseEntry.notes')}</Label>
                         <Input
                           id="notes"
                           {...serviceInvoiceForm.register("notes")}
-                          placeholder="Additional notes"
+                          placeholder={t('expenseEntry.notesPlaceholder')}
                         />
                       </div>
                     </form>
@@ -2948,7 +2951,7 @@ export default function ExpenseEntryPage() {
                       disabled={!serviceInvoiceForm.watch("amount") || !serviceInvoiceForm.watch("invoiceNumber") || !serviceInvoiceForm.watch("date")}
                     >
                       <Plus className="mr-2 h-4 w-4" />
-                      Add Invoice
+                      {t('expenseEntry.addInvoice')}
                     </Button>
                   </CardFooter>
                 </Card>
@@ -2957,20 +2960,20 @@ export default function ExpenseEntryPage() {
                   <div>
                     <Card className="mt-4">
                       <CardHeader>
-                        <CardTitle>Service Invoices List</CardTitle>
+                        <CardTitle>{t('expenseEntry.serviceInvoicesListTitle')}</CardTitle>
                         <CardDescription>
-                          Added service invoices for this shipment
+                          {t('expenseEntry.serviceInvoicesListDesc')}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Invoice Number</TableHead>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Amount</TableHead>
-                              <TableHead>Notes</TableHead>
-                              <TableHead>Action</TableHead>
+                              <TableHead>{t('expenseEntry.colInvoiceNumber')}</TableHead>
+                              <TableHead>{t('expenseEntry.colDate')}</TableHead>
+                              <TableHead>{t('expenseEntry.colAmount')}</TableHead>
+                              <TableHead>{t('expenseEntry.colNotes')}</TableHead>
+                              <TableHead>{t('expenseEntry.colAction')}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -2985,7 +2988,7 @@ export default function ExpenseEntryPage() {
                                 <TableCell>
                                   {formatCurrency(invoice.amount, invoice.currency)}
                                 </TableCell>
-                                <TableCell>{invoice.notes || "-"}</TableCell>
+                                <TableCell>{invoice.notes || t('expenseEntry.dash')}</TableCell>
                                 <TableCell>
                                   <TooltipProvider>
                                     <Tooltip>
@@ -2999,7 +3002,7 @@ export default function ExpenseEntryPage() {
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
-                                        <p>Remove invoice</p>
+                                        <p>{t('expenseEntry.tooltipRemoveInvoice')}</p>
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
@@ -3011,7 +3014,7 @@ export default function ExpenseEntryPage() {
                       </CardContent>
                       <CardFooter className="flex justify-between">
                         <div>
-                          <span className="text-sm font-semibold">Service Invoices Total: </span>
+                          <span className="text-sm font-semibold">{t('expenseEntry.serviceInvoicesTotal')}: </span>
                           <span>{formatNumber(totals.serviceInvoiceTotal)}</span>
                         </div>
                       </CardFooter>
@@ -3019,15 +3022,15 @@ export default function ExpenseEntryPage() {
                     
                     <Card className="mt-4">
                       <CardHeader>
-                        <CardTitle>Service Invoice Documents</CardTitle>
+                        <CardTitle>{t('expenseEntry.serviceInvoiceDocuments')}</CardTitle>
                         <CardDescription>
-                          Manage documents for service invoices
+                          {t('expenseEntry.serviceInvoiceDocumentsDesc')}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-4">
                           <div>
-                            <Label>Select Invoice</Label>
+                            <Label>{t('expenseEntry.selectInvoice')}</Label>
                             <Select
                               onValueChange={(value) => {
                                 const invoice = serviceInvoices.find(i => i.id && i.id.toString() === value);
@@ -3037,7 +3040,7 @@ export default function ExpenseEntryPage() {
                               }}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="Select an invoice to manage documents" />
+                                <SelectValue placeholder={t('expenseEntry.selectInvoicePlaceholder')} />
                               </SelectTrigger>
                               <SelectContent>
                                 {serviceInvoices.filter(invoice => invoice.id).map((invoice) => (
@@ -3056,8 +3059,8 @@ export default function ExpenseEntryPage() {
                               expenseId={selectedServiceInvoice.id}
                               onUploadComplete={() => {
                                 showToast({
-                                  title: "Document uploaded",
-                                  description: "Your document has been uploaded successfully"
+                                  title: t('expenseEntry.toastDocumentUploadedTitle'),
+                                  description: t('expenseEntry.toastDocumentUploadedDesc')
                                 });
                               }}
                             />
@@ -3074,9 +3077,9 @@ export default function ExpenseEntryPage() {
             {procedure && (
               <Card className="mb-6">
                 <CardHeader>
-                  <CardTitle>Upload Import Documents</CardTitle>
+                  <CardTitle>{t('expenseEntry.uploadImportDocuments')}</CardTitle>
                   <CardDescription>
-                    Upload documents related to this import procedure
+                    {t('expenseEntry.uploadImportDocumentsDesc')}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -3085,8 +3088,8 @@ export default function ExpenseEntryPage() {
                     procedureId={procedure.id}
                     onUploadComplete={() => {
                       toast({
-                        title: "Document uploaded",
-                        description: "Your document has been uploaded successfully"
+                        title: t('expenseEntry.toastDocumentUploadedTitle'),
+                        description: t('expenseEntry.toastDocumentUploadedDesc')
                       });
                     }}
                   />
@@ -3097,16 +3100,16 @@ export default function ExpenseEntryPage() {
             {(taxData || importExpenses.length > 0 || serviceInvoices.length > 0) && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Expense Summary</CardTitle>
+                  <CardTitle>{t('expenseEntry.expenseSummary')}</CardTitle>
                   <CardDescription>
-                    Summary of all expenses for this shipment
+                    {t('expenseEntry.expenseSummaryDesc')}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-lg">Taxes</CardTitle>
+                        <CardTitle className="text-lg">{t('expenseEntry.summaryTaxes')}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-2xl font-bold">{formatNumber(totals.taxTotal)}</p>
@@ -3114,7 +3117,7 @@ export default function ExpenseEntryPage() {
                     </Card>
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-lg">Import Expenses</CardTitle>
+                        <CardTitle className="text-lg">{t('expenseEntry.summaryImportExpenses')}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-2xl font-bold">{formatNumber(totals.importExpenseTotal)}</p>
@@ -3122,20 +3125,20 @@ export default function ExpenseEntryPage() {
                     </Card>
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-lg">Service Invoices</CardTitle>
+                        <CardTitle className="text-lg">{t('expenseEntry.summaryServiceInvoices')}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-2xl font-bold">{formatNumber(totals.serviceInvoiceTotal)}</p>
                       </CardContent>
                     </Card>
                   </div>
-                  
+
                   <div className="mt-6 border-t pt-4">
                     <div className="flex justify-between items-center">
                       <div>
-                        <p className="text-lg font-semibold">Total Expenses</p>
+                        <p className="text-lg font-semibold">{t('expenseEntry.totalExpenses')}</p>
                         <p className="text-xs text-muted-foreground">
-                          All expense types combined
+                          {t('expenseEntry.totalExpensesDesc')}
                         </p>
                       </div>
                       <p className="text-3xl font-bold">{formatNumber(totals.overallTotal)}</p>
@@ -3147,23 +3150,23 @@ export default function ExpenseEntryPage() {
                     <AlertDialogTrigger asChild>
                       <Button variant="outline">
                         <RefreshCw className="mr-2 h-4 w-4" />
-                        Reset
+                        {t('expenseEntry.reset')}
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogTitle>{t('expenseEntry.resetConfirmTitle')}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This action will reset all forms and clear any unsaved data. This cannot be undone.
+                          {t('expenseEntry.resetConfirmDesc')}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={confirmReset}>Reset</AlertDialogAction>
+                        <AlertDialogCancel>{t('expenseEntry.cancel')}</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmReset}>{t('expenseEntry.reset')}</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
-                  
+
                   <Button
                     onClick={saveAllExpenses}
                     disabled={isSubmitting}
@@ -3173,7 +3176,7 @@ export default function ExpenseEntryPage() {
                     ) : (
                       <>
                         <Save className="mr-2 h-4 w-4" />
-                        Record All
+                        {t('expenseEntry.recordAll')}
                       </>
                     )}
                   </Button>
@@ -3190,10 +3193,10 @@ export default function ExpenseEntryPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Upload Expense Receipts & Invoices
+              {t('expenseEntry.modalTitle')}
             </DialogTitle>
             <DialogDescription>
-              Upload one or more expense receipt PDFs. Taxes and expenses from all files will be combined automatically.
+              {t('expenseEntry.modalDesc')}
             </DialogDescription>
           </DialogHeader>
 
@@ -3208,17 +3211,17 @@ export default function ExpenseEntryPage() {
                 {isAnalyzingExpenseReceipt ? (
                   <div className="flex flex-col items-center gap-3">
                     <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
-                    <p className="text-sm text-gray-600">Analyzing document...</p>
-                    <p className="text-xs text-gray-500">Extracting taxes, expenses, and matching invoices...</p>
+                    <p className="text-sm text-gray-600">{t('expenseEntry.analyzingDocument')}</p>
+                    <p className="text-xs text-gray-500">{t('expenseEntry.extractingDetails')}</p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-3">
                     <Upload className="h-10 w-10 text-gray-400" />
                     <p className="text-sm text-gray-600 mb-2">
-                      Upload expense receipt PDF(s)
+                      {t('expenseEntry.uploadReceiptPdfs')}
                     </p>
                     <p className="text-xs text-gray-400 mb-2">
-                      You can select multiple PDFs at once. Taxes will be combined automatically.
+                      {t('expenseEntry.uploadReceiptHint')}
                     </p>
                     <input
                       type="file"
@@ -3239,7 +3242,7 @@ export default function ExpenseEntryPage() {
                       onClick={() => document.getElementById('expense-receipt-input')?.click()}
                       data-testid="button-browse-expense-receipt"
                     >
-                      Browse Files (Select Multiple)
+                      {t('expenseEntry.browseFiles')}
                     </Button>
                   </div>
                 )}
@@ -3255,7 +3258,11 @@ export default function ExpenseEntryPage() {
               <div className="mb-4 flex justify-between items-center">
                 <div>
                   <p className="text-sm text-gray-600">
-                    Found {recognizedItems.filter(i => i.type === 'tax').length} tax(es), {recognizedItems.filter(i => i.type === 'expense').length} expense(s), and {recognizedItems.filter(i => i.type === 'service_invoice').length} service invoice(s)
+                    {t('expenseEntry.foundSummary', {
+                      taxes: recognizedItems.filter(i => i.type === 'tax').length,
+                      expenses: recognizedItems.filter(i => i.type === 'expense').length,
+                      services: recognizedItems.filter(i => i.type === 'service_invoice').length
+                    })}
                   </p>
                 </div>
                 <div className="flex gap-2 items-center">
@@ -3264,18 +3271,18 @@ export default function ExpenseEntryPage() {
                     size="sm"
                     onClick={() => setRecognizedItems(prev => prev.map(item => ({ ...item, selected: true })))}
                   >
-                    Select All
+                    {t('expenseEntry.selectAll')}
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setRecognizedItems(prev => prev.map(item => ({ ...item, selected: false })))}
                   >
-                    Deselect All
+                    {t('expenseEntry.deselectAll')}
                   </Button>
                   {uploadedPdfFile && (
                     <div className="flex items-center gap-1 ml-2 border-l pl-2">
-                      <span className="text-xs text-gray-500">Add from page:</span>
+                      <span className="text-xs text-gray-500">{t('expenseEntry.addFromPage')}</span>
                       <Input
                         type="number"
                         min={1}
@@ -3297,7 +3304,7 @@ export default function ExpenseEntryPage() {
                         ) : (
                           <Plus className="h-4 w-4" />
                         )}
-                        Add
+                        {t('expenseEntry.add')}
                       </Button>
                     </div>
                   )}
@@ -3310,7 +3317,7 @@ export default function ExpenseEntryPage() {
                   <div className="mb-4">
                     <h4 className="text-sm font-semibold text-blue-700 mb-2 flex items-center gap-2">
                       <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                      Taxes
+                      {t('expenseEntry.sectionTaxes')}
                     </h4>
                     <div className="space-y-2">
                       {recognizedItems.filter(i => i.type === 'tax').map((item) => (
@@ -3362,7 +3369,7 @@ export default function ExpenseEntryPage() {
                                             </Button>
                                           </TooltipTrigger>
                                           <TooltipContent>
-                                            <p>View PDF page {item.pageNumber}</p>
+                                            <p>{t('expenseEntry.viewPdfPage', { page: item.pageNumber })}</p>
                                           </TooltipContent>
                                         </Tooltip>
                                       </TooltipProvider>
@@ -3370,7 +3377,7 @@ export default function ExpenseEntryPage() {
                                   )}
                                   {!item.pdfObjectKey && item.pageNumber && (
                                     <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
-                                      Page {item.pageNumber}
+                                      {t('expenseEntry.pageBadge', { page: item.pageNumber })}
                                     </span>
                                   )}
                                 </div>
@@ -3383,11 +3390,11 @@ export default function ExpenseEntryPage() {
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="customs_tax">Customs Tax</SelectItem>
-                                    <SelectItem value="additional_customs_tax">Additional Customs Tax</SelectItem>
-                                    <SelectItem value="kkdf">KKDF</SelectItem>
-                                    <SelectItem value="vat">VAT (KDV)</SelectItem>
-                                    <SelectItem value="stamp_tax">Stamp Tax</SelectItem>
+                                    <SelectItem value="customs_tax">{t('expenseEntry.category.customs_tax')}</SelectItem>
+                                    <SelectItem value="additional_customs_tax">{t('expenseEntry.category.additional_customs_tax')}</SelectItem>
+                                    <SelectItem value="kkdf">{t('expenseEntry.category.kkdf')}</SelectItem>
+                                    <SelectItem value="vat">{t('expenseEntry.category.vat')}</SelectItem>
+                                    <SelectItem value="stamp_tax">{t('expenseEntry.category.stamp_tax')}</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -3404,7 +3411,7 @@ export default function ExpenseEntryPage() {
                   <div className="mb-4">
                     <h4 className="text-sm font-semibold text-green-700 mb-2 flex items-center gap-2">
                       <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                      Import Expenses
+                      {t('expenseEntry.sectionImportExpenses')}
                     </h4>
                     <div className="space-y-2">
                       {recognizedItems.filter(i => i.type === 'expense').map((item) => (
@@ -3458,7 +3465,7 @@ export default function ExpenseEntryPage() {
                                               </Button>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                              <p>View PDF page {item.pageNumber}</p>
+                                              <p>{t('expenseEntry.viewPdfPage', { page: item.pageNumber })}</p>
                                             </TooltipContent>
                                           </Tooltip>
                                         </TooltipProvider>
@@ -3466,12 +3473,12 @@ export default function ExpenseEntryPage() {
                                     )}
                                     {!item.pdfObjectKey && item.pageNumber && (
                                       <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
-                                        Page {item.pageNumber}
+                                        {t('expenseEntry.pageBadge', { page: item.pageNumber })}
                                       </span>
                                     )}
                                   </div>
                                   <div className="w-48">
-                                    <Label className="text-xs text-gray-500 mb-1 block">Category</Label>
+                                    <Label className="text-xs text-gray-500 mb-1 block">{t('expenseEntry.fieldCategory')}</Label>
                                     <Select
                                       value={item.selectedCategory}
                                       onValueChange={(value) => updateRecognizedItemCategory(item.id, value)}
@@ -3483,7 +3490,7 @@ export default function ExpenseEntryPage() {
                                       <SelectContent>
                                         {expenseCategories.map(category => (
                                           <SelectItem key={category} value={category}>
-                                            {formatCategoryName(category)}
+                                            {formatAllCategoryName(category)}
                                           </SelectItem>
                                         ))}
                                       </SelectContent>
@@ -3492,29 +3499,29 @@ export default function ExpenseEntryPage() {
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mt-2">
                                   <div>
-                                    <Label className="text-xs text-gray-500 mb-1 block">Invoice Number</Label>
+                                    <Label className="text-xs text-gray-500 mb-1 block">{t('expenseEntry.invoiceNumber')}</Label>
                                     <Input
                                       value={item.invoiceNumber || ''}
                                       onChange={(e) => updateRecognizedItemField(item.id, 'invoiceNumber', e.target.value)}
-                                      placeholder="e.g., ABC2025000000001"
+                                      placeholder={t('expenseEntry.invoiceNumberExample')}
                                       disabled={!item.selected}
                                       className="h-8 text-sm"
                                       data-testid={`input-invoice-number-${item.id}`}
                                     />
                                   </div>
                                   <div>
-                                    <Label className="text-xs text-gray-500 mb-1 block">Document No</Label>
+                                    <Label className="text-xs text-gray-500 mb-1 block">{t('expenseEntry.documentNoShort')}</Label>
                                     <Input
                                       value={item.receiptNumber || ''}
                                       onChange={(e) => updateRecognizedItemField(item.id, 'receiptNumber', e.target.value)}
-                                      placeholder="From page 1 table"
+                                      placeholder={t('expenseEntry.documentNoPlaceholder')}
                                       disabled={!item.selected}
                                       className="h-8 text-sm"
                                       data-testid={`input-document-number-${item.id}`}
                                     />
                                   </div>
                                   <div>
-                                    <Label className="text-xs text-gray-500 mb-1 block">Invoice Date</Label>
+                                    <Label className="text-xs text-gray-500 mb-1 block">{t('expenseEntry.invoiceDate')}</Label>
                                     <Input
                                       type="date"
                                       value={item.invoiceDate || ''}
@@ -3525,11 +3532,11 @@ export default function ExpenseEntryPage() {
                                     />
                                   </div>
                                   <div>
-                                    <Label className="text-xs text-gray-500 mb-1 block">Issuer</Label>
+                                    <Label className="text-xs text-gray-500 mb-1 block">{t('expenseEntry.issuer')}</Label>
                                     <Input
                                       value={item.issuer || ''}
                                       onChange={(e) => updateRecognizedItemField(item.id, 'issuer', e.target.value)}
-                                      placeholder="Company name"
+                                      placeholder={t('expenseEntry.companyNamePlaceholder')}
                                       disabled={!item.selected}
                                       className="h-8 text-sm"
                                       data-testid={`input-issuer-${item.id}`}
@@ -3550,7 +3557,7 @@ export default function ExpenseEntryPage() {
                   <div>
                     <h4 className="text-sm font-semibold text-purple-700 mb-2 flex items-center gap-2">
                       <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                      Service Invoices
+                      {t('expenseEntry.sectionServiceInvoices')}
                     </h4>
                     <div className="space-y-2">
                       {recognizedItems.filter(i => i.type === 'service_invoice').map((item) => (
@@ -3604,7 +3611,7 @@ export default function ExpenseEntryPage() {
                                               </Button>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                              <p>View PDF page {item.pageNumber}</p>
+                                              <p>{t('expenseEntry.viewPdfPage', { page: item.pageNumber })}</p>
                                             </TooltipContent>
                                           </Tooltip>
                                         </TooltipProvider>
@@ -3612,25 +3619,25 @@ export default function ExpenseEntryPage() {
                                     )}
                                     {!item.pdfObjectKey && item.pageNumber && (
                                       <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
-                                        Page {item.pageNumber}
+                                        {t('expenseEntry.pageBadge', { page: item.pageNumber })}
                                       </span>
                                     )}
                                   </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
                                   <div>
-                                    <Label className="text-xs text-gray-500 mb-1 block">Invoice Number</Label>
+                                    <Label className="text-xs text-gray-500 mb-1 block">{t('expenseEntry.invoiceNumber')}</Label>
                                     <Input
                                       value={item.invoiceNumber || ''}
                                       onChange={(e) => updateRecognizedItemField(item.id, 'invoiceNumber', e.target.value)}
-                                      placeholder="e.g., ABC2025000000001"
+                                      placeholder={t('expenseEntry.invoiceNumberExample')}
                                       disabled={!item.selected}
                                       className="h-8 text-sm"
                                       data-testid={`input-invoice-number-${item.id}`}
                                     />
                                   </div>
                                   <div>
-                                    <Label className="text-xs text-gray-500 mb-1 block">Invoice Date</Label>
+                                    <Label className="text-xs text-gray-500 mb-1 block">{t('expenseEntry.invoiceDate')}</Label>
                                     <Input
                                       type="date"
                                       value={item.invoiceDate || ''}
@@ -3655,23 +3662,26 @@ export default function ExpenseEntryPage() {
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-sm font-medium">
-                      Selected: {recognizedItems.filter(i => i.selected).length} of {recognizedItems.length}
+                      {t('expenseEntry.selectedCount', {
+                        selected: recognizedItems.filter(i => i.selected).length,
+                        total: recognizedItems.length
+                      })}
                     </p>
                     <div className="flex gap-4 text-sm text-gray-500">
                       <span className="text-blue-600">
-                        Taxes: {formatCurrency(
+                        {t('expenseEntry.summaryTaxes')}: {formatCurrency(
                           recognizedItems.filter(i => i.selected && i.type === 'tax').reduce((sum, i) => sum + i.amount, 0).toString(),
                           'TRY'
                         )}
                       </span>
                       <span className="text-green-600">
-                        Expenses: {formatCurrency(
+                        {t('expenseEntry.summaryExpenses')}: {formatCurrency(
                           recognizedItems.filter(i => i.selected && i.type === 'expense').reduce((sum, i) => sum + i.amount, 0).toString(),
                           'TRY'
                         )}
                       </span>
                       <span className="text-purple-600">
-                        Service: {formatCurrency(
+                        {t('expenseEntry.summaryService')}: {formatCurrency(
                           recognizedItems.filter(i => i.selected && i.type === 'service_invoice').reduce((sum, i) => sum + i.amount, 0).toString(),
                           'TRY'
                         )}
@@ -3694,7 +3704,7 @@ export default function ExpenseEntryPage() {
                 setUploadedPdfFile(null);
               }}
             >
-              Cancel
+              {t('expenseEntry.cancel')}
             </Button>
             {recognizedItems.length > 0 && (
               <Button
@@ -3707,7 +3717,7 @@ export default function ExpenseEntryPage() {
                 ) : (
                   <Check className="mr-2 h-4 w-4" />
                 )}
-                Save {recognizedItems.filter(i => i.selected).length} Item(s)
+                {t('expenseEntry.saveItems', { count: recognizedItems.filter(i => i.selected).length })}
               </Button>
             )}
           </DialogFooter>
@@ -3720,17 +3730,17 @@ export default function ExpenseEntryPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              PDF Page Preview - Page {previewPageNumber}
+              {t('expenseEntry.pdfPreviewTitle', { page: previewPageNumber })}
             </DialogTitle>
             <DialogDescription>
-              Review the PDF page to confirm this is the correct document for the expense.
+              {t('expenseEntry.pdfPreviewDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 min-h-[500px] border rounded-lg bg-gray-50 overflow-auto flex items-center justify-center">
             {uploadedPdfFile && previewPageNumber && (
               <div className="text-center p-8">
                 <FileText className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                <p className="text-gray-600 mb-4">PDF Page {previewPageNumber} is ready for viewing.</p>
+                <p className="text-gray-600 mb-4">{t('expenseEntry.pdfPageReady', { page: previewPageNumber })}</p>
                 <Button
                   onClick={() => {
                     const url = `/api/expense-documents/pdf-page/${encodeURIComponent(uploadedPdfFile.objectKey)}?page=${previewPageNumber}`;
@@ -3739,19 +3749,19 @@ export default function ExpenseEntryPage() {
                   data-testid="button-open-pdf-new-tab"
                 >
                   <Eye className="mr-2 h-4 w-4" />
-                  Open PDF in New Tab
+                  {t('expenseEntry.openPdfNewTab')}
                 </Button>
               </div>
             )}
             {!uploadedPdfFile && (
               <div className="flex items-center justify-center h-full text-gray-500">
-                <p>PDF not available for preview</p>
+                <p>{t('expenseEntry.pdfNotAvailable')}</p>
               </div>
             )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsPdfPreviewOpen(false)}>
-              Close
+              {t('expenseEntry.close')}
             </Button>
           </DialogFooter>
         </DialogContent>

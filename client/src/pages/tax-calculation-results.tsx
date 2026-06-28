@@ -19,6 +19,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useParams, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 import type { TaxCalculation, TaxCalculationItem } from "@shared/schema";
 import { CalculationSummary } from "@/components/tax-calculation/CalculationSummary";
 import { ResultsTable } from "@/components/tax-calculation/ResultsTable";
@@ -73,6 +74,7 @@ const items = [
 ];
 
 export default function TaxCalculationResultsPage() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -95,7 +97,7 @@ export default function TaxCalculationResultsPage() {
       });
       if (!response.ok) {
         const text = await response.text();
-        let msg = "Failed to create procedure";
+        let msg = t('taxCalc.toast.createProcedureError');
         try { const j = JSON.parse(text); msg = j.error ?? j.message ?? msg; } catch {}
         throw new Error(msg);
       }
@@ -105,14 +107,14 @@ export default function TaxCalculationResultsPage() {
       queryClient.invalidateQueries({ queryKey: [`/api/tax-calculation/calculations/${id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/procedures"] });
       toast({
-        title: "Success",
-        description: "Procedure created successfully",
+        title: t('common.success'),
+        description: t('taxCalc.toast.procedureCreated'),
       });
     },
     onError: (err) => {
-      const msg = err instanceof Error ? err.message : "Failed to create procedure";
+      const msg = err instanceof Error ? err.message : t('taxCalc.toast.createProcedureError');
       toast({
-        title: "Error",
+        title: t('common.error'),
         description: msg,
         variant: "destructive",
       });
@@ -128,7 +130,7 @@ export default function TaxCalculationResultsPage() {
       );
       if (!response.ok) {
         const text = await response.text();
-        let msg = "Failed to update product list";
+        let msg = t('taxCalc.toast.updateProductListError');
         try { const j = JSON.parse(text); msg = j.error ?? j.message ?? msg; } catch {}
         throw new Error(msg);
       }
@@ -140,16 +142,16 @@ export default function TaxCalculationResultsPage() {
         queryClient.invalidateQueries({ queryKey: ["/api/procedures"] });
       }
       toast({
-        title: "Updated",
+        title: t('taxCalc.toast.updatedTitle'),
         description: data?.procedureSynced
-          ? "Product list and linked procedure updated"
-          : "Product list updated and taxes recalculated",
+          ? t('taxCalc.toast.productListAndProcedureUpdated')
+          : t('taxCalc.toast.productListUpdated'),
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error?.message || "Failed to update product list",
+        title: t('common.error'),
+        description: error?.message || t('taxCalc.toast.updateProductListError'),
         variant: "destructive",
       });
     },
@@ -177,8 +179,8 @@ export default function TaxCalculationResultsPage() {
       await performBeyannameExport({});
     } catch (error) {
       toast({
-        title: "Error",
-        description: `Failed to export: ${error instanceof Error ? error.message : String(error)}`,
+        title: t('common.error'),
+        description: t('taxCalc.toast.exportFailed', { error: error instanceof Error ? error.message : String(error) }),
         variant: "destructive",
       });
     }
@@ -208,13 +210,13 @@ export default function TaxCalculationResultsPage() {
       document.body.removeChild(a);
       
       toast({
-        title: "Success",
-        description: "Excel template exported successfully",
+        title: t('common.success'),
+        description: t('taxCalc.toast.excelTemplateExported'),
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: `Failed to export: ${error instanceof Error ? error.message : String(error)}`,
+        title: t('common.error'),
+        description: t('taxCalc.toast.exportFailed', { error: error instanceof Error ? error.message : String(error) }),
         variant: "destructive",
       });
     }
@@ -228,8 +230,8 @@ export default function TaxCalculationResultsPage() {
     
     if (!allFilled) {
       toast({
-        title: "Error",
-        description: "Please enter 3-digit codes for all countries",
+        title: t('common.error'),
+        description: t('taxCalc.toast.enterAllCountryCodes'),
         variant: "destructive",
       });
       return;
@@ -263,15 +265,15 @@ export default function TaxCalculationResultsPage() {
       document.body.removeChild(a);
       
       toast({
-        title: "Success",
-        description: "PDF downloaded successfully"
+        title: t('common.success'),
+        description: t('taxCalc.toast.pdfDownloaded')
       });
-      
+
     } catch (error) {
       console.error('PDF export error:', error);
       toast({
-        title: "Error",
-        description: "Failed to export PDF",
+        title: t('common.error'),
+        description: t('taxCalc.toast.pdfExportError'),
         variant: "destructive"
       });
     } finally {
@@ -311,17 +313,17 @@ export default function TaxCalculationResultsPage() {
       document.body.removeChild(a);
       
       toast({
-        title: "Success",
-        description: "Adv. Taxletter PDF exported successfully"
+        title: t('common.success'),
+        description: t('taxCalc.toast.advTaxletterExported')
       });
-      
+
       setIsAdvTaxletterModalOpen(false);
-      
+
     } catch (error) {
       console.error('Adv. Taxletter PDF export error:', error);
       toast({
-        title: "Error",
-        description: "Failed to export Adv. Taxletter PDF",
+        title: t('common.error'),
+        description: t('taxCalc.toast.advTaxletterExportError'),
         variant: "destructive"
       });
     } finally {
@@ -331,9 +333,9 @@ export default function TaxCalculationResultsPage() {
 
   if (isLoading) {
     return (
-      <PageLayout title="Tax Calculation Results" navItems={items}>
+      <PageLayout title={t('taxCalc.results.pageTitle')} navItems={items}>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-muted-foreground">Loading calculation results...</div>
+          <div className="text-muted-foreground">{t('taxCalc.results.loadingResults')}</div>
         </div>
       </PageLayout>
     );
@@ -341,9 +343,9 @@ export default function TaxCalculationResultsPage() {
 
   if (!data) {
     return (
-      <PageLayout title="Tax Calculation Results" navItems={items}>
+      <PageLayout title={t('taxCalc.results.pageTitle')} navItems={items}>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-muted-foreground">Calculation not found</div>
+          <div className="text-muted-foreground">{t('taxCalc.edit.notFound')}</div>
         </div>
       </PageLayout>
     );
@@ -387,51 +389,51 @@ export default function TaxCalculationResultsPage() {
   };
 
   return (
-    <PageLayout title="Tax Calculation Results" navItems={items}>
+    <PageLayout title={t('taxCalc.results.pageTitle')} navItems={items}>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold">Calculation: {calculation.reference}</h1>
+            <h1 className="text-3xl font-bold">{t('taxCalc.results.calculationHeading', { reference: calculation.reference })}</h1>
             <p className="text-muted-foreground">
-              Invoice: {calculation.invoice_no || "N/A"} | 
-              Date: {calculation.invoice_date ? new Date(calculation.invoice_date).toLocaleDateString() : "N/A"}
+              {t('taxCalc.results.invoiceLabel')}: {calculation.invoice_no || t('taxCalc.results.na')} |
+              {' '}{t('taxCalc.results.dateLabel')}: {calculation.invoice_date ? new Date(calculation.invoice_date).toLocaleDateString() : t('taxCalc.results.na')}
             </p>
           </div>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               data-testid="button-export-excel"
               onClick={() => {
                 window.location.href = `/api/tax-calculation/calculations/${id}/export/excel`;
               }}
             >
               <Download className="mr-2 h-4 w-4" />
-              Export Excel
+              {t('taxCalc.results.exportExcel')}
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               data-testid="button-export-beyanname"
               onClick={handleBeyannameExport}
             >
               <Download className="mr-2 h-4 w-4" />
-              Export Template
+              {t('taxCalc.results.exportTemplate')}
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               data-testid="button-export-pdf"
               onClick={handleExportPdf}
               disabled={isExportingPdf}
             >
               <FileText className="mr-2 h-4 w-4" />
-              {isExportingPdf ? "Generating PDF..." : "Export PDF"}
+              {isExportingPdf ? t('taxCalc.results.generatingPdf') : t('taxCalc.results.exportPdf')}
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               data-testid="button-export-adv-taxletter"
               onClick={handleAdvTaxletterClick}
             >
               <FileText className="mr-2 h-4 w-4" />
-              Adv. Taxletter
+              {t('taxCalc.results.advTaxletter')}
             </Button>
             <Button
               variant="outline"
@@ -440,7 +442,7 @@ export default function TaxCalculationResultsPage() {
               disabled={replaceProductsMutation.isPending}
             >
               <RefreshCw className={`mr-2 h-4 w-4 ${replaceProductsMutation.isPending ? "animate-spin" : ""}`} />
-              {replaceProductsMutation.isPending ? "Updating..." : "Update Product List"}
+              {replaceProductsMutation.isPending ? t('taxCalc.results.updating') : t('taxCalc.results.updateProductList')}
             </Button>
             {calculation.status === "calculated" && (
               (calculation as any).procedure_id ? (
@@ -448,9 +450,9 @@ export default function TaxCalculationResultsPage() {
                   disabled
                   variant="outline"
                   data-testid="button-procedure-created"
-                  title={`Procedure #${(calculation as any).procedure_id} already created from this calculation`}
+                  title={t('taxCalc.results.procedureAlreadyCreatedTooltip', { id: (calculation as any).procedure_id })}
                 >
-                  ✓ Procedure Created (#{(calculation as any).procedure_id})
+                  {t('taxCalc.results.procedureCreatedBadge', { id: (calculation as any).procedure_id })}
                 </Button>
               ) : (
                 <Button
@@ -458,7 +460,7 @@ export default function TaxCalculationResultsPage() {
                   disabled={createProcedureMutation.isPending}
                   data-testid="button-create-procedure"
                 >
-                  {createProcedureMutation.isPending ? "Creating..." : "Create Procedure"}
+                  {createProcedureMutation.isPending ? t('taxCalc.results.creating') : t('taxCalc.results.createProcedure')}
                 </Button>
               )
             )}
@@ -483,7 +485,7 @@ export default function TaxCalculationResultsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>📦 Detailed Results</CardTitle>
+            <CardTitle>📦 {t('taxCalc.results.detailedResults')}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResultsTable items={calcItems} />
@@ -504,17 +506,17 @@ export default function TaxCalculationResultsPage() {
       <Dialog open={isCountryCodeModalOpen} onOpenChange={setIsCountryCodeModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Missing Country Codes</DialogTitle>
+            <DialogTitle>{t('taxCalc.countryCodeModal.title')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <p className="text-sm text-muted-foreground">
-              The following country codes don't have 3-digit numeric mappings. Please enter them:
+              {t('taxCalc.countryCodeModal.description')}
             </p>
             {missingCountryCodes.map((code) => (
               <div key={code} className="flex items-center gap-4">
                 <Label className="w-20 font-medium">{code}</Label>
                 <Input
-                  placeholder="3-digit code (e.g. 720)"
+                  placeholder={t('taxCalc.countryCodeModal.codePlaceholder')}
                   value={countryCodeMappings[code] || ''}
                   onChange={(e) => setCountryCodeMappings(prev => ({
                     ...prev,
@@ -528,10 +530,10 @@ export default function TaxCalculationResultsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCountryCodeModalOpen(false)}>
-              Cancel
+              {t('taxCalc.actions.cancel')}
             </Button>
             <Button onClick={handleCountryCodeSubmit} data-testid="button-submit-country-codes">
-              Export
+              {t('taxCalc.countryCodeModal.export')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -540,9 +542,9 @@ export default function TaxCalculationResultsPage() {
       <DocumentUploadDialog
         open={isUpdateProductsOpen}
         onOpenChange={setIsUpdateProductsOpen}
-        title="Update Product List"
-        description="Upload a new commercial invoice PDF or Excel. The product list will be replaced, taxes recalculated, and any linked procedure synced."
-        importButtonLabel={(count) => `Replace with ${count} Products`}
+        title={t('taxCalc.results.updateProductList')}
+        description={t('taxCalc.results.updateProductListDescription')}
+        importButtonLabel={(count) => t('taxCalc.results.replaceWithProducts', { count })}
         onImport={(products, invoiceMetadata) => {
           replaceProductsMutation.mutate({ products, invoiceMetadata });
         }}

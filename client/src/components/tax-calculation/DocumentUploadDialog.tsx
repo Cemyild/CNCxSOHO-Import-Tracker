@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { FileSpreadsheet, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 
 interface ProductItem {
   tempId?: string;
@@ -57,6 +58,7 @@ export function DocumentUploadDialog({
   description,
   importButtonLabel,
 }: DocumentUploadDialogProps) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [parsedData, setParsedData] = useState<ProductItem[]>([]);
   const [invoiceMeta, setInvoiceMeta] = useState<InvoiceMetadata | undefined>(undefined);
@@ -74,8 +76,8 @@ export function DocumentUploadDialog({
 
     if (!response.ok) {
       toast({
-        title: "Error",
-        description: data.error ?? "Failed to extract products",
+        title: t('common.error'),
+        description: data.error ?? t('taxCalcComp.docUpload.failedToExtract'),
         variant: "destructive",
       });
       return;
@@ -83,8 +85,8 @@ export function DocumentUploadDialog({
 
     if (!data.products || data.products.length === 0) {
       toast({
-        title: "No products found",
-        description: "No product rows could be extracted from the document",
+        title: t('taxCalcComp.docUpload.noProductsFoundTitle'),
+        description: t('taxCalcComp.docUpload.noProductRows'),
         variant: "destructive",
       });
       return;
@@ -94,8 +96,8 @@ export function DocumentUploadDialog({
     setInvoiceMeta(data.invoiceMetadata);
     setShowPreview(true);
     toast({
-      title: "Success",
-      description: `Found ${data.products.length} products in ${sourceLabel}`,
+      title: t('common.success'),
+      description: t('taxCalcComp.docUpload.foundProductsIn', { count: data.products.length, source: sourceLabel }),
     });
   };
 
@@ -118,8 +120,8 @@ export function DocumentUploadDialog({
       await handleExtractionResponse(response, file.name);
     } catch {
       toast({
-        title: "Error",
-        description: "Failed to upload document",
+        title: t('common.error'),
+        description: t('taxCalcComp.docUpload.failedToUpload'),
         variant: "destructive",
       });
     } finally {
@@ -134,7 +136,7 @@ export function DocumentUploadDialog({
   const handleS3KeyUpload = async () => {
     const key = s3Key.trim();
     if (!key) {
-      toast({ title: "S3 key gerekli", description: "Lütfen S3 anahtarını yapıştır", variant: "destructive" });
+      toast({ title: t('taxCalcComp.docUpload.s3KeyRequiredTitle'), description: t('taxCalcComp.docUpload.s3KeyRequiredDesc'), variant: "destructive" });
       return;
     }
     setFileName(key.split("/").pop() ?? key);
@@ -148,8 +150,8 @@ export function DocumentUploadDialog({
       await handleExtractionResponse(response, key.split("/").pop() ?? key);
     } catch {
       toast({
-        title: "Error",
-        description: "Failed to fetch from S3 key",
+        title: t('common.error'),
+        description: t('taxCalcComp.docUpload.failedToFetchS3'),
         variant: "destructive",
       });
     } finally {
@@ -160,8 +162,8 @@ export function DocumentUploadDialog({
   const handleImport = () => {
     onImport(parsedData, invoiceMeta);
     toast({
-      title: "Success",
-      description: `Imported ${parsedData.length} products`,
+      title: t('common.success'),
+      description: t('taxCalcComp.docUpload.importedProducts', { count: parsedData.length }),
     });
     handleClose();
   };
@@ -182,18 +184,17 @@ export function DocumentUploadDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            {title ?? "Upload Invoice / Excel"}
+            {title ?? t('taxCalcComp.docUpload.title')}
           </DialogTitle>
           <DialogDescription>
-            {description ??
-              "Upload a commercial invoice PDF or Excel file (.pdf, .xlsx, .xls). AI will extract product data automatically."}
+            {description ?? t('taxCalcComp.docUpload.description')}
           </DialogDescription>
         </DialogHeader>
 
         {!showPreview ? (
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-1 block">Dosyadan yükle</label>
+              <label className="text-sm font-medium mb-1 block">{t('taxCalcComp.docUpload.uploadFromFile')}</label>
               <Input
                 key={fileName}
                 type="file"
@@ -208,58 +209,58 @@ export function DocumentUploadDialog({
                 <div className="w-full border-t" />
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-background px-2 text-xs uppercase text-muted-foreground">veya</span>
+                <span className="bg-background px-2 text-xs uppercase text-muted-foreground">{t('taxCalcComp.docUpload.or')}</span>
               </div>
             </div>
 
             <div>
               <label className="text-sm font-medium mb-1 block">
-                S3 anahtarı ile yükle
+                {t('taxCalcComp.docUpload.uploadViaS3Key')}
                 <span className="text-xs text-muted-foreground font-normal ml-1">
-                  (otomasyon / Cowork için)
+                  {t('taxCalcComp.docUpload.forAutomation')}
                 </span>
               </label>
               <div className="flex gap-2">
                 <Input
                   type="text"
-                  placeholder="örn. mcp-uploads/1779165792540-TR00028_Draft_Tax_File.xlsx"
+                  placeholder={t('taxCalcComp.docUpload.s3KeyPlaceholder')}
                   value={s3Key}
                   onChange={(e) => setS3Key(e.target.value)}
                   disabled={isLoading}
                 />
                 <Button onClick={handleS3KeyUpload} disabled={isLoading || !s3Key.trim()}>
-                  Yükle
+                  {t('taxCalcComp.docUpload.upload')}
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                `prepare_invoice_upload` ile S3'e PUT edilmiş dosyanın anahtarını yapıştır.
+                {t('taxCalcComp.docUpload.s3KeyHelp')}
               </p>
             </div>
 
             {isLoading && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                AI ürün verilerini çıkarıyor…
+                {t('taxCalcComp.docUpload.aiExtracting')}
               </div>
             )}
             <Button variant="outline" onClick={handleClose} disabled={isLoading}>
-              İptal
+              {t('taxCalcComp.docUpload.cancel')}
             </Button>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="text-sm text-muted-foreground">
-              File: <span className="font-medium">{fileName}</span> (
-              {parsedData.length} products)
+              {t('taxCalcComp.docUpload.fileLabel')} <span className="font-medium">{fileName}</span> (
+              {t('taxCalcComp.docUpload.productsCount', { count: parsedData.length })})
             </div>
 
             {invoiceMeta && (invoiceMeta.invoice_no || invoiceMeta.invoice_date || invoiceMeta.shipper) && (
               <div className="rounded-md border bg-muted/40 p-3 text-sm">
-                <div className="font-medium mb-1">Detected invoice info</div>
+                <div className="font-medium mb-1">{t('taxCalcComp.docUpload.detectedInvoiceInfo')}</div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <div><span className="text-muted-foreground">Invoice #: </span>{invoiceMeta.invoice_no || "-"}</div>
-                  <div><span className="text-muted-foreground">Date: </span>{invoiceMeta.invoice_date || "-"}</div>
-                  <div><span className="text-muted-foreground">Shipper: </span>{invoiceMeta.shipper || "-"}</div>
+                  <div><span className="text-muted-foreground">{t('taxCalcComp.docUpload.invoiceNumberLabel')} </span>{invoiceMeta.invoice_no || "-"}</div>
+                  <div><span className="text-muted-foreground">{t('taxCalcComp.docUpload.dateLabel')} </span>{invoiceMeta.invoice_date || "-"}</div>
+                  <div><span className="text-muted-foreground">{t('taxCalcComp.docUpload.shipperLabel')} </span>{invoiceMeta.shipper || "-"}</div>
                 </div>
               </div>
             )}
@@ -269,16 +270,16 @@ export function DocumentUploadDialog({
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead className="min-w-[100px]">Style</TableHead>
-                    <TableHead className="min-w-[80px]">Color</TableHead>
-                    <TableHead className="min-w-[120px]">Category</TableHead>
-                    <TableHead className="min-w-[120px]">Fabric</TableHead>
-                    <TableHead className="min-w-[80px] text-right">Cost</TableHead>
-                    <TableHead className="min-w-[70px] text-right">Units</TableHead>
-                    <TableHead className="min-w-[80px]">Country</TableHead>
-                    <TableHead className="min-w-[110px]">HTS Code</TableHead>
+                    <TableHead className="min-w-[100px]">{t('taxCalcComp.table.style')}</TableHead>
+                    <TableHead className="min-w-[80px]">{t('taxCalcComp.table.color')}</TableHead>
+                    <TableHead className="min-w-[120px]">{t('taxCalcComp.table.category')}</TableHead>
+                    <TableHead className="min-w-[120px]">{t('taxCalcComp.table.fabric')}</TableHead>
+                    <TableHead className="min-w-[80px] text-right">{t('taxCalcComp.table.cost')}</TableHead>
+                    <TableHead className="min-w-[70px] text-right">{t('taxCalcComp.table.units')}</TableHead>
+                    <TableHead className="min-w-[80px]">{t('taxCalcComp.table.country')}</TableHead>
+                    <TableHead className="min-w-[110px]">{t('taxCalcComp.table.htsCode')}</TableHead>
                     <TableHead className="min-w-[100px] text-right">
-                      Total Value
+                      {t('taxCalcComp.table.totalValue')}
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -323,12 +324,12 @@ export function DocumentUploadDialog({
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowPreview(false)}>
-                Back
+                {t('taxCalcComp.docUpload.back')}
               </Button>
               <Button onClick={handleImport}>
                 {importButtonLabel
                   ? importButtonLabel(parsedData.length)
-                  : `Import ${parsedData.length} Products`}
+                  : t('taxCalcComp.docUpload.importProducts', { count: parsedData.length })}
               </Button>
             </DialogFooter>
           </div>

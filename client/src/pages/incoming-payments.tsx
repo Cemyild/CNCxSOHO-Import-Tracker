@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { formatCurrency, formatDate } from '@/lib/formatters';
@@ -37,31 +38,37 @@ import { CreateIncomingPaymentForm } from '@/components/create-incoming-payment-
 
 // Distribution status badge component
 const DistributionStatusBadge = ({ status }: { status: string }) => {
+  const { t } = useTranslation();
   let bgColor = '';
   let textColor = 'text-white';
-  
+  let label = status.replace(/_/g, ' ');
+
   switch(status) {
     case 'pending_distribution':
       bgColor = 'bg-yellow-500';
+      label = t('incomingPayments.status.pendingDistribution');
       break;
     case 'partially_distributed':
       bgColor = 'bg-blue-500';
+      label = t('incomingPayments.status.partiallyDistributed');
       break;
     case 'fully_distributed':
       bgColor = 'bg-green-500';
+      label = t('incomingPayments.status.fullyDistributed');
       break;
     default:
       bgColor = 'bg-gray-500';
   }
-  
+
   return (
     <span className={`${bgColor} ${textColor} px-2 py-1 rounded-full text-xs font-medium capitalize`}>
-      {status.replace(/_/g, ' ')}
+      {label}
     </span>
   );
 };
 
 export default function IncomingPaymentsPage() {
+  const { t } = useTranslation();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<any>(null);
   const [showDistributeModal, setShowDistributeModal] = useState(false);
@@ -105,13 +112,13 @@ export default function IncomingPaymentsPage() {
     },
     onSuccess: () => {
       toast({
-        title: 'Success',
-        description: 'Payment deleted successfully',
+        title: t('common.success'),
+        description: t('incomingPayments.toast.deleteSuccess'),
       });
-      
+
       // Invalidate the payments query to refresh the list
       queryClient.invalidateQueries({ queryKey: ['/api/incoming-payments'] });
-      
+
       // Close the confirmation dialog
       setShowDeleteConfirm(false);
       setPaymentToDelete(null);
@@ -119,8 +126,8 @@ export default function IncomingPaymentsPage() {
     onError: (error) => {
       console.error('Error deleting payment:', error);
       toast({
-        title: 'Error',
-        description: `Failed to delete payment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: t('common.error'),
+        description: t('incomingPayments.toast.deleteError', { error: error instanceof Error ? error.message : t('incomingPayments.unknownError') }),
         variant: 'destructive',
       });
     },
@@ -133,18 +140,18 @@ export default function IncomingPaymentsPage() {
     },
     onSuccess: (data) => {
       toast({
-        title: 'Success',
-        description: `Successfully reset ${data.count} payment distributions.`,
+        title: t('common.success'),
+        description: t('incomingPayments.toast.resetSuccess', { count: data.count }),
       });
-      
+
       // Invalidate the payments query to refresh the list
       queryClient.invalidateQueries({ queryKey: ['/api/incoming-payments'] });
     },
     onError: (error) => {
       console.error('Error resetting payment distributions:', error);
       toast({
-        title: 'Error',
-        description: `Failed to reset payment distributions: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: t('common.error'),
+        description: t('incomingPayments.toast.resetError', { error: error instanceof Error ? error.message : t('incomingPayments.unknownError') }),
         variant: 'destructive',
       });
     },
@@ -158,8 +165,8 @@ export default function IncomingPaymentsPage() {
     queryClient.invalidateQueries({ queryKey: ['/api/incoming-payments'] });
     
     toast({
-      title: 'Success',
-      description: 'New incoming payment created successfully',
+      title: t('common.success'),
+      description: t('incomingPayments.toast.createSuccess'),
     });
   };
 
@@ -185,7 +192,7 @@ export default function IncomingPaymentsPage() {
   };
 
   const handleResetAllDistributions = () => {
-    if (window.confirm('Are you sure you want to reset ALL payment distributions? This will remove all distributions and reset all payments to pending status.')) {
+    if (window.confirm(t('incomingPayments.resetConfirm'))) {
       resetAllDistributionsMutation.mutate();
     }
   };
@@ -198,9 +205,9 @@ export default function IncomingPaymentsPage() {
   if (isError) {
     return (
       <div className="container mx-auto p-4">
-        <h1 className="text-2xl font-bold mb-4">Incoming Payments</h1>
+        <h1 className="text-2xl font-bold mb-4">{t('incomingPayments.title')}</h1>
         <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-md">
-          <p>Error loading payments: {error instanceof Error ? error.message : 'Unknown error'}</p>
+          <p>{t('incomingPayments.loadError', { error: error instanceof Error ? error.message : t('incomingPayments.unknownError') })}</p>
         </div>
       </div>
     );
@@ -209,12 +216,12 @@ export default function IncomingPaymentsPage() {
   return (
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Incoming Payments</h1>
+        <h1 className="text-2xl font-bold">{t('incomingPayments.title')}</h1>
         <div className="flex gap-2">
           {isAdmin && (
             <Button onClick={() => setShowCreateForm(true)}>
               <PlusCircle className="h-4 w-4 mr-2" />
-              New Payment
+              {t('incomingPayments.newPayment')}
             </Button>
           )}
           {/* Admin actions dropdown */}
@@ -223,18 +230,18 @@ export default function IncomingPaymentsPage() {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
                   <Database className="h-4 w-4 mr-2" />
-                  Admin Actions
+                  {t('incomingPayments.adminActions')}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>System Operations</DropdownMenuLabel>
+                <DropdownMenuLabel>{t('incomingPayments.systemOperations')}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-red-600 focus:text-red-600"
                   onClick={handleResetAllDistributions}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Reset All Distributions
+                  {t('incomingPayments.resetAllDistributions')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -252,20 +259,20 @@ export default function IncomingPaymentsPage() {
         <div className="bg-white rounded-lg shadow overflow-x-auto">
           {data?.payments?.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
-              <p>No incoming payments found. Create your first payment to get started.</p>
+              <p>{t('incomingPayments.empty')}</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Payment ID</TableHead>
-                  <TableHead>Date Received</TableHead>
-                  <TableHead>Payer</TableHead>
-                  <TableHead>Total Amount</TableHead>
-                  <TableHead>Distributed</TableHead>
-                  <TableHead>Remaining</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t('incomingPayments.columns.paymentId')}</TableHead>
+                  <TableHead>{t('incomingPayments.columns.dateReceived')}</TableHead>
+                  <TableHead>{t('incomingPayments.columns.payer')}</TableHead>
+                  <TableHead>{t('incomingPayments.columns.totalAmount')}</TableHead>
+                  <TableHead>{t('incomingPayments.columns.distributed')}</TableHead>
+                  <TableHead>{t('incomingPayments.columns.remaining')}</TableHead>
+                  <TableHead>{t('incomingPayments.columns.status')}</TableHead>
+                  <TableHead className="text-right">{t('incomingPayments.columns.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -288,28 +295,28 @@ export default function IncomingPaymentsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuLabel>{t('incomingPayments.columns.actions')}</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          
+
                           {payment.distributionStatus !== 'fully_distributed' && (
                             <DropdownMenuItem onClick={() => handleDistribute(payment)}>
                               <PlusCircle className="h-4 w-4 mr-2" />
-                              Distribute Payment
+                              {t('incomingPayments.distributePayment')}
                             </DropdownMenuItem>
                           )}
-                          
+
                           <DropdownMenuItem onClick={() => handleViewDistributions(payment)}>
                             <Eye className="h-4 w-4 mr-2" />
-                            View Distributions
+                            {t('incomingPayments.viewDistributions')}
                           </DropdownMenuItem>
-                          
+
                           {payment.distributionStatus === 'pending_distribution' && (
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                               onClick={() => handleDeletePayment(payment)}
                               className="text-red-600 focus:text-red-600"
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
-                              Delete Payment
+                              {t('incomingPayments.deletePayment')}
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -359,19 +366,19 @@ export default function IncomingPaymentsPage() {
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>{t('incomingPayments.deleteDialog.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the payment with ID: {paymentToDelete?.paymentId}.
+              {t('incomingPayments.deleteDialog.description', { id: paymentToDelete?.paymentId })}
               {paymentToDelete?.distributionStatus !== 'pending_distribution' && (
                 <p className="text-red-600 mt-2">
-                  Warning: This payment has distributions. You cannot delete it until all distributions are removed.
+                  {t('incomingPayments.deleteDialog.warning')}
                 </p>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogCancel>{t('incomingPayments.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
                 confirmDelete();
@@ -379,7 +386,7 @@ export default function IncomingPaymentsPage() {
               className="bg-red-600 hover:bg-red-700"
               disabled={paymentToDelete?.distributionStatus !== 'pending_distribution'}
             >
-              Delete
+              {t('incomingPayments.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

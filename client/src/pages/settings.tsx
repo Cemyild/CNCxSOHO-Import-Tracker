@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -186,6 +187,7 @@ export function SettingsPage() {
     item_description: ''
   });
 
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("profile");
@@ -232,8 +234,8 @@ export function SettingsPage() {
     },
     onSuccess: () => {
       toast({
-        title: 'Success',
-        description: 'User created successfully',
+        title: t('common.success'),
+        description: t('settings.toast.userCreated'),
       });
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       setShowCreateUserDialog(false);
@@ -241,8 +243,8 @@ export function SettingsPage() {
     },
     onError: (error) => {
       toast({
-        title: 'Error',
-        description: `Failed to create user: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: t('common.error'),
+        description: t('settings.toast.userCreateFailed', { error: error instanceof Error ? error.message : t('settings.toast.unknownError') }),
         variant: 'destructive',
       });
     },
@@ -256,8 +258,8 @@ export function SettingsPage() {
     },
     onSuccess: () => {
       toast({
-        title: 'Success',
-        description: 'User updated successfully',
+        title: t('common.success'),
+        description: t('settings.toast.userUpdated'),
       });
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       setShowEditUserDialog(false);
@@ -265,8 +267,8 @@ export function SettingsPage() {
     },
     onError: (error) => {
       toast({
-        title: 'Error',
-        description: `Failed to update user: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: t('common.error'),
+        description: t('settings.toast.userUpdateFailed', { error: error instanceof Error ? error.message : t('settings.toast.unknownError') }),
         variant: 'destructive',
       });
     },
@@ -280,15 +282,15 @@ export function SettingsPage() {
     },
     onSuccess: () => {
       toast({
-        title: 'Success',
-        description: 'User deleted successfully',
+        title: t('common.success'),
+        description: t('settings.toast.userDeleted'),
       });
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
     },
     onError: (error) => {
       toast({
-        title: 'Error',
-        description: `Failed to delete user: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: t('common.error'),
+        description: t('settings.toast.userDeleteFailed', { error: error instanceof Error ? error.message : t('settings.toast.unknownError') }),
         variant: 'destructive',
       });
     },
@@ -302,16 +304,16 @@ export function SettingsPage() {
     },
     onSuccess: () => {
       toast({
-        title: 'Success',
-        description: 'Password changed successfully',
+        title: t('common.success'),
+        description: t('settings.toast.passwordChanged'),
       });
       setShowPasswordDialog(false);
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     },
     onError: (error) => {
       toast({
-        title: 'Error',
-        description: `Failed to change password: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: t('common.error'),
+        description: t('settings.toast.passwordChangeFailed', { error: error instanceof Error ? error.message : t('settings.toast.unknownError') }),
         variant: 'destructive',
       });
     },
@@ -341,12 +343,12 @@ export function SettingsPage() {
       return await response.json();
     },
     onSuccess: () => {
-      toast({ title: 'Success', description: 'HS Code created successfully' });
+      toast({ title: t('common.success'), description: t('settings.toast.hsCodeCreated') });
       queryClient.invalidateQueries({ queryKey: ['/api/hs-codes'] });
       resetHsCodeForm();
     },
     onError: (error) => {
-      toast({ title: 'Error', description: `Failed to create HS Code: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'destructive' });
+      toast({ title: t('common.error'), description: t('settings.toast.hsCodeCreateFailed', { error: error instanceof Error ? error.message : t('settings.toast.unknownError') }), variant: 'destructive' });
     },
   });
 
@@ -362,12 +364,12 @@ export function SettingsPage() {
       return await response.json();
     },
     onSuccess: () => {
-      toast({ title: 'Success', description: 'HS Code updated successfully' });
+      toast({ title: t('common.success'), description: t('settings.toast.hsCodeUpdated') });
       queryClient.invalidateQueries({ queryKey: ['/api/hs-codes'] });
       resetHsCodeForm();
     },
     onError: (error) => {
-      toast({ title: 'Error', description: `Failed to update HS Code: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'destructive' });
+      toast({ title: t('common.error'), description: t('settings.toast.hsCodeUpdateFailed', { error: error instanceof Error ? error.message : t('settings.toast.unknownError') }), variant: 'destructive' });
     },
   });
 
@@ -377,11 +379,11 @@ export function SettingsPage() {
       return await response.json();
     },
     onSuccess: () => {
-      toast({ title: 'Success', description: 'HS Code deleted successfully' });
+      toast({ title: t('common.success'), description: t('settings.toast.hsCodeDeleted') });
       queryClient.invalidateQueries({ queryKey: ['/api/hs-codes'] });
     },
     onError: (error) => {
-      toast({ title: 'Error', description: `Failed to delete HS Code: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'destructive' });
+      toast({ title: t('common.error'), description: t('settings.toast.hsCodeDeleteFailed', { error: error instanceof Error ? error.message : t('settings.toast.unknownError') }), variant: 'destructive' });
     },
   });
 
@@ -403,12 +405,12 @@ export function SettingsPage() {
       return await response.json();
     },
     onSuccess: () => {
-      toast({ title: 'Success', description: 'Product created successfully' });
+      toast({ title: t('common.success'), description: t('settings.toast.productCreated') });
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
       resetProductForm();
     },
     onError: (error) => {
-      toast({ title: 'Error', description: `Failed to create product: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'destructive' });
+      toast({ title: t('common.error'), description: t('settings.toast.productCreateFailed', { error: error instanceof Error ? error.message : t('settings.toast.unknownError') }), variant: 'destructive' });
     },
   });
 
@@ -418,12 +420,12 @@ export function SettingsPage() {
       return await response.json();
     },
     onSuccess: () => {
-      toast({ title: 'Success', description: 'Product updated successfully' });
+      toast({ title: t('common.success'), description: t('settings.toast.productUpdated') });
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
       resetProductForm();
     },
     onError: (error) => {
-      toast({ title: 'Error', description: `Failed to update product: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'destructive' });
+      toast({ title: t('common.error'), description: t('settings.toast.productUpdateFailed', { error: error instanceof Error ? error.message : t('settings.toast.unknownError') }), variant: 'destructive' });
     },
   });
 
@@ -433,11 +435,11 @@ export function SettingsPage() {
       return await response.json();
     },
     onSuccess: () => {
-      toast({ title: 'Success', description: 'Product deleted successfully' });
+      toast({ title: t('common.success'), description: t('settings.toast.productDeleted') });
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
     },
     onError: (error) => {
-      toast({ title: 'Error', description: `Failed to delete product: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'destructive' });
+      toast({ title: t('common.error'), description: t('settings.toast.productDeleteFailed', { error: error instanceof Error ? error.message : t('settings.toast.unknownError') }), variant: 'destructive' });
     },
   });
 
@@ -471,7 +473,7 @@ export function SettingsPage() {
 
   const handleSaveHsCode = () => {
     if (!hsCodeFormData.tr_hs_code) {
-      toast({ title: 'Error', description: 'TR HS Code is required', variant: 'destructive' });
+      toast({ title: t('common.error'), description: t('settings.validation.trHsCodeRequired'), variant: 'destructive' });
       return;
     }
     if (editingHsCode) {
@@ -501,7 +503,7 @@ export function SettingsPage() {
 
   const handleSaveProduct = () => {
     if (!productFormData.style) {
-      toast({ title: 'Error', description: 'Style is required', variant: 'destructive' });
+      toast({ title: t('common.error'), description: t('settings.validation.styleRequired'), variant: 'destructive' });
       return;
     }
     if (editingProduct) {
@@ -514,8 +516,8 @@ export function SettingsPage() {
   const handleCreateUser = () => {
     if (!newUserData.username || !newUserData.password) {
       toast({
-        title: 'Error',
-        description: 'Username and password are required',
+        title: t('common.error'),
+        description: t('settings.validation.usernamePasswordRequired'),
         variant: 'destructive',
       });
       return;
@@ -539,8 +541,8 @@ export function SettingsPage() {
   const handleDeleteUser = (userId: number) => {
     if (userId === currentUser?.id) {
       toast({
-        title: 'Error',
-        description: 'You cannot delete your own account',
+        title: t('common.error'),
+        description: t('settings.validation.cannotDeleteOwnAccount'),
         variant: 'destructive',
       });
       return;
@@ -551,8 +553,8 @@ export function SettingsPage() {
   const handleChangePassword = () => {
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       toast({
-        title: 'Error',
-        description: 'New passwords do not match',
+        title: t('common.error'),
+        description: t('settings.validation.passwordsDoNotMatch'),
         variant: 'destructive',
       });
       return;
@@ -567,14 +569,14 @@ export function SettingsPage() {
   const isAdmin = currentUser?.role === 'admin';
 
   return (
-    <PageLayout title="Settings" navItems={items}>
+    <PageLayout title={t('nav.settings')} navItems={items}>
               <Tabs defaultValue={isAdmin ? "users" : "profile"} className="w-full">
                 <TabsList className="mb-6">
-                  {isAdmin && <TabsTrigger value="users">User Management</TabsTrigger>}
-                  <TabsTrigger value="profile">Profile Settings</TabsTrigger>
-                  <TabsTrigger value="tr-hs-codes">TR HS Codes</TabsTrigger>
-                  <TabsTrigger value="products">Products</TabsTrigger>
-                  {isAdmin && <TabsTrigger value="pdf-templates">PDF Templates</TabsTrigger>}
+                  {isAdmin && <TabsTrigger value="users">{t('settings.tabs.userManagement')}</TabsTrigger>}
+                  <TabsTrigger value="profile">{t('settings.tabs.profileSettings')}</TabsTrigger>
+                  <TabsTrigger value="tr-hs-codes">{t('settings.tabs.trHsCodes')}</TabsTrigger>
+                  <TabsTrigger value="products">{t('settings.tabs.products')}</TabsTrigger>
+                  {isAdmin && <TabsTrigger value="pdf-templates">{t('settings.tabs.pdfTemplates')}</TabsTrigger>}
                 </TabsList>
 
                 {/* User Management Tab (Admin Only) */}
@@ -585,30 +587,30 @@ export function SettingsPage() {
                         <div>
                           <CardTitle className="flex items-center">
                             <Users className="h-5 w-5 mr-2" />
-                            User Management
+                            {t('settings.users.title')}
                           </CardTitle>
                           <CardDescription>
-                            Manage user accounts and permissions
+                            {t('settings.users.description')}
                           </CardDescription>
                         </div>
                         <Button onClick={() => setShowCreateUserDialog(true)}>
                           <Plus className="h-4 w-4 mr-2" />
-                          Add User
+                          {t('settings.users.addUser')}
                         </Button>
                       </CardHeader>
                       <CardContent>
                         {isUsersLoading ? (
-                          <div className="text-center py-8">Loading users...</div>
+                          <div className="text-center py-8">{t('settings.users.loading')}</div>
                         ) : (
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Username</TableHead>
-                                <TableHead>Email</TableHead>
-                                <TableHead>Role</TableHead>
-                                <TableHead>Created</TableHead>
-                                <TableHead>Last Login</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead>{t('settings.users.username')}</TableHead>
+                                <TableHead>{t('settings.users.email')}</TableHead>
+                                <TableHead>{t('settings.users.role')}</TableHead>
+                                <TableHead>{t('settings.users.created')}</TableHead>
+                                <TableHead>{t('settings.users.lastLogin')}</TableHead>
+                                <TableHead className="text-right">{t('settings.users.actions')}</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -622,7 +624,7 @@ export function SettingsPage() {
                                     </Badge>
                                   </TableCell>
                                   <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
-                                  <TableCell>{user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}</TableCell>
+                                  <TableCell>{user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : t('settings.users.never')}</TableCell>
                                   <TableCell className="text-right">
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
@@ -633,15 +635,15 @@ export function SettingsPage() {
                                       <DropdownMenuContent align="end">
                                         <DropdownMenuItem onClick={() => handleEditUser(user)}>
                                           <Edit className="h-4 w-4 mr-2" />
-                                          Edit
+                                          {t('settings.actions.edit')}
                                         </DropdownMenuItem>
                                         {user.id !== currentUser?.id && (
-                                          <DropdownMenuItem 
+                                          <DropdownMenuItem
                                             onClick={() => handleDeleteUser(user.id)}
                                             className="text-red-600"
                                           >
                                             <Trash2 className="h-4 w-4 mr-2" />
-                                            Delete
+                                            {t('settings.actions.delete')}
                                           </DropdownMenuItem>
                                         )}
                                       </DropdownMenuContent>
@@ -662,23 +664,23 @@ export function SettingsPage() {
                   <div className="grid gap-6">
                     <Card>
                       <CardHeader>
-                        <CardTitle>Profile Information</CardTitle>
+                        <CardTitle>{t('settings.profile.title')}</CardTitle>
                         <CardDescription>
-                          View and manage your account information
+                          {t('settings.profile.description')}
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label>Username</Label>
+                            <Label>{t('settings.profile.username')}</Label>
                             <Input value={currentUser?.username || ''} disabled />
                           </div>
                           <div>
-                            <Label>Email</Label>
+                            <Label>{t('settings.profile.email')}</Label>
                             <Input value={currentUser?.email || ''} disabled />
                           </div>
                           <div>
-                            <Label>Role</Label>
+                            <Label>{t('settings.profile.role')}</Label>
                             <Input value={currentUser?.role || ''} disabled />
                           </div>
                         </div>
@@ -689,15 +691,15 @@ export function SettingsPage() {
                       <CardHeader>
                         <CardTitle className="flex items-center">
                           <Key className="h-5 w-5 mr-2" />
-                          Change Password
+                          {t('settings.password.title')}
                         </CardTitle>
                         <CardDescription>
-                          Update your account password
+                          {t('settings.password.description')}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <Button onClick={() => setShowPasswordDialog(true)}>
-                          Change Password
+                          {t('settings.password.title')}
                         </Button>
                       </CardContent>
                     </Card>
@@ -711,34 +713,34 @@ export function SettingsPage() {
                       <div>
                         <CardTitle className="flex items-center">
                           <Hash className="h-5 w-5 mr-2" />
-                          TR HS Codes
+                          {t('settings.hsCodes.title')}
                         </CardTitle>
                         <CardDescription>
-                          Manage Turkish HS codes with tax rates and import requirements
+                          {t('settings.hsCodes.description')}
                         </CardDescription>
                       </div>
                       <Button onClick={() => { setEditingHsCode(null); setHsCodeFormData({ tr_hs_code: '', ex_registry_form: false, azo_dye_test: false, special_custom: false, customs_tax_percent: '', additional_customs_tax_percent: '', kkdf_percent: '', vat_percent: '', description_tr: '', unit: '' }); setShowHsCodeDialog(true); }}>
                         <Plus className="h-4 w-4 mr-2" />
-                        Add HS Code
+                        {t('settings.hsCodes.addHsCode')}
                       </Button>
                     </CardHeader>
                     <CardContent>
                       {isHsCodesLoading ? (
-                        <div className="text-center py-8">Loading HS codes...</div>
+                        <div className="text-center py-8">{t('settings.hsCodes.loading')}</div>
                       ) : (
                         <div className="overflow-x-auto">
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>TR HS Code</TableHead>
-                                <TableHead>Customs %</TableHead>
-                                <TableHead>Add. Customs %</TableHead>
-                                <TableHead>KKDF %</TableHead>
-                                <TableHead>VAT %</TableHead>
-                                <TableHead>Ex Reg Form</TableHead>
-                                <TableHead>AZO Test</TableHead>
-                                <TableHead>Special Customs</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead>{t('settings.hsCodes.colTrHsCode')}</TableHead>
+                                <TableHead>{t('settings.hsCodes.colCustoms')}</TableHead>
+                                <TableHead>{t('settings.hsCodes.colAddCustoms')}</TableHead>
+                                <TableHead>{t('settings.hsCodes.colKkdf')}</TableHead>
+                                <TableHead>{t('settings.hsCodes.colVat')}</TableHead>
+                                <TableHead>{t('settings.hsCodes.colExRegForm')}</TableHead>
+                                <TableHead>{t('settings.hsCodes.colAzoTest')}</TableHead>
+                                <TableHead>{t('settings.hsCodes.colSpecialCustoms')}</TableHead>
+                                <TableHead className="text-right">{t('settings.users.actions')}</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -749,9 +751,9 @@ export function SettingsPage() {
                                   <TableCell>{hsCode.additional_customs_tax_percent || '—'}</TableCell>
                                   <TableCell>{hsCode.kkdf_percent || '—'}</TableCell>
                                   <TableCell>{hsCode.vat_percent || '—'}</TableCell>
-                                  <TableCell><Badge variant={hsCode.ex_registry_form ? 'default' : 'secondary'}>{hsCode.ex_registry_form ? 'Yes' : 'No'}</Badge></TableCell>
-                                  <TableCell><Badge variant={hsCode.azo_dye_test ? 'default' : 'secondary'}>{hsCode.azo_dye_test ? 'Yes' : 'No'}</Badge></TableCell>
-                                  <TableCell><Badge variant={hsCode.special_custom ? 'default' : 'secondary'}>{hsCode.special_custom ? 'Yes' : 'No'}</Badge></TableCell>
+                                  <TableCell><Badge variant={hsCode.ex_registry_form ? 'default' : 'secondary'}>{hsCode.ex_registry_form ? t('settings.common.yes') : t('settings.common.no')}</Badge></TableCell>
+                                  <TableCell><Badge variant={hsCode.azo_dye_test ? 'default' : 'secondary'}>{hsCode.azo_dye_test ? t('settings.common.yes') : t('settings.common.no')}</Badge></TableCell>
+                                  <TableCell><Badge variant={hsCode.special_custom ? 'default' : 'secondary'}>{hsCode.special_custom ? t('settings.common.yes') : t('settings.common.no')}</Badge></TableCell>
                                   <TableCell className="text-right">
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
@@ -762,11 +764,11 @@ export function SettingsPage() {
                                       <DropdownMenuContent align="end">
                                         <DropdownMenuItem onClick={() => handleEditHsCode(hsCode)} data-testid={`button-edit-hscode-${hsCode.tr_hs_code}`}>
                                           <Edit className="h-4 w-4 mr-2" />
-                                          Edit
+                                          {t('settings.actions.edit')}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => deleteHsCodeMutation.mutate(hsCode.tr_hs_code)} className="text-red-600" data-testid={`button-delete-hscode-${hsCode.tr_hs_code}`}>
                                           <Trash2 className="h-4 w-4 mr-2" />
-                                          Delete
+                                          {t('settings.actions.delete')}
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
@@ -775,7 +777,7 @@ export function SettingsPage() {
                               ))}
                               {(!hsCodesData?.hsCodes || hsCodesData.hsCodes.length === 0) && (
                                 <TableRow>
-                                  <TableCell colSpan={9} className="text-center text-muted-foreground py-8">No HS codes found. Click "Add HS Code" to create one.</TableCell>
+                                  <TableCell colSpan={9} className="text-center text-muted-foreground py-8">{t('settings.hsCodes.empty')}</TableCell>
                                 </TableRow>
                               )}
                             </TableBody>
@@ -793,20 +795,20 @@ export function SettingsPage() {
                       <div>
                         <CardTitle className="flex items-center">
                           <Package className="h-5 w-5 mr-2" />
-                          Products
+                          {t('settings.products.title')}
                         </CardTitle>
                         <CardDescription>
-                          Manage products with style, HS codes, and descriptions
+                          {t('settings.products.description')}
                         </CardDescription>
                       </div>
                       <Button onClick={() => { setEditingProduct(null); setProductFormData({ style: '', hts_code: '', tr_hs_code: '', item_description: '' }); setShowProductDialog(true); }}>
                         <Plus className="h-4 w-4 mr-2" />
-                        Add Product
+                        {t('settings.products.addProduct')}
                       </Button>
                     </CardHeader>
                     <CardContent>
                       {isProductsLoading ? (
-                        <div className="text-center py-8">Loading products...</div>
+                        <div className="text-center py-8">{t('settings.products.loading')}</div>
                       ) : (
                         <div className="overflow-x-auto">
                           <Table>
@@ -818,30 +820,30 @@ export function SettingsPage() {
                                     onClick={() => handleSort('style')}
                                     className="hover:bg-transparent px-0 font-bold"
                                   >
-                                    Style
+                                    {t('settings.products.colStyle')}
                                     {sortColumn === 'style' && (
                                       sortDirection === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />
                                     )}
                                   </Button>
                                 </TableHead>
-                                <TableHead>HS Code (US)</TableHead>
+                                <TableHead>{t('settings.products.colHsCodeUs')}</TableHead>
                                 <TableHead>
-                                  <Button 
-                                    variant="ghost" 
+                                  <Button
+                                    variant="ghost"
                                     onClick={() => handleSort('tr_hs_code')}
                                     className="hover:bg-transparent px-0 font-bold"
                                   >
-                                    TR HS Code
+                                    {t('settings.products.colTrHsCode')}
                                     {sortColumn === 'tr_hs_code' && (
                                       sortDirection === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />
                                     )}
                                   </Button>
                                 </TableHead>
-                                <TableHead>Description</TableHead>
-                                <TableHead>Ex Reg Form</TableHead>
-                                <TableHead>AZO Test</TableHead>
-                                <TableHead>Special Customs</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead>{t('settings.products.colDescription')}</TableHead>
+                                <TableHead>{t('settings.hsCodes.colExRegForm')}</TableHead>
+                                <TableHead>{t('settings.hsCodes.colAzoTest')}</TableHead>
+                                <TableHead>{t('settings.hsCodes.colSpecialCustoms')}</TableHead>
+                                <TableHead className="text-right">{t('settings.users.actions')}</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -864,21 +866,21 @@ export function SettingsPage() {
                                   <TableCell>
                                     {hsCodeData ? (
                                       <Badge variant={hsCodeData.ex_registry_form ? 'default' : 'secondary'}>
-                                        {hsCodeData.ex_registry_form ? 'Yes' : 'No'}
+                                        {hsCodeData.ex_registry_form ? t('settings.common.yes') : t('settings.common.no')}
                                       </Badge>
                                     ) : '—'}
                                   </TableCell>
                                   <TableCell>
                                     {hsCodeData ? (
                                       <Badge variant={hsCodeData.azo_dye_test ? 'default' : 'secondary'}>
-                                        {hsCodeData.azo_dye_test ? 'Yes' : 'No'}
+                                        {hsCodeData.azo_dye_test ? t('settings.common.yes') : t('settings.common.no')}
                                       </Badge>
                                     ) : '—'}
                                   </TableCell>
                                   <TableCell>
                                     {hsCodeData ? (
                                       <Badge variant={hsCodeData.special_custom ? 'default' : 'secondary'}>
-                                        {hsCodeData.special_custom ? 'Yes' : 'No'}
+                                        {hsCodeData.special_custom ? t('settings.common.yes') : t('settings.common.no')}
                                       </Badge>
                                     ) : '—'}
                                   </TableCell>
@@ -892,11 +894,11 @@ export function SettingsPage() {
                                       <DropdownMenuContent align="end">
                                         <DropdownMenuItem onClick={() => handleEditProduct(product)} data-testid={`button-edit-product-${product.id}`}>
                                           <Edit className="h-4 w-4 mr-2" />
-                                          Edit
+                                          {t('settings.actions.edit')}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => deleteProductMutation.mutate(product.id)} className="text-red-600" data-testid={`button-delete-product-${product.id}`}>
                                           <Trash2 className="h-4 w-4 mr-2" />
-                                          Delete
+                                          {t('settings.actions.delete')}
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
@@ -905,7 +907,7 @@ export function SettingsPage() {
                               )})}
                               {(!productsData?.products || productsData.products.length === 0) && (
                                 <TableRow>
-                                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No products found. Click "Add Product" to create one.</TableCell>
+                                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">{t('settings.products.empty')}</TableCell>
                                 </TableRow>
                               )}
                             </TableBody>
@@ -923,18 +925,18 @@ export function SettingsPage() {
                       <CardHeader>
                         <CardTitle className="flex items-center">
                           <FileText className="h-5 w-5 mr-2" />
-                          PDF Template Management
+                          {t('settings.pdfTemplates.title')}
                         </CardTitle>
                         <CardDescription>
-                          Upload and manage PDF generation templates
+                          {t('settings.pdfTemplates.description')}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-6">
                           <div>
-                            <h3 className="text-lg font-medium mb-2">Upload New Template</h3>
+                            <h3 className="text-lg font-medium mb-2">{t('settings.pdfTemplates.uploadNew')}</h3>
                             <p className="text-sm text-muted-foreground mb-4">
-                              Upload Adobe PDF document generation templates for generating reports.
+                              {t('settings.pdfTemplates.uploadHint')}
                             </p>
                             <UploadTemplateForm />
                           </div>
@@ -949,61 +951,61 @@ export function SettingsPage() {
       <Dialog open={showCreateUserDialog} onOpenChange={setShowCreateUserDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New User</DialogTitle>
+            <DialogTitle>{t('settings.createUserDialog.title')}</DialogTitle>
             <DialogDescription>
-              Add a new user to the system
+              {t('settings.createUserDialog.description')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">{t('settings.users.username')}</Label>
               <Input
                 id="username"
                 value={newUserData.username}
                 onChange={(e) => setNewUserData({ ...newUserData, username: e.target.value })}
-                placeholder="Enter username"
+                placeholder={t('settings.createUserDialog.usernamePlaceholder')}
               />
             </div>
             <div>
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t('settings.users.email')}</Label>
               <Input
                 id="email"
                 type="email"
                 value={newUserData.email}
                 onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
-                placeholder="Enter email (optional)"
+                placeholder={t('settings.createUserDialog.emailPlaceholder')}
               />
             </div>
             <div>
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('settings.createUserDialog.password')}</Label>
               <Input
                 id="password"
                 type="password"
                 value={newUserData.password}
                 onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
-                placeholder="Enter password"
+                placeholder={t('settings.createUserDialog.passwordPlaceholder')}
               />
             </div>
             <div>
-              <Label htmlFor="role">Role</Label>
+              <Label htmlFor="role">{t('settings.users.role')}</Label>
               <select
                 id="role"
                 value={newUserData.role}
                 onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value as 'admin' | 'user' | 'accountant' })}
                 className="w-full p-2 border rounded-md"
               >
-                <option value="user">User</option>
-                <option value="accountant">Muhasebeci</option>
-                <option value="admin">Admin</option>
+                <option value="user">{t('settings.roles.user')}</option>
+                <option value="accountant">{t('settings.roles.accountant')}</option>
+                <option value="admin">{t('settings.roles.admin')}</option>
               </select>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateUserDialog(false)}>
-              Cancel
+              {t('settings.actions.cancel')}
             </Button>
             <Button onClick={handleCreateUser} disabled={createUserMutation.isPending}>
-              {createUserMutation.isPending ? 'Creating...' : 'Create User'}
+              {createUserMutation.isPending ? t('settings.createUserDialog.creating') : t('settings.createUserDialog.submit')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1013,15 +1015,15 @@ export function SettingsPage() {
       <Dialog open={showEditUserDialog} onOpenChange={setShowEditUserDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
+            <DialogTitle>{t('settings.editUserDialog.title')}</DialogTitle>
             <DialogDescription>
-              Update user information
+              {t('settings.editUserDialog.description')}
             </DialogDescription>
           </DialogHeader>
           {selectedUser && (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="edit-username">Username</Label>
+                <Label htmlFor="edit-username">{t('settings.users.username')}</Label>
                 <Input
                   id="edit-username"
                   value={selectedUser.username}
@@ -1029,7 +1031,7 @@ export function SettingsPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="edit-email">Email</Label>
+                <Label htmlFor="edit-email">{t('settings.users.email')}</Label>
                 <Input
                   id="edit-email"
                   type="email"
@@ -1038,26 +1040,26 @@ export function SettingsPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="edit-role">Role</Label>
+                <Label htmlFor="edit-role">{t('settings.users.role')}</Label>
                 <select
                   id="edit-role"
                   value={selectedUser.role}
                   onChange={(e) => setSelectedUser({ ...selectedUser, role: e.target.value as 'admin' | 'user' | 'accountant' })}
                   className="w-full p-2 border rounded-md"
                 >
-                  <option value="user">User</option>
-                  <option value="accountant">Muhasebeci</option>
-                  <option value="admin">Admin</option>
+                  <option value="user">{t('settings.roles.user')}</option>
+                  <option value="accountant">{t('settings.roles.accountant')}</option>
+                  <option value="admin">{t('settings.roles.admin')}</option>
                 </select>
               </div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditUserDialog(false)}>
-              Cancel
+              {t('settings.actions.cancel')}
             </Button>
             <Button onClick={handleUpdateUser} disabled={updateUserMutation.isPending}>
-              {updateUserMutation.isPending ? 'Updating...' : 'Update User'}
+              {updateUserMutation.isPending ? t('settings.editUserDialog.updating') : t('settings.editUserDialog.submit')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1067,21 +1069,21 @@ export function SettingsPage() {
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Change Password</DialogTitle>
+            <DialogTitle>{t('settings.password.title')}</DialogTitle>
             <DialogDescription>
-              Enter your current password and choose a new one
+              {t('settings.passwordDialog.description')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="current-password">Current Password</Label>
+              <Label htmlFor="current-password">{t('settings.passwordDialog.current')}</Label>
               <div className="relative">
                 <Input
                   id="current-password"
                   type={showPassword ? "text" : "password"}
                   value={passwordData.currentPassword}
                   onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                  placeholder="Enter current password"
+                  placeholder={t('settings.passwordDialog.currentPlaceholder')}
                 />
                 <Button
                   type="button"
@@ -1095,32 +1097,32 @@ export function SettingsPage() {
               </div>
             </div>
             <div>
-              <Label htmlFor="new-password">New Password</Label>
+              <Label htmlFor="new-password">{t('settings.passwordDialog.new')}</Label>
               <Input
                 id="new-password"
                 type="password"
                 value={passwordData.newPassword}
                 onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                placeholder="Enter new password"
+                placeholder={t('settings.passwordDialog.newPlaceholder')}
               />
             </div>
             <div>
-              <Label htmlFor="confirm-password">Confirm New Password</Label>
+              <Label htmlFor="confirm-password">{t('settings.passwordDialog.confirm')}</Label>
               <Input
                 id="confirm-password"
                 type="password"
                 value={passwordData.confirmPassword}
                 onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                placeholder="Confirm new password"
+                placeholder={t('settings.passwordDialog.confirmPlaceholder')}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPasswordDialog(false)}>
-              Cancel
+              {t('settings.actions.cancel')}
             </Button>
             <Button onClick={handleChangePassword} disabled={changePasswordMutation.isPending}>
-              {changePasswordMutation.isPending ? 'Changing...' : 'Change Password'}
+              {changePasswordMutation.isPending ? t('settings.passwordDialog.changing') : t('settings.password.title')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1130,81 +1132,81 @@ export function SettingsPage() {
       <Dialog open={showHsCodeDialog} onOpenChange={(open) => { if (!open) resetHsCodeForm(); else setShowHsCodeDialog(true); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingHsCode ? 'Edit HS Code' : 'Add New HS Code'}</DialogTitle>
+            <DialogTitle>{editingHsCode ? t('settings.hsCodeDialog.editTitle') : t('settings.hsCodeDialog.addTitle')}</DialogTitle>
             <DialogDescription>
-              {editingHsCode ? 'Update HS code information' : 'Enter the details for the new HS code'}
+              {editingHsCode ? t('settings.hsCodeDialog.editDescription') : t('settings.hsCodeDialog.addDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="tr_hs_code">TR HS Code *</Label>
+                <Label htmlFor="tr_hs_code">{t('settings.hsCodeDialog.trHsCodeRequired')}</Label>
                 <Input
                   id="tr_hs_code"
                   value={hsCodeFormData.tr_hs_code}
                   onChange={(e) => setHsCodeFormData({ ...hsCodeFormData, tr_hs_code: e.target.value })}
-                  placeholder="e.g., 6204.62.90.00.00"
+                  placeholder={t('settings.hsCodeDialog.trHsCodePlaceholder')}
                   disabled={!!editingHsCode}
                   data-testid="input-tr-hs-code"
                 />
               </div>
               <div>
-                <Label htmlFor="description_tr">Description</Label>
+                <Label htmlFor="description_tr">{t('settings.products.colDescription')}</Label>
                 <Input
                   id="description_tr"
                   value={hsCodeFormData.description_tr}
                   onChange={(e) => setHsCodeFormData({ ...hsCodeFormData, description_tr: e.target.value })}
-                  placeholder="Description in Turkish"
+                  placeholder={t('settings.hsCodeDialog.descriptionPlaceholder')}
                   data-testid="input-description-tr"
                 />
               </div>
             </div>
             <div className="grid grid-cols-4 gap-4">
               <div>
-                <Label htmlFor="customs_tax_percent">Customs Tax %</Label>
+                <Label htmlFor="customs_tax_percent">{t('settings.hsCodeDialog.customsTax')}</Label>
                 <Input
                   id="customs_tax_percent"
                   type="number"
                   step="0.01"
                   value={hsCodeFormData.customs_tax_percent}
                   onChange={(e) => setHsCodeFormData({ ...hsCodeFormData, customs_tax_percent: e.target.value })}
-                  placeholder="e.g., 12"
+                  placeholder={t('settings.hsCodeDialog.exampleValue', { value: '12' })}
                   data-testid="input-customs-tax"
                 />
               </div>
               <div>
-                <Label htmlFor="additional_customs_tax_percent">Add. Customs %</Label>
+                <Label htmlFor="additional_customs_tax_percent">{t('settings.hsCodes.colAddCustoms')}</Label>
                 <Input
                   id="additional_customs_tax_percent"
                   type="number"
                   step="0.01"
                   value={hsCodeFormData.additional_customs_tax_percent}
                   onChange={(e) => setHsCodeFormData({ ...hsCodeFormData, additional_customs_tax_percent: e.target.value })}
-                  placeholder="e.g., 30"
+                  placeholder={t('settings.hsCodeDialog.exampleValue', { value: '30' })}
                   data-testid="input-add-customs-tax"
                 />
               </div>
               <div>
-                <Label htmlFor="kkdf_percent">KKDF %</Label>
+                <Label htmlFor="kkdf_percent">{t('settings.hsCodes.colKkdf')}</Label>
                 <Input
                   id="kkdf_percent"
                   type="number"
                   step="0.01"
                   value={hsCodeFormData.kkdf_percent}
                   onChange={(e) => setHsCodeFormData({ ...hsCodeFormData, kkdf_percent: e.target.value })}
-                  placeholder="e.g., 6"
+                  placeholder={t('settings.hsCodeDialog.exampleValue', { value: '6' })}
                   data-testid="input-kkdf"
                 />
               </div>
               <div>
-                <Label htmlFor="vat_percent">VAT %</Label>
+                <Label htmlFor="vat_percent">{t('settings.hsCodes.colVat')}</Label>
                 <Input
                   id="vat_percent"
                   type="number"
                   step="0.01"
                   value={hsCodeFormData.vat_percent}
                   onChange={(e) => setHsCodeFormData({ ...hsCodeFormData, vat_percent: e.target.value })}
-                  placeholder="e.g., 10"
+                  placeholder={t('settings.hsCodeDialog.exampleValue', { value: '10' })}
                   data-testid="input-vat"
                 />
               </div>
@@ -1217,7 +1219,7 @@ export function SettingsPage() {
                   onCheckedChange={(checked) => setHsCodeFormData({ ...hsCodeFormData, ex_registry_form: checked as boolean })}
                   data-testid="checkbox-ex-reg-form"
                 />
-                <Label htmlFor="ex_registry_form" className="cursor-pointer">Ex Registry Form Required</Label>
+                <Label htmlFor="ex_registry_form" className="cursor-pointer">{t('settings.hsCodeDialog.exRegistryRequired')}</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -1226,7 +1228,7 @@ export function SettingsPage() {
                   onCheckedChange={(checked) => setHsCodeFormData({ ...hsCodeFormData, azo_dye_test: checked as boolean })}
                   data-testid="checkbox-azo-test"
                 />
-                <Label htmlFor="azo_dye_test" className="cursor-pointer">AZO Dye Test Required</Label>
+                <Label htmlFor="azo_dye_test" className="cursor-pointer">{t('settings.hsCodeDialog.azoDyeRequired')}</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -1235,16 +1237,16 @@ export function SettingsPage() {
                   onCheckedChange={(checked) => setHsCodeFormData({ ...hsCodeFormData, special_custom: checked as boolean })}
                   data-testid="checkbox-special-custom"
                 />
-                <Label htmlFor="special_custom" className="cursor-pointer">Special Customs</Label>
+                <Label htmlFor="special_custom" className="cursor-pointer">{t('settings.hsCodes.colSpecialCustoms')}</Label>
               </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={resetHsCodeForm}>
-              Cancel
+              {t('settings.actions.cancel')}
             </Button>
             <Button onClick={handleSaveHsCode} disabled={createHsCodeMutation.isPending || updateHsCodeMutation.isPending} data-testid="button-save-hscode">
-              {createHsCodeMutation.isPending || updateHsCodeMutation.isPending ? 'Saving...' : editingHsCode ? 'Update HS Code' : 'Create HS Code'}
+              {createHsCodeMutation.isPending || updateHsCodeMutation.isPending ? t('settings.actions.saving') : editingHsCode ? t('settings.hsCodeDialog.update') : t('settings.hsCodeDialog.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1254,61 +1256,61 @@ export function SettingsPage() {
       <Dialog open={showProductDialog} onOpenChange={(open) => { if (!open) resetProductForm(); else setShowProductDialog(true); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingProduct ? 'Edit Product' : 'Add New Product'}</DialogTitle>
+            <DialogTitle>{editingProduct ? t('settings.productDialog.editTitle') : t('settings.productDialog.addTitle')}</DialogTitle>
             <DialogDescription>
-              {editingProduct ? 'Update product information' : 'Enter the details for the new product'}
+              {editingProduct ? t('settings.productDialog.editDescription') : t('settings.productDialog.addDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="style">Style *</Label>
+              <Label htmlFor="style">{t('settings.productDialog.styleRequired')}</Label>
               <Input
                 id="style"
                 value={productFormData.style}
                 onChange={(e) => setProductFormData({ ...productFormData, style: e.target.value })}
-                placeholder="e.g., ABC-12345"
+                placeholder={t('settings.productDialog.stylePlaceholder')}
                 data-testid="input-style"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="hts_code">HS Code (US)</Label>
+                <Label htmlFor="hts_code">{t('settings.products.colHsCodeUs')}</Label>
                 <Input
                   id="hts_code"
                   value={productFormData.hts_code}
                   onChange={(e) => setProductFormData({ ...productFormData, hts_code: e.target.value })}
-                  placeholder="e.g., 6204.62.4010"
+                  placeholder={t('settings.productDialog.htsCodePlaceholder')}
                   data-testid="input-hts-code"
                 />
               </div>
               <div>
-                <Label htmlFor="product_tr_hs_code">TR HS Code</Label>
+                <Label htmlFor="product_tr_hs_code">{t('settings.products.colTrHsCode')}</Label>
                 <Input
                   id="product_tr_hs_code"
                   value={productFormData.tr_hs_code}
                   onChange={(e) => setProductFormData({ ...productFormData, tr_hs_code: e.target.value })}
-                  placeholder="e.g., 6204.62.90.00.00"
+                  placeholder={t('settings.hsCodeDialog.trHsCodePlaceholder')}
                   data-testid="input-product-tr-hs-code"
                 />
               </div>
             </div>
             <div>
-              <Label htmlFor="item_description">Description</Label>
+              <Label htmlFor="item_description">{t('settings.products.colDescription')}</Label>
               <Input
                 id="item_description"
                 value={productFormData.item_description}
                 onChange={(e) => setProductFormData({ ...productFormData, item_description: e.target.value })}
-                placeholder="Product description"
+                placeholder={t('settings.productDialog.descriptionPlaceholder')}
                 data-testid="input-item-description"
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={resetProductForm}>
-              Cancel
+              {t('settings.actions.cancel')}
             </Button>
             <Button onClick={handleSaveProduct} disabled={createProductMutation.isPending || updateProductMutation.isPending} data-testid="button-save-product">
-              {createProductMutation.isPending || updateProductMutation.isPending ? 'Saving...' : editingProduct ? 'Update Product' : 'Create Product'}
+              {createProductMutation.isPending || updateProductMutation.isPending ? t('settings.actions.saving') : editingProduct ? t('settings.productDialog.update') : t('settings.productDialog.create')}
             </Button>
           </DialogFooter>
         </DialogContent>

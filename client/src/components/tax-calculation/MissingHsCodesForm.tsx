@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useTranslation } from "react-i18next";
 
 export function MissingHsCodesForm({
   hsCodes,
@@ -13,6 +14,7 @@ export function MissingHsCodesForm({
   hsCodes: string[];
   onComplete: () => void;
 }) {
+  const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -59,8 +61,8 @@ export function MissingHsCodesForm({
     // Validate required fields
     if (!formData.customs_tax_percent || !formData.vat_percent) {
       toast({
-        title: "Validation Error",
-        description: "Customs Tax % and VAT % are required",
+        title: t('taxCalcComp.missingHs.validationErrorTitle'),
+        description: t('taxCalcComp.missingHs.customsAndVatRequired'),
         variant: "destructive",
       });
       return;
@@ -84,8 +86,8 @@ export function MissingHsCodesForm({
       });
 
       toast({
-        title: "Success",
-        description: `${currentHsCode} tax rates saved to database`,
+        title: t('common.success'),
+        description: t('taxCalcComp.missingHs.ratesSaved', { code: currentHsCode }),
       });
 
       console.log(
@@ -107,8 +109,8 @@ export function MissingHsCodesForm({
     } catch (error) {
       console.error("[HS FORM] Save error:", error);
       toast({
-        title: "Error",
-        description: `Failed to save: ${error instanceof Error ? error.message : "Unknown error"}`,
+        title: t('common.error'),
+        description: t('taxCalcComp.missingHs.saveFailed', { error: error instanceof Error ? error.message : t('taxCalcComp.missingHs.unknownError') }),
         variant: "destructive",
       });
     } finally {
@@ -124,17 +126,16 @@ export function MissingHsCodesForm({
     <div className="space-y-4">
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <h3 className="font-semibold mb-2">
-          HS Code {currentIndex + 1} of {hsCodes.length}: {currentHsCode}
+          {t('taxCalcComp.missingHs.hsCodeHeading', { current: currentIndex + 1, total: hsCodes.length, code: currentHsCode })}
         </h3>
         <p className="text-sm text-gray-600">
-          Tax rates for this HS code are not in the database. Please provide the
-          tax information to continue.
+          {t('taxCalcComp.missingHs.notInDatabase')}
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
-          <Label>TR HS CODE</Label>
+          <Label>{t('taxCalcComp.missingHs.trHsCode')}</Label>
           <Input
             value={currentHsCode}
             disabled
@@ -143,29 +144,29 @@ export function MissingHsCodesForm({
         </div>
 
         <div className="col-span-2">
-          <Label>Description (Turkish)</Label>
+          <Label>{t('taxCalcComp.missingHs.descriptionTurkish')}</Label>
           <Input
             value={formData.description_tr}
             onChange={(e) =>
               setFormData({ ...formData, description_tr: e.target.value })
             }
-            placeholder="Ürün açıklaması"
+            placeholder={t('taxCalcComp.missingHs.productDescriptionPlaceholder')}
             data-testid="input-description"
           />
         </div>
 
         <div>
-          <Label>Unit</Label>
+          <Label>{t('taxCalcComp.missingHs.unit')}</Label>
           <Input
             value={formData.unit}
             onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-            placeholder="AD, KG, etc."
+            placeholder={t('taxCalcComp.missingHs.unitPlaceholder')}
             data-testid="input-unit"
           />
         </div>
 
         <div className="col-span-2 space-y-2 border rounded-lg p-3 bg-gray-50">
-          <Label className="text-sm font-semibold">Import Requirements</Label>
+          <Label className="text-sm font-semibold">{t('taxCalcComp.missingHs.importRequirements')}</Label>
           <div className="flex items-center space-x-2">
             <Checkbox
               id="ex-registry"
@@ -176,7 +177,7 @@ export function MissingHsCodesForm({
               data-testid="checkbox-ex-registry"
             />
             <Label htmlFor="ex-registry" className="font-normal cursor-pointer">
-              EX REGISTRY FORM Required
+              {t('taxCalcComp.missingHs.exRegistryRequired')}
             </Label>
           </div>
           <div className="flex items-center space-x-2">
@@ -189,7 +190,7 @@ export function MissingHsCodesForm({
               data-testid="checkbox-azo-dye"
             />
             <Label htmlFor="azo-dye" className="font-normal cursor-pointer">
-              AZO DYE TEST Required
+              {t('taxCalcComp.missingHs.azoDyeRequired')}
             </Label>
           </div>
           <div className="flex items-center space-x-2">
@@ -205,15 +206,15 @@ export function MissingHsCodesForm({
               htmlFor="special-custom"
               className="font-normal cursor-pointer"
             >
-              SPECIAL CUSTOM Required
+              {t('taxCalcComp.missingHs.specialCustomRequired')}
             </Label>
           </div>
         </div>
 
         <div>
           <Label>
-            Customs Tax % *{" "}
-            <span className="text-xs text-gray-500">(e.g., 0.03 for 3%)</span>
+            {t('taxCalcComp.missingHs.customsTaxPercent')}{" "}
+            <span className="text-xs text-gray-500">{t('taxCalcComp.missingHs.hint3')}</span>
           </Label>
           <Input
             type="number"
@@ -233,8 +234,8 @@ export function MissingHsCodesForm({
 
         <div>
           <Label>
-            Additional Customs Tax %{" "}
-            <span className="text-xs text-gray-500">(e.g., 0.39 for 39%)</span>
+            {t('taxCalcComp.missingHs.additionalCustomsTaxPercent')}{" "}
+            <span className="text-xs text-gray-500">{t('taxCalcComp.missingHs.hint39')}</span>
           </Label>
           <Input
             type="number"
@@ -253,8 +254,8 @@ export function MissingHsCodesForm({
 
         <div>
           <Label>
-            KKDF %{" "}
-            <span className="text-xs text-gray-500">(e.g., 0.06 for 6%)</span>
+            {t('taxCalcComp.missingHs.kkdfPercent')}{" "}
+            <span className="text-xs text-gray-500">{t('taxCalcComp.missingHs.hint6')}</span>
           </Label>
           <Input
             type="number"
@@ -273,8 +274,8 @@ export function MissingHsCodesForm({
 
         <div>
           <Label>
-            VAT % *{" "}
-            <span className="text-xs text-gray-500">(e.g., 0.10 for 10%)</span>
+            {t('taxCalcComp.missingHs.vatPercent')}{" "}
+            <span className="text-xs text-gray-500">{t('taxCalcComp.missingHs.hint10')}</span>
           </Label>
           <Input
             type="number"
@@ -300,14 +301,14 @@ export function MissingHsCodesForm({
           disabled={isSaving}
           data-testid="button-skip-all-hscodes"
         >
-          Skip All
+          {t('taxCalcComp.missingHs.skipAll')}
         </Button>
         <Button
           onClick={handleSave}
           disabled={isSaving}
           data-testid="button-save-hscode"
         >
-          {isSaving ? "Saving..." : "Save & Next"}
+          {isSaving ? t('taxCalcComp.missingHs.saving') : t('taxCalcComp.missingHs.saveNext')}
         </Button>
       </div>
     </div>

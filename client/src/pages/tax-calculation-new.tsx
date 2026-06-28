@@ -20,6 +20,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
+import { useTranslation } from "react-i18next";
 import type { InsertTaxCalculation, InsertTaxCalculationItem, Product } from "@shared/schema";
 import { InvoiceInfoForm } from "@/components/tax-calculation/InvoiceInfoForm";
 import { ProductsTable, ProductItem } from "@/components/tax-calculation/ProductsTable";
@@ -73,6 +74,7 @@ const items = [
 ];
 
 export default function TaxCalculationNewPage() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [isFromRemovedItems, setIsFromRemovedItems] = useState(false);
@@ -138,8 +140,8 @@ export default function TaxCalculationNewPage() {
             setProducts(loadedProducts);
             setIsFromRemovedItems(true);
             toast({
-              title: "Items Loaded",
-              description: `${loadedProducts.length} items loaded from previous calculation`,
+              title: t('taxCalc.toast.itemsLoadedTitle'),
+              description: t('taxCalc.toast.itemsLoadedFromPrevious', { count: loadedProducts.length }),
             });
           }
           
@@ -150,7 +152,7 @@ export default function TaxCalculationNewPage() {
         }
       }
     }
-  }, [toast]);
+  }, [toast, t]);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [showMissingDataModal, setShowMissingDataModal] = useState(false);
   const [missingData, setMissingData] = useState<{ missingProducts: any[]; missingHsCodes: string[] }>({
@@ -173,7 +175,7 @@ export default function TaxCalculationNewPage() {
 
   const createCalculationMutation = useMutation({
     mutationFn: async (data: { calculation: Partial<InsertTaxCalculation>; items: ProductItem[]; calculate: boolean }) => {
-      setLoadingStep('Creating calculation');
+      setLoadingStep(t('taxCalc.step.creatingCalculation'));
       setLoadingProgress(25);
       console.log('💾 STEP 1: CREATING CALCULATION...');
       
@@ -199,7 +201,7 @@ export default function TaxCalculationNewPage() {
       const { calculation } = await calcResponse.json();
       console.log(`✓ Calculation created (ID: ${calculation.id})`);
 
-      setLoadingStep('Creating items');
+      setLoadingStep(t('taxCalc.step.creatingItems'));
       setLoadingProgress(40);
       console.log('📦 STEP 2: CREATING ITEMS...');
       console.log(`[BATCH] Preparing ${data.items.length} items for batch creation`);
@@ -235,7 +237,7 @@ export default function TaxCalculationNewPage() {
       setLoadingProgress(60);
 
       if (data.calculate) {
-        setLoadingStep('Calculating');
+        setLoadingStep(t('taxCalc.step.calculating'));
         console.log('🧮 STEP 3: CALCULATING TAXES...');
         console.log('⏱️  This may take 1-2 minutes for large calculations...');
         
@@ -268,8 +270,8 @@ export default function TaxCalculationNewPage() {
             queryClient.invalidateQueries({ queryKey: ["/api/procedures"] });
             setIsLoading(false);
             toast({
-              title: "Success",
-              description: "New calculation and linked procedure created with copied details",
+              title: t('common.success'),
+              description: t('taxCalc.toast.splitCreatedWithProcedure'),
             });
             navigate(`/tax-calculation/${calculation.id}`);
             return;
@@ -281,8 +283,8 @@ export default function TaxCalculationNewPage() {
         // Procedure creation failed — keep the calculation, warn the user.
         setIsLoading(false);
         toast({
-          title: "Calculation created",
-          description: "But the linked procedure could not be created automatically. You can create it from the results page.",
+          title: t('taxCalc.toast.calculationCreatedTitle'),
+          description: t('taxCalc.toast.procedureAutoCreateFailed'),
           variant: "destructive",
         });
         navigate(`/tax-calculation/${calculation.id}`);
@@ -291,16 +293,16 @@ export default function TaxCalculationNewPage() {
 
       setIsLoading(false);
       toast({
-        title: "Success",
-        description: "Calculation created successfully",
+        title: t('common.success'),
+        description: t('taxCalc.toast.calculationCreated'),
       });
       navigate(`/tax-calculation/${calculation.id}`);
     },
     onError: (error: Error) => {
       setIsLoading(false);
       toast({
-        title: "Error",
-        description: error.message || "Failed to create calculation",
+        title: t('common.error'),
+        description: error.message || t('taxCalc.toast.createError'),
         variant: "destructive",
       });
     },
@@ -437,12 +439,12 @@ export default function TaxCalculationNewPage() {
     
     if (validProducts.length < importedProducts.length) {
       toast({
-        title: "Import Warning",
-        description: `${importedProducts.length - validProducts.length} products skipped (missing style, zero cost, or zero units)`,
+        title: t('taxCalc.toast.importWarningTitle'),
+        description: t('taxCalc.toast.productsSkipped', { count: importedProducts.length - validProducts.length }),
         variant: "destructive",
       });
     }
-    
+
     setProducts([...products, ...updatedProducts]);
   };
 
@@ -508,8 +510,8 @@ export default function TaxCalculationNewPage() {
   const handleSave = async (calculate: boolean) => {
     if (!invoiceData.reference) {
       toast({
-        title: "Validation Error",
-        description: "Reference is required",
+        title: t('taxCalc.toast.validationErrorTitle'),
+        description: t('taxCalc.toast.referenceRequired'),
         variant: "destructive",
       });
       return;
@@ -517,8 +519,8 @@ export default function TaxCalculationNewPage() {
 
     if (products.length === 0) {
       toast({
-        title: "Validation Error",
-        description: "At least one product is required",
+        title: t('taxCalc.toast.validationErrorTitle'),
+        description: t('taxCalc.toast.atLeastOneProduct'),
         variant: "destructive",
       });
       return;
@@ -532,8 +534,8 @@ export default function TaxCalculationNewPage() {
 
     if (hasInvalidProduct) {
       toast({
-        title: "Validation Error",
-        description: "All products must have a style, valid cost (>0), and units (>0)",
+        title: t('taxCalc.toast.validationErrorTitle'),
+        description: t('taxCalc.toast.invalidProducts'),
         variant: "destructive",
       });
       return;
@@ -543,7 +545,7 @@ export default function TaxCalculationNewPage() {
     if (calculate) {
       try {
         setIsLoading(true);
-        setLoadingStep('Validating');
+        setLoadingStep(t('taxCalc.step.validating'));
         setLoadingProgress(10);
         console.log('📝 STEP 0: VALIDATING...');
         
@@ -558,10 +560,10 @@ export default function TaxCalculationNewPage() {
         
         // Check for missing ATR rates if is_atr is enabled
         if (invoiceData.is_atr) {
-          setLoadingStep('Checking ATR rates');
+          setLoadingStep(t('taxCalc.step.checkingAtrRates'));
           setLoadingProgress(15);
           console.log('📋 STEP 0.5: CHECKING ATR RATES...');
-          
+
           // Build unique HS code + country combinations from products
           const atrCheckItems = products
             .filter(p => p.tr_hs_code && p.country_of_origin)
@@ -592,8 +594,8 @@ export default function TaxCalculationNewPage() {
         console.error('[SAVE] Validation error:', error);
         setIsLoading(false);
         toast({
-          title: "Validation Error",
-          description: error instanceof Error ? error.message : "Failed to validate data. Please try again.",
+          title: t('taxCalc.toast.validationErrorTitle'),
+          description: error instanceof Error ? error.message : t('taxCalc.toast.validateFailed'),
           variant: "destructive",
         });
         return; // Don't proceed with creation
@@ -610,7 +612,7 @@ export default function TaxCalculationNewPage() {
   const handleAtrRatesComplete = async () => {
     setShowAtrRatesModal(false);
     setIsLoading(true);
-    setLoadingStep('Proceeding with calculation');
+    setLoadingStep(t('taxCalc.step.proceedingWithCalculation'));
     setLoadingProgress(20);
     
     console.log('[ATR RATES] Modal completed, proceeding with calculation...');
@@ -626,7 +628,7 @@ export default function TaxCalculationNewPage() {
   const handleMissingDataComplete = async () => {
     setShowMissingDataModal(false);
     setIsLoading(true);
-    setLoadingStep('Updating product data');
+    setLoadingStep(t('taxCalc.step.updatingProductData'));
     setLoadingProgress(20);
     
     console.log('[MISSING DATA] Modal completed, fetching updated product data...');
@@ -668,7 +670,7 @@ export default function TaxCalculationNewPage() {
       
       // Check for missing ATR rates if is_atr is enabled
       if (invoiceData.is_atr) {
-        setLoadingStep('Checking ATR rates');
+        setLoadingStep(t('taxCalc.step.checkingAtrRates'));
         setLoadingProgress(22);
         console.log('[MISSING DATA] Checking ATR rates for updated items...');
         
@@ -695,9 +697,9 @@ export default function TaxCalculationNewPage() {
         }
       }
       
-      setLoadingStep('Creating calculation');
+      setLoadingStep(t('taxCalc.step.creatingCalculation'));
       setLoadingProgress(25);
-      
+
       // After adding missing data, proceed with calculation using UPDATED items
       createCalculationMutation.mutate({
         calculation: invoiceData,
@@ -708,52 +710,52 @@ export default function TaxCalculationNewPage() {
       console.error('[MISSING DATA] Error fetching products:', error);
       setIsLoading(false);
       toast({
-        title: "Error",
-        description: "Failed to refresh product data. Please try again.",
+        title: t('common.error'),
+        description: t('taxCalc.toast.refreshProductsFailed'),
         variant: "destructive",
       });
     }
   };
 
   return (
-    <PageLayout title="New Tax Calculation" navItems={items}>
+    <PageLayout title={t('taxCalc.new.pageTitle')} navItems={items}>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold">New Tax Calculation</h1>
-            <p className="text-muted-foreground">Create a new tax calculation for import procedures</p>
+            <h1 className="text-3xl font-bold">{t('taxCalc.new.heading')}</h1>
+            <p className="text-muted-foreground">{t('taxCalc.new.subtitle')}</p>
           </div>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => navigate("/tax-calculation")}
               data-testid="button-cancel"
             >
-              Cancel
+              {t('taxCalc.actions.cancel')}
             </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => handleSave(false)} 
+            <Button
+              variant="outline"
+              onClick={() => handleSave(false)}
               disabled={createCalculationMutation.isPending || isLoading}
               data-testid="button-save-draft"
             >
               <Save className="mr-2 h-4 w-4" />
-              Save Draft
+              {t('taxCalc.actions.saveDraft')}
             </Button>
-            <Button 
+            <Button
               onClick={() => handleSave(true)}
               disabled={createCalculationMutation.isPending || isLoading}
               data-testid="button-calculate"
             >
               <Calculator className="mr-2 h-4 w-4" />
-              {isLoading ? 'Processing...' : 'Calculate Taxes'}
+              {isLoading ? t('taxCalc.actions.processing') : t('taxCalc.actions.calculateTaxes')}
             </Button>
           </div>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>📄 Invoice Information</CardTitle>
+            <CardTitle>📄 {t('taxCalc.invoiceInformation')}</CardTitle>
           </CardHeader>
           <CardContent>
             <InvoiceInfoForm 
@@ -766,21 +768,21 @@ export default function TaxCalculationNewPage() {
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
-              <CardTitle>📦 Products</CardTitle>
+              <CardTitle>📦 {t('taxCalc.products')}</CardTitle>
               <div className="flex gap-2">
                 <Button
                   onClick={() => setShowPasteDialog(true)}
                   data-testid="button-paste-excel"
                 >
                   <ClipboardPaste className="mr-2 h-4 w-4" />
-                  Paste from Excel
+                  {t('taxCalc.actions.pasteFromExcel')}
                 </Button>
                 <Button
                   onClick={() => setShowUploadDialog(true)}
                   data-testid="button-upload-document"
                 >
                   <UploadIcon className="mr-2 h-4 w-4" />
-                  Upload Invoice / Excel
+                  {t('taxCalc.actions.uploadInvoiceExcel')}
                 </Button>
                 <Button
                   variant="outline"
@@ -788,7 +790,7 @@ export default function TaxCalculationNewPage() {
                   data-testid="button-add-product"
                 >
                   <Plus className="mr-2 h-4 w-4" />
-                  Add Single Product
+                  {t('taxCalc.actions.addSingleProduct')}
                 </Button>
               </div>
             </div>
