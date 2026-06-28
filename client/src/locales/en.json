@@ -22,5 +22,37 @@
     "activeProcedures": "Active Procedures",
     "pendingDocuments": "Pending Documents",
     "awaitingPayment": "Awaiting Payment"
+  },
+  "snapshot": {
+    "totalValueImported": "Total Value Imported",
+    "totalPiecesImported": "Total Pieces Imported",
+    "totalTaxPaid": "Total Tax Paid",
+    "totalExpensesPaid": "Total Expenses Paid",
+    "viewDetails": "View Details",
+    "pieces": "pieces"
+  },
+  "tareks": {
+    "title": "Tareks Application",
+    "exportExcel": "Export Excel",
+    "exportToExcel": "Export to Excel",
+    "empty": "No procedures in Tareks Application status",
+    "statusUpdated": "Status updated",
+    "statusUpdateFailed": "Failed to update status",
+    "col": {
+      "reference": "Reference",
+      "shipper": "Shipper",
+      "invoiceNo": "Invoice #",
+      "invoiceDate": "Invoice Date",
+      "amount": "Amount",
+      "pieces": "Pieces",
+      "styleNo": "Style No",
+      "status": "Status"
+    },
+    "status": {
+      "waiting_response": "Waiting Response",
+      "inspection_date_confirmed": "Inspection Date Confirmed",
+      "samples_taken": "Samples Taken",
+      "lab_testing": "Lab Testing"
+    }
   }
 }

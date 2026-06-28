@@ -22,5 +22,37 @@
     "activeProcedures": "Aktif İşlemler",
     "pendingDocuments": "Bekleyen Belgeler",
     "awaitingPayment": "Ödeme Bekleyen"
+  },
+  "snapshot": {
+    "totalValueImported": "İthal Edilen Toplam Değer",
+    "totalPiecesImported": "İthal Edilen Toplam Adet",
+    "totalTaxPaid": "Ödenen Toplam Vergi",
+    "totalExpensesPaid": "Ödenen Toplam Gider",
+    "viewDetails": "Detayları Gör",
+    "pieces": "adet"
+  },
+  "tareks": {
+    "title": "Tareks Başvurusu",
+    "exportExcel": "Excel'e Aktar",
+    "exportToExcel": "Excel'e Aktar",
+    "empty": "Tareks Başvurusu durumunda işlem yok",
+    "statusUpdated": "Durum güncellendi",
+    "statusUpdateFailed": "Durum güncellenemedi",
+    "col": {
+      "reference": "Referans",
+      "shipper": "Gönderici",
+      "invoiceNo": "Fatura No",
+      "invoiceDate": "Fatura Tarihi",
+      "amount": "Tutar",
+      "pieces": "Adet",
+      "styleNo": "Stil No",
+      "status": "Durum"
+    },
+    "status": {
+      "waiting_response": "Yanıt Bekleniyor",
+      "inspection_date_confirmed": "Muayene Tarihi Onaylandı",
+      "samples_taken": "Numune Alındı",
+      "lab_testing": "Laboratuvar Testi"
+    }
   }
 }

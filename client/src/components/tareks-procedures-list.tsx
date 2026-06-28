@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -31,10 +32,10 @@ type TareksDashboardData = {
 };
 
 const TAREKS_STATUSES = [
-  { value: "waiting_response", label: "Waiting Response" },
-  { value: "inspection_date_confirmed", label: "Inspection Date Confirmed" },
-  { value: "samples_taken", label: "Samples Taken" },
-  { value: "lab_testing", label: "Lab Testing" },
+  { value: "waiting_response" },
+  { value: "inspection_date_confirmed" },
+  { value: "samples_taken" },
+  { value: "lab_testing" },
 ] as const;
 
 type TareksStatusValue = typeof TAREKS_STATUSES[number]["value"];
@@ -45,10 +46,6 @@ const STATUS_BADGE_STYLES: Record<TareksStatusValue, string> = {
   samples_taken: "bg-orange-100 text-orange-800 border-orange-200",
   lab_testing: "bg-purple-100 text-purple-800 border-purple-200",
 };
-
-function getStatusLabel(value: string): string {
-  return TAREKS_STATUSES.find((s) => s.value === value)?.label ?? value;
-}
 
 function formatDate(date: string | null): string {
   if (!date) return "—";
@@ -74,6 +71,7 @@ function formatAmount(amount: string | null, currency: string | null): string {
 }
 
 export function TareksProceduresList() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -106,10 +104,10 @@ export function TareksProceduresList() {
       queryClient.invalidateQueries({
         queryKey: ["/api/dashboard/tareks-application"],
       });
-      toast({ title: "Status updated" });
+      toast({ title: t("tareks.statusUpdated") });
     },
     onError: () => {
-      toast({ title: "Failed to update status", variant: "destructive" });
+      toast({ title: t("tareks.statusUpdateFailed"), variant: "destructive" });
     },
     onSettled: () => {
       setUpdatingId(null);
@@ -122,7 +120,7 @@ export function TareksProceduresList() {
       <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
         <ClipboardList className="h-5 w-5 text-red-500" />
         <h2 className="text-base font-semibold text-gray-900">
-          Tareks Application
+          {t("tareks.title")}
         </h2>
         {!isLoading && (
           <Badge className="ml-1 bg-red-100 text-red-700 border-red-200 text-xs">
@@ -138,10 +136,10 @@ export function TareksProceduresList() {
               )
             }
             className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            title="Export to Excel"
+            title={t("tareks.exportToExcel")}
           >
             <Download className="h-3.5 w-3.5" />
-            Export Excel
+            {t("tareks.exportExcel")}
           </button>
         )}
       </div>
@@ -151,14 +149,14 @@ export function TareksProceduresList() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-              <th className="px-4 py-3 text-left font-medium">Reference</th>
-              <th className="px-4 py-3 text-left font-medium">Shipper</th>
-              <th className="px-4 py-3 text-left font-medium">Invoice #</th>
-              <th className="px-4 py-3 text-left font-medium">Invoice Date</th>
-              <th className="px-4 py-3 text-right font-medium">Amount</th>
-              <th className="px-4 py-3 text-right font-medium">Pieces</th>
-              <th className="px-4 py-3 text-left font-medium">Style No</th>
-              <th className="px-4 py-3 text-left font-medium">Status</th>
+              <th className="px-4 py-3 text-left font-medium">{t("tareks.col.reference")}</th>
+              <th className="px-4 py-3 text-left font-medium">{t("tareks.col.shipper")}</th>
+              <th className="px-4 py-3 text-left font-medium">{t("tareks.col.invoiceNo")}</th>
+              <th className="px-4 py-3 text-left font-medium">{t("tareks.col.invoiceDate")}</th>
+              <th className="px-4 py-3 text-right font-medium">{t("tareks.col.amount")}</th>
+              <th className="px-4 py-3 text-right font-medium">{t("tareks.col.pieces")}</th>
+              <th className="px-4 py-3 text-left font-medium">{t("tareks.col.styleNo")}</th>
+              <th className="px-4 py-3 text-left font-medium">{t("tareks.col.status")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -178,7 +176,7 @@ export function TareksProceduresList() {
                   colSpan={8}
                   className="px-4 py-8 text-center text-gray-400 text-sm"
                 >
-                  No procedures in Tareks Application status
+                  {t("tareks.empty")}
                 </td>
               </tr>
             ) : (
@@ -239,13 +237,13 @@ export function TareksProceduresList() {
                           <Badge
                             className={`text-xs font-medium border ${badgeStyle} cursor-pointer`}
                           >
-                            {getStatusLabel(statusValue)}
+                            {t(`tareks.status.${statusValue}`)}
                           </Badge>
                         </SelectTrigger>
                         <SelectContent>
                           {TAREKS_STATUSES.map((s) => (
                             <SelectItem key={s.value} value={s.value}>
-                              {s.label}
+                              {t(`tareks.status.${s.value}`)}
                             </SelectItem>
                           ))}
                         </SelectContent>

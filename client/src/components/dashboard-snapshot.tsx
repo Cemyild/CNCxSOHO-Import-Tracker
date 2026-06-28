@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { DollarSign, Package, Receipt, CreditCard } from "lucide-react";
 import { BentoCard, BentoGrid } from "@/components/ui/bento-grid";
 
@@ -10,6 +11,7 @@ interface SnapshotData {
 }
 
 export function DashboardSnapshot() {
+  const { t } = useTranslation();
   const { data: snapshot, isLoading } = useQuery<SnapshotData>({
     queryKey: ['/api/dashboard/snapshot'],
     enabled: true
@@ -44,37 +46,37 @@ export function DashboardSnapshot() {
   const snapshotCards = [
     {
       Icon: DollarSign,
-      name: "Total Value Imported",
+      name: t("snapshot.totalValueImported"),
       description: formatCurrency(snapshot?.totalValueUSD || 0),
       href: "/procedures",
-      cta: "View Details",
+      cta: t("snapshot.viewDetails"),
       background: <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-emerald-100 opacity-60" />,
       className: "col-span-3 lg:col-span-1",
     },
     {
       Icon: Package,
-      name: "Total Pieces Imported",
-      description: formatNumber(snapshot?.totalPieces || 0) + " pieces",
+      name: t("snapshot.totalPiecesImported"),
+      description: formatNumber(snapshot?.totalPieces || 0) + " " + t("snapshot.pieces"),
       href: "/procedures",
-      cta: "View Details",
+      cta: t("snapshot.viewDetails"),
       background: <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-cyan-100 opacity-60" />,
       className: "col-span-3 lg:col-span-1",
     },
     {
       Icon: Receipt,
-      name: "Total Tax Paid",
+      name: t("snapshot.totalTaxPaid"),
       description: "₺" + formatNumber(snapshot?.totalTaxPaid || 0),
       href: "/expenses",
-      cta: "View Details",
+      cta: t("snapshot.viewDetails"),
       background: <div className="absolute inset-0 bg-gradient-to-br from-orange-50 to-amber-100 opacity-60" />,
       className: "col-span-3 lg:col-span-1",
     },
     {
       Icon: CreditCard,
-      name: "Total Expenses Paid",
+      name: t("snapshot.totalExpensesPaid"),
       description: "₺" + formatNumber(snapshot?.totalExpensesPaid || 0),
       href: "/expenses",
-      cta: "View Details",
+      cta: t("snapshot.viewDetails"),
       background: <div className="absolute inset-0 bg-gradient-to-br from-purple-50 to-violet-100 opacity-60" />,
       className: "col-span-3 lg:col-span-1",
     },
