@@ -11,6 +11,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { Trash2, Upload, FileText, FileImage, File, FileArchive, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
+import { useTranslation } from 'react-i18next';
 
 // Maximum file size - 5MB
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -50,6 +51,7 @@ export function ExpenseDocumentUpload({
 }: ExpenseDocumentUploadProps) {
   const [files, setFiles] = useState<DocumentFile[]>([]);
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   // Query to fetch existing documents
   const { data: documentsData, isLoading } = useQuery({
@@ -100,8 +102,8 @@ export function ExpenseDocumentUpload({
       queryClient.invalidateQueries({ queryKey: ['/api/expense-documents/expense', expenseType, expenseId] });
       
       toast({
-        title: 'Document uploaded',
-        description: `${file.file.name} has been uploaded successfully.`,
+        title: t('expenseDocUpload.uploadedTitle'),
+        description: t('expenseDocUpload.uploadedDesc', { name: file.file.name }),
       });
       
       if (onUploadComplete) {
@@ -119,8 +121,8 @@ export function ExpenseDocumentUpload({
       );
       
       toast({
-        title: 'Upload failed',
-        description: `Failed to upload ${file.file.name}. Please try again.`,
+        title: t('expenseDocUpload.uploadFailedTitle'),
+        description: t('expenseDocUpload.uploadFailedDesc', { name: file.file.name }),
         variant: 'destructive',
       });
     }
@@ -146,16 +148,16 @@ export function ExpenseDocumentUpload({
       queryClient.invalidateQueries({ queryKey: ['/api/expense-documents/expense', expenseType, expenseId] });
       
       toast({
-        title: 'Document deleted',
-        description: 'The document has been deleted successfully.',
+        title: t('expenseDocUpload.deletedTitle'),
+        description: t('expenseDocUpload.deletedDesc'),
       });
     },
     onError: (error) => {
       console.error('Delete error:', error);
       
       toast({
-        title: 'Delete failed',
-        description: 'Failed to delete the document. Please try again.',
+        title: t('expenseDocUpload.deleteFailedTitle'),
+        description: t('expenseDocUpload.deleteFailedDesc'),
         variant: 'destructive',
       });
     }
@@ -184,20 +186,20 @@ export function ExpenseDocumentUpload({
         
         if (errors.some(e => e.code === 'file-too-large')) {
           toast({
-            title: 'File too large',
-            description: `${file.name} is larger than 5MB.`,
+            title: t('expenseDocUpload.fileTooLargeTitle'),
+            description: t('expenseDocUpload.fileTooLargeDesc', { name: file.name }),
             variant: 'destructive',
           });
         } else if (errors.some(e => e.code === 'file-invalid-type')) {
           toast({
-            title: 'Invalid file type',
-            description: `${file.name} is not a supported file type.`,
+            title: t('expenseDocUpload.invalidTypeTitle'),
+            description: t('expenseDocUpload.invalidTypeDesc', { name: file.name }),
             variant: 'destructive',
           });
         } else {
           toast({
-            title: 'Invalid file',
-            description: `${file.name} could not be uploaded.`,
+            title: t('expenseDocUpload.invalidFileTitle'),
+            description: t('expenseDocUpload.invalidFileDesc', { name: file.name }),
             variant: 'destructive',
           });
         }
@@ -263,9 +265,9 @@ export function ExpenseDocumentUpload({
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Document Upload</CardTitle>
+        <CardTitle>{t('expenseDocUpload.cardTitle')}</CardTitle>
         <CardDescription>
-          Upload supporting documents for this expense. Supported formats: PDF, JPG, PNG, DOC, DOCX. Max size: 5MB per file.
+          {t('expenseDocUpload.cardDescription')}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -277,16 +279,16 @@ export function ExpenseDocumentUpload({
           <input {...getInputProps()} />
           <Upload className="h-10 w-10 text-gray-400 mb-2" />
           <p className="text-sm font-medium mb-1">
-            {isDragActive ? 'Drop files here...' : 'Drag and drop files, or click to select'}
+            {isDragActive ? t('expenseDocUpload.dropFilesHere') : t('expenseDocUpload.dragOrClick')}
           </p>
           <p className="text-xs text-gray-500">
-            PDF, JPG, PNG, DOC, DOCX up to 5MB
+            {t('expenseDocUpload.formatsHint')}
           </p>
         </div>
 
         {files.length > 0 && (
           <div className="mt-6 space-y-4">
-            <h4 className="text-sm font-medium">Selected Files</h4>
+            <h4 className="text-sm font-medium">{t('expenseDocUpload.selectedFiles')}</h4>
             <div className="space-y-2">
               {files.map((file, index) => (
                 <div key={`${file.file.name}-${index}`} className="flex items-center p-3 border rounded-md">
@@ -301,11 +303,11 @@ export function ExpenseDocumentUpload({
                   </div>
                   
                   {file.status === 'error' && (
-                    <Badge variant="destructive" className="mr-2">Failed</Badge>
+                    <Badge variant="destructive" className="mr-2">{t('expenseDocUpload.failedBadge')}</Badge>
                   )}
                   
                   {file.status === 'success' && (
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 mr-2">Uploaded</Badge>
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 mr-2">{t('expenseDocUpload.uploadedBadge')}</Badge>
                   )}
                   
                   {(file.status === 'pending' || file.status === 'uploading') && (
@@ -317,7 +319,7 @@ export function ExpenseDocumentUpload({
                           onClick={() => handleUpload(file)}
                           disabled={file.status === 'uploading' as FileStatus}
                         >
-                          Upload
+                          {t('expenseDocUpload.uploadButton')}
                         </Button>
                       ) : (
                         <div className="w-20">
@@ -339,7 +341,7 @@ export function ExpenseDocumentUpload({
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Delete file</TooltipContent>
+                      <TooltipContent>{t('expenseDocUpload.deleteFileTooltip')}</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </div>
@@ -350,7 +352,7 @@ export function ExpenseDocumentUpload({
 
         {documentsData?.documents && documentsData.documents.length > 0 && (
           <div className="mt-6 space-y-4">
-            <h4 className="text-sm font-medium">Uploaded Documents</h4>
+            <h4 className="text-sm font-medium">{t('expenseDocUpload.uploadedDocuments')}</h4>
             <div className="space-y-2">
               {documentsData.documents.map((doc: any) => (
                 <div key={doc.id} className="flex items-center p-3 border rounded-md">
@@ -361,7 +363,7 @@ export function ExpenseDocumentUpload({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{doc.originalFilename}</p>
                       <p className="text-xs text-gray-500">
-                        {Math.round(doc.fileSize / 1024)} KB • Uploaded on {new Date(doc.uploadDate).toLocaleString()}
+                        {Math.round(doc.fileSize / 1024)} KB • {t('expenseDocUpload.uploadedOn')} {new Date(doc.uploadDate).toLocaleString()}
                       </p>
                     </div>
                   </div>
@@ -378,7 +380,7 @@ export function ExpenseDocumentUpload({
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Delete document</TooltipContent>
+                      <TooltipContent>{t('expenseDocUpload.deleteDocumentTooltip')}</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </div>

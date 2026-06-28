@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ResponsiveContainer,
@@ -269,6 +270,7 @@ export default function ExpenseTrendsChart({
   currency: initialCurrency = "TRY",
   exchangeRate = 1,
 }: ExpenseTrendsChartProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>("all");
@@ -282,10 +284,10 @@ export default function ExpenseTrendsChart({
   
   // Category filter options
   const categoryOptions = [
-    { value: "all", label: "All Categories" },
-    { value: "taxExpenses", label: "Taxes" },
-    { value: "importExpenses", label: "Import Expenses" },
-    { value: "serviceExpenses", label: "Service Invoices" }
+    { value: "all", label: t('expenseTrends.categories.all') },
+    { value: "taxExpenses", label: t('expenseTrends.categories.taxes') },
+    { value: "importExpenses", label: t('expenseTrends.categories.importExpenses') },
+    { value: "serviceExpenses", label: t('expenseTrends.categories.serviceInvoices') }
   ];
   
   // Function to filter data by category group
@@ -529,15 +531,15 @@ export default function ExpenseTrendsChart({
     (serviceError && !serviceInvoiceData);
   
   const errors = [
-    expenseError ? { type: 'Import expenses', error: String(expenseError) } : null,
-    taxError ? { type: 'Tax expenses', error: String(taxError) } : null,
-    serviceError ? { type: 'Service invoices', error: String(serviceError) } : null
+    expenseError ? { type: t('expenseTrends.errorTypes.importExpenses'), error: String(expenseError) } : null,
+    taxError ? { type: t('expenseTrends.errorTypes.taxExpenses'), error: String(taxError) } : null,
+    serviceError ? { type: t('expenseTrends.errorTypes.serviceInvoices'), error: String(serviceError) } : null
   ].filter(Boolean);
-  
+
   const errorMessage = hasAnyError
     ? hasCompleteFailure
-      ? "We couldn't load any expense data. Please try again later."
-      : "Some expense data couldn't be loaded. The chart shows partial data."
+      ? t('expenseTrends.errorAllFailed')
+      : t('expenseTrends.errorPartial')
     : "";
   
   const detailedError = errors.map(e => `${e?.type}: ${e?.error}`).join("\n\n");
@@ -549,7 +551,7 @@ export default function ExpenseTrendsChart({
       <Card className="mt-8">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <div>
-            <CardTitle className="text-base font-medium">EXPENSES BY TYPE</CardTitle>
+            <CardTitle className="text-base font-medium">{t('expenseTrends.title')}</CardTitle>
           </div>
           <div className="flex items-center gap-2">
             {/* Currency toggle button */}
@@ -558,26 +560,26 @@ export default function ExpenseTrendsChart({
               size="sm"
               onClick={toggleCurrency}
               className={`h-8 ${
-                activeCurrency === "USD" 
-                  ? "bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100" 
+                activeCurrency === "USD"
+                  ? "bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100"
                   : "bg-sky-50 text-sky-900 border-sky-200 hover:bg-sky-100"
               }`}
             >
               {activeCurrency === "USD" ? "$ USD" : "₺ TL"}
             </Button>
-            
-            <Button 
-              variant="outline" 
+
+            <Button
+              variant="outline"
               size="sm"
               onClick={refreshData}
               disabled={isRefreshing}
               className="h-8"
             >
               <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-              {isRefreshing ? "Refreshing..." : "Refresh"}
+              {isRefreshing ? t('expenseTrends.refreshing') : t('expenseTrends.refresh')}
             </Button>
             <div className="text-sm text-muted-foreground">
-              All categories
+              {t('expenseTrends.categories.all')}
               <ChevronDown className="ml-1 h-4 w-4 inline" />
             </div>
           </div>
@@ -599,7 +601,7 @@ export default function ExpenseTrendsChart({
                   d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                 />
               </svg>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Unable to load chart data</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">{t('expenseTrends.unableToLoad')}</h3>
               <p className="text-gray-500">{errorMessage}</p>
             </div>
           </div>
@@ -608,21 +610,21 @@ export default function ExpenseTrendsChart({
           <div className="mt-3 text-xs text-center text-muted-foreground">
             <span className="ml-4 inline-flex items-center mr-6">
               <span className="w-3 h-3 inline-block mr-2 rounded-sm" style={{ backgroundColor: "#a1c89f" }}></span>
-              Tax expenses
+              {t('expenseTrends.legend.tax')}
             </span>
             <span className="ml-4 inline-flex items-center mr-6">
               <span className="w-3 h-3 inline-block mr-2 rounded-sm" style={{ backgroundColor: "#fad779" }}></span>
-              Service expenses
+              {t('expenseTrends.legend.service')}
             </span>
             <span className="ml-4 inline-flex items-center">
               <span className="w-3 h-3 inline-block mr-2 rounded-sm" style={{ backgroundColor: "#65c3e8" }}></span>
-              Import expenses
+              {t('expenseTrends.legend.import')}
             </span>
           </div>
-          
+
           {/* Add a collapsible technical details section for developers */}
           <details className="mt-6 text-xs">
-            <summary className="cursor-pointer text-muted-foreground">Technical details</summary>
+            <summary className="cursor-pointer text-muted-foreground">{t('expenseTrends.technicalDetails')}</summary>
             <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto max-h-32">
               {detailedError}
             </pre>
@@ -641,7 +643,7 @@ export default function ExpenseTrendsChart({
     <Card className="mt-8">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
-          <CardTitle className="text-base font-medium">EXPENSES BY TYPE</CardTitle>
+          <CardTitle className="text-base font-medium">{t('expenseTrends.title')}</CardTitle>
         </div>
         <div className="flex items-center gap-2">
           {/* Currency toggle button */}
@@ -650,24 +652,24 @@ export default function ExpenseTrendsChart({
             size="sm"
             onClick={toggleCurrency}
             className={`h-8 ${
-              activeCurrency === "USD" 
-                ? "bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100" 
+              activeCurrency === "USD"
+                ? "bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100"
                 : "bg-sky-50 text-sky-900 border-sky-200 hover:bg-sky-100"
             }`}
           >
             {activeCurrency === "USD" ? "$ USD" : "₺ TL"}
           </Button>
-          
+
           {/* Refresh button */}
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={refreshData}
             disabled={isRefreshing}
             className="h-8"
           >
             <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? "Refreshing..." : "Refresh"}
+            {isRefreshing ? t('expenseTrends.refreshing') : t('expenseTrends.refresh')}
           </Button>
           
           {/* Category filter dropdown */}
@@ -678,7 +680,7 @@ export default function ExpenseTrendsChart({
                 size="sm"
                 className="h-8 bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
               >
-                {categoryOptions.find(opt => opt.value === activeCategory)?.label || "All Categories"}
+                {categoryOptions.find(opt => opt.value === activeCategory)?.label || t('expenseTrends.categories.all')}
                 <ChevronDown className="ml-1 h-4 w-4 inline" />
               </Button>
             </DropdownMenuTrigger>
@@ -703,7 +705,7 @@ export default function ExpenseTrendsChart({
           </div>
         ) : filteredCategoryData.length === 0 ? (
           <div className="h-[350px] flex items-center justify-center">
-            <p className="text-muted-foreground">No expense data available for the selected category</p>
+            <p className="text-muted-foreground">{t('expenseTrends.noDataForCategory')}</p>
           </div>
         ) : (
           <div className="h-[350px]">
@@ -751,9 +753,9 @@ export default function ExpenseTrendsChart({
                   }}
                   labelFormatter={() => ''}
                 />
-                <Bar 
-                  dataKey="value" 
-                  name="Amount" 
+                <Bar
+                  dataKey="value"
+                  name={t('expenseTrends.amount')}
                   radius={[4, 4, 0, 0]}
                 >
                   {filteredCategoryData.map((entry, index) => (
@@ -769,23 +771,23 @@ export default function ExpenseTrendsChart({
         <div className="mt-3 text-xs flex flex-wrap justify-center text-muted-foreground">
           <span className="ml-4 inline-flex items-center mr-6 mb-2">
             <span className="w-3 h-3 inline-block mr-2 rounded-sm" style={{ backgroundColor: "#a1c89f" }}></span>
-            Tax expenses
+            {t('expenseTrends.legend.tax')}
           </span>
           <span className="ml-4 inline-flex items-center mr-6 mb-2">
             <span className="w-3 h-3 inline-block mr-2 rounded-sm" style={{ backgroundColor: "#fad779" }}></span>
-            Service expenses
+            {t('expenseTrends.legend.service')}
           </span>
           <span className="ml-4 inline-flex items-center mb-2">
             <span className="w-3 h-3 inline-block mr-2 rounded-sm" style={{ backgroundColor: "#65c3e8" }}></span>
-            Import expenses
+            {t('expenseTrends.legend.import')}
           </span>
         </div>
-        
+
         {/* Show partial data warning if there were errors but we still have some data */}
         {hasAnyError && !hasCompleteFailure && (
           <div className="mt-4 px-4 py-3 bg-amber-50 text-amber-800 rounded-md text-xs">
             <AlertTriangle className="h-4 w-4 inline-block mr-2" />
-            Some data sources couldn't be loaded. The chart shows partial data.
+            {t('expenseTrends.partialWarning')}
           </div>
         )}
       </CardContent>

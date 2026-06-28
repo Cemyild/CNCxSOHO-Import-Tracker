@@ -1,5 +1,6 @@
 import React from 'react';
 import { Download } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from './button';
 
 interface IFramePDFViewerProps {
@@ -11,8 +12,9 @@ interface IFramePDFViewerProps {
 export const IFramePDFViewer: React.FC<IFramePDFViewerProps> = ({ 
   url, 
   filename,
-  onDownload 
+  onDownload
 }) => {
+  const { t } = useTranslation();
   // Add a timestamp to the URL to prevent caching
   const timestampedUrl = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
   
@@ -32,16 +34,16 @@ export const IFramePDFViewer: React.FC<IFramePDFViewerProps> = ({
             className="h-8 px-2"
           >
             <Download className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Download</span>
+            <span className="hidden sm:inline">{t('pdfViewer.download')}</span>
           </Button>
         )}
       </div>
       
       {/* PDF document container using iframe */}
       <div className="flex-1 bg-gray-50 dark:bg-gray-900 min-h-[500px]">
-        <iframe 
+        <iframe
           src={timestampedUrl}
-          title={`PDF Preview: ${filename}`}
+          title={t('pdfViewer.previewTitle', { filename })}
           className="w-full h-full min-h-[500px] border-0" 
           sandbox="allow-scripts allow-same-origin"
         />

@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { queryClient } from "@/lib/queryClient";
 
 import {
@@ -67,6 +68,7 @@ export default function AddPaymentModal({
   initialProcedureReference,
 }: AddPaymentModalProps) {
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch procedures for reference dropdown
@@ -137,8 +139,8 @@ export default function AddPaymentModal({
       }
 
       toast({
-        title: "Success",
-        description: "Payment has been created successfully",
+        title: t('common.success'),
+        description: t('addPaymentModal.createdSuccess'),
       });
 
       // Invalidate queries to refresh data
@@ -156,8 +158,8 @@ export default function AddPaymentModal({
     } catch (error) {
       console.error("Error creating payment:", error);
       toast({
-        title: "Error",
-        description: "Failed to create payment. Please try again.",
+        title: t('common.error'),
+        description: t('addPaymentModal.createError'),
         variant: "destructive",
       });
     } finally {
@@ -176,9 +178,9 @@ export default function AddPaymentModal({
     <Dialog open={isOpen} onOpenChange={handleDialogChange} modal={true}>
       <DialogContent className="sm:max-w-[550px] z-50 payment-distribution-modal">
         <DialogHeader>
-          <DialogTitle>Add New Payment</DialogTitle>
+          <DialogTitle>{t('addPaymentModal.title')}</DialogTitle>
           <DialogDescription>
-            Create a new payment record for a procedure.
+            {t('addPaymentModal.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -192,7 +194,7 @@ export default function AddPaymentModal({
                 console.log("Procedure field value:", field.value);
                 return (
                 <FormItem>
-                  <FormLabel>Procedure Reference</FormLabel>
+                  <FormLabel>{t('addPaymentModal.procedureReference')}</FormLabel>
                   <Select
                     onValueChange={(value) => {
                       console.log("Selecting procedure:", value);
@@ -203,7 +205,7 @@ export default function AddPaymentModal({
                   >
                     <FormControl>
                       <SelectTrigger className="w-full" onClick={() => console.log("Trigger clicked")}>
-                        <SelectValue placeholder="Select a procedure" />
+                        <SelectValue placeholder={t('addPaymentModal.selectProcedure')} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent
@@ -213,7 +215,7 @@ export default function AddPaymentModal({
                     >
                       {isProceduresLoading ? (
                         <SelectItem value="loading" disabled>
-                          Loading procedures...
+                          {t('addPaymentModal.loadingProcedures')}
                         </SelectItem>
                       ) : proceduresData?.procedures?.length > 0 ? (
                         proceduresData.procedures.map((procedure: any) => (
@@ -227,7 +229,7 @@ export default function AddPaymentModal({
                         ))
                       ) : (
                         <SelectItem value="no-procedures" disabled>
-                          No procedures available
+                          {t('addPaymentModal.noProcedures')}
                         </SelectItem>
                       )}
                     </SelectContent>
@@ -245,7 +247,7 @@ export default function AddPaymentModal({
                 console.log("Payment type field value:", field.value);
                 return (
                 <FormItem>
-                  <FormLabel>Payment Type</FormLabel>
+                  <FormLabel>{t('addPaymentModal.paymentType')}</FormLabel>
                   <Select
                     onValueChange={(value) => {
                       console.log("Selecting payment type:", value);
@@ -256,7 +258,7 @@ export default function AddPaymentModal({
                   >
                     <FormControl>
                       <SelectTrigger className="w-full" onClick={() => console.log("Payment type trigger clicked")}>
-                        <SelectValue placeholder="Select payment type" />
+                        <SelectValue placeholder={t('addPaymentModal.selectPaymentType')} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent
@@ -264,8 +266,8 @@ export default function AddPaymentModal({
                       sideOffset={5}
                       className="z-[9999]"
                     >
-                      <SelectItem value="advance" className="cursor-pointer">Advance Payment</SelectItem>
-                      <SelectItem value="balance" className="cursor-pointer">Balance Payment</SelectItem>
+                      <SelectItem value="advance" className="cursor-pointer">{t('addPaymentModal.advancePayment')}</SelectItem>
+                      <SelectItem value="balance" className="cursor-pointer">{t('addPaymentModal.balancePayment')}</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -279,12 +281,12 @@ export default function AddPaymentModal({
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Amount (TRY)</FormLabel>
+                  <FormLabel>{t('addPaymentModal.amountTry')}</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
                       step="0.01"
-                      placeholder="Enter amount"
+                      placeholder={t('addPaymentModal.enterAmount')}
                       {...field}
                       onChange={(e) => {
                         const value = e.target.value ? parseFloat(e.target.value) : undefined;
@@ -303,7 +305,7 @@ export default function AddPaymentModal({
               name="paymentDate"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>Payment Date</FormLabel>
+                  <FormLabel>{t('addPaymentModal.paymentDate')}</FormLabel>
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -318,7 +320,7 @@ export default function AddPaymentModal({
                           {field.value ? (
                             format(field.value, "PPP")
                           ) : (
-                            <span>Pick a date</span>
+                            <span>{t('addPaymentModal.pickDate')}</span>
                           )}
                           <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                         </Button>
@@ -352,10 +354,10 @@ export default function AddPaymentModal({
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormLabel>{t('addPaymentModal.descriptionOptional')}</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Enter payment description or notes"
+                      placeholder={t('addPaymentModal.enterDescription')}
                       className="resize-none"
                       {...field}
                     />
@@ -372,10 +374,10 @@ export default function AddPaymentModal({
                 onClick={onClose}
                 disabled={isSubmitting}
               >
-                Cancel
+                {t('addPaymentModal.cancel')}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Adding..." : "Add Payment"}
+                {isSubmitting ? t('addPaymentModal.adding') : t('addPaymentModal.addPayment')}
               </Button>
             </DialogFooter>
           </form>

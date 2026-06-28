@@ -12,6 +12,7 @@ import { Trash2, Upload, FileText, FileImage, File, FileArchive, X } from 'lucid
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useTranslation } from 'react-i18next';
 
 // Maximum file size - 10MB
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -70,6 +71,7 @@ export function ImportDocumentUpload({
   const [files, setFiles] = useState<DocumentFile[]>([]);
   const [selectedDocumentType, setSelectedDocumentType] = useState<string>('');
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   // Query to fetch existing import documents
   const { data: documentsData, isLoading } = useQuery({
@@ -128,8 +130,8 @@ export function ImportDocumentUpload({
       
       // Show success toast
       toast({
-        title: "Upload Complete",
-        description: `${file.file.name} has been uploaded successfully`,
+        title: t('importDocUpload.uploadCompleteTitle'),
+        description: t('importDocUpload.uploadCompleteDesc', { name: file.file.name }),
       });
     },
     onError: (error, file) => {
@@ -146,8 +148,8 @@ export function ImportDocumentUpload({
       
       // Show error toast
       toast({
-        title: "Upload Failed",
-        description: `${file.file.name} could not be uploaded. ${error.message}`,
+        title: t('importDocUpload.uploadFailedTitle'),
+        description: t('importDocUpload.uploadFailedDesc', { name: file.file.name, error: error.message }),
         variant: "destructive",
       });
     }
@@ -171,8 +173,8 @@ export function ImportDocumentUpload({
       
       // Show success toast
       toast({
-        title: "Delete Complete",
-        description: "Document has been deleted successfully",
+        title: t('importDocUpload.deleteCompleteTitle'),
+        description: t('importDocUpload.deleteCompleteDesc'),
       });
     },
     onError: (error) => {
@@ -180,8 +182,8 @@ export function ImportDocumentUpload({
       
       // Show error toast
       toast({
-        title: "Delete Failed",
-        description: `Document could not be deleted. ${error.message}`,
+        title: t('importDocUpload.deleteFailedTitle'),
+        description: t('importDocUpload.deleteFailedDesc', { error: error.message }),
         variant: "destructive",
       });
     }
@@ -191,8 +193,8 @@ export function ImportDocumentUpload({
   const onDrop = (acceptedFiles: File[]) => {
     if (!selectedDocumentType) {
       toast({
-        title: "Document Type Required",
-        description: "Please select a document type before uploading files.",
+        title: t('importDocUpload.docTypeRequiredTitle'),
+        description: t('importDocUpload.docTypeRequiredDesc'),
         variant: "destructive",
       });
       return;
@@ -205,8 +207,8 @@ export function ImportDocumentUpload({
     // Show warning for files that are too large
     if (invalidFiles.length > 0) {
       toast({
-        title: "Files Too Large",
-        description: `${invalidFiles.length} file(s) exceed the maximum size of ${MAX_FILE_SIZE / (1024 * 1024)}MB and will not be uploaded.`,
+        title: t('importDocUpload.filesTooLargeTitle'),
+        description: t('importDocUpload.filesTooLargeDesc', { count: invalidFiles.length, size: MAX_FILE_SIZE / (1024 * 1024) }),
         variant: "destructive",
       });
     }
@@ -297,7 +299,7 @@ export function ImportDocumentUpload({
   // Get document type label
   const getDocumentTypeLabel = (value: string) => {
     const docType = IMPORT_DOCUMENT_TYPES.find(type => type.value === value);
-    return docType ? docType.label : value;
+    return docType ? t(`importDocUpload.docTypes.${value}`, { defaultValue: docType.label }) : value;
   };
   
   // Format file size
@@ -315,18 +317,18 @@ export function ImportDocumentUpload({
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4">
         <div>
-          <Label htmlFor="document-type">Document Type</Label>
-          <Select 
-            value={selectedDocumentType} 
+          <Label htmlFor="document-type">{t('importDocUpload.documentTypeLabel')}</Label>
+          <Select
+            value={selectedDocumentType}
             onValueChange={setSelectedDocumentType}
           >
             <SelectTrigger id="document-type">
-              <SelectValue placeholder="Select document type" />
+              <SelectValue placeholder={t('importDocUpload.selectDocumentType')} />
             </SelectTrigger>
             <SelectContent>
               {IMPORT_DOCUMENT_TYPES.map((type) => (
                 <SelectItem key={type.value} value={type.value}>
-                  {type.label}
+                  {getDocumentTypeLabel(type.value)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -344,11 +346,11 @@ export function ImportDocumentUpload({
             <Upload className="h-10 w-10 text-muted-foreground mb-2" />
             <p className="text-sm text-muted-foreground text-center">
               {isDragActive
-                ? "Drop the files here..."
-                : "Drag & drop files here, or click to select files"}
+                ? t('importDocUpload.dropFilesHere')
+                : t('importDocUpload.dragOrClick')}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Accepted formats: PDF, JPG, PNG, DOC, DOCX, XLS, XLSX (Max {MAX_FILE_SIZE / (1024 * 1024)}MB)
+              {t('importDocUpload.acceptedFormats', { size: MAX_FILE_SIZE / (1024 * 1024) })}
             </p>
           </div>
         </div>
@@ -357,7 +359,7 @@ export function ImportDocumentUpload({
       {/* File Upload List */}
       {files.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-medium">Upload Queue</h4>
+          <h4 className="text-sm font-medium">{t('importDocUpload.uploadQueue')}</h4>
           {files.map((file, index) => (
             <div key={index} className="p-3 border rounded-md">
               <div className="flex items-center gap-3">
@@ -391,18 +393,18 @@ export function ImportDocumentUpload({
                     <div className="mt-2">
                       <Progress value={file.progress} className="h-1" />
                       <span className="text-xs text-muted-foreground mt-1">
-                        Uploading: {file.progress}%
+                        {t('importDocUpload.uploadingProgress', { progress: file.progress })}
                       </span>
                     </div>
                   )}
                   {file.status === 'error' && (
                     <p className="text-xs text-destructive mt-1">
-                      {file.error || 'Upload failed'}
+                      {file.error || t('importDocUpload.uploadFailedShort')}
                     </p>
                   )}
                   {file.status === 'success' && (
                     <p className="text-xs text-green-600 mt-1">
-                      Upload complete
+                      {t('importDocUpload.uploadCompleteShort')}
                     </p>
                   )}
                 </div>
@@ -415,7 +417,7 @@ export function ImportDocumentUpload({
       {/* Existing Documents */}
       {documentsData?.documents && documentsData.documents.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-medium">Uploaded Documents</h4>
+          <h4 className="text-sm font-medium">{t('importDocUpload.uploadedDocuments')}</h4>
           <div className="grid grid-cols-1 gap-2">
             {documentsData.documents.map((doc: any) => (
               <div key={doc.id} className="p-3 border rounded-md">
@@ -462,7 +464,7 @@ export function ImportDocumentUpload({
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>Delete document</p>
+                          <p>{t('importDocUpload.deleteDocumentTooltip')}</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Download } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { PDFViewer } from './pdf-viewer';
 import { IFramePDFViewer } from './iframe-pdf-viewer';
 import { ImageViewer } from './image-viewer';
@@ -31,6 +32,7 @@ interface DocumentViewerProps {
 }
 
 export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onDownload }) => {
+  const { t } = useTranslation();
   const [documentUrl, setDocumentUrl] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -88,7 +90,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onDown
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center">
           <Skeleton className="h-[500px] w-[400px] bg-gray-200 dark:bg-gray-700" />
-          <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading document viewer...</div>
+          <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">{t('docViewers.loadingViewer')}</div>
         </div>
       </div>
     );
@@ -98,9 +100,9 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onDown
     return (
       <div className="flex flex-col items-center justify-center text-center p-8 max-w-md">
         <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-lg font-medium mb-2">No document selected</p>
+        <p className="text-lg font-medium mb-2">{t('docViewers.noDocumentSelected')}</p>
         <p className="text-sm text-muted-foreground">
-          Please select a document to preview.
+          {t('docViewers.selectToPreview')}
         </p>
       </div>
     );
@@ -110,14 +112,14 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onDown
     return (
       <div className="flex flex-col items-center justify-center text-center p-8 max-w-md">
         <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-lg font-medium mb-2">Document unavailable</p>
+        <p className="text-lg font-medium mb-2">{t('docViewers.documentUnavailable')}</p>
         <p className="text-sm text-muted-foreground mb-4">
-          The document could not be found or accessed.
+          {t('docViewers.notFoundOrAccessed')}
         </p>
         {onDownload && (
           <Button onClick={onDownload} className="mt-2">
             <Download className="h-4 w-4 mr-2" />
-            Try Download
+            {t('docViewers.tryDownload')}
           </Button>
         )}
       </div>
@@ -161,20 +163,20 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, onDown
     return (
       <div className="flex flex-col items-center justify-center text-center p-8 max-w-md">
         <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-lg font-medium mb-2">File type not supported for preview</p>
+        <p className="text-lg font-medium mb-2">{t('docViewers.unsupportedForPreview')}</p>
         <p className="text-sm text-muted-foreground mb-4">
           {document.fileType.includes('excel') || document.fileType.includes('spreadsheet') ? (
-            "Excel spreadsheets require specialized software to view."
+            t('docViewers.excelNeedsSoftware')
           ) : document.fileType.includes('word') || document.fileType.includes('document') ? (
-            "Word documents require specialized software to view."
+            t('docViewers.wordNeedsSoftware')
           ) : (
-            `The file type "${document.fileType}" cannot be previewed in the browser.`
+            t('docViewers.cannotPreview', { fileType: document.fileType })
           )}
         </p>
         {onDownload && (
           <Button onClick={onDownload} className="mt-2">
             <Download className="h-4 w-4 mr-2" />
-            Download to View
+            {t('docViewers.downloadToView')}
           </Button>
         )}
       </div>

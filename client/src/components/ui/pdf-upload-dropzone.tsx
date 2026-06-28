@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { Loader2, Upload, FileText, AlertCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useTranslation } from 'react-i18next';
 
 interface PdfUploadDropzoneProps {
   title: string;
@@ -19,6 +20,7 @@ export function PdfUploadDropzone({
   error,
   maxSizeMB = 20
 }: PdfUploadDropzoneProps) {
+  const { t } = useTranslation();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -28,11 +30,11 @@ export function PdfUploadDropzone({
     if (rejectedFiles.length > 0) {
       const rejection = rejectedFiles[0];
       if (rejection.errors[0]?.code === 'file-too-large') {
-        setLocalError(`PDF file must be under ${maxSizeMB}MB`);
+        setLocalError(t('pdfDropzone.fileTooLarge', { size: maxSizeMB }));
       } else if (rejection.errors[0]?.code === 'file-invalid-type') {
-        setLocalError('Please upload a PDF file');
+        setLocalError(t('pdfDropzone.invalidType'));
       } else {
-        setLocalError('Invalid file');
+        setLocalError(t('pdfDropzone.invalidFile'));
       }
       return;
     }
@@ -49,7 +51,7 @@ export function PdfUploadDropzone({
         setSelectedFile(null);
       }
     }
-  }, [onFileSelect, maxSizeMB]);
+  }, [onFileSelect, maxSizeMB, t]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -85,8 +87,8 @@ export function PdfUploadDropzone({
           {isAnalyzing ? (
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
-              <p className="text-sm text-gray-600">Analyzing document...</p>
-              <p className="text-xs text-gray-500">This may take a few moments</p>
+              <p className="text-sm text-gray-600">{t('pdfDropzone.analyzing')}</p>
+              <p className="text-xs text-gray-500">{t('pdfDropzone.analyzingHint')}</p>
             </div>
           ) : selectedFile ? (
             <div className="flex flex-col items-center gap-2">
@@ -99,17 +101,17 @@ export function PdfUploadDropzone({
           ) : isDragActive ? (
             <div className="flex flex-col items-center gap-2">
               <Upload className="h-10 w-10 text-blue-500" />
-              <p className="text-sm text-blue-600 font-medium">Drop PDF here</p>
+              <p className="text-sm text-blue-600 font-medium">{t('pdfDropzone.dropHere')}</p>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2">
               <Upload className="h-10 w-10 text-gray-400" />
               <p className="text-sm text-gray-600">
-                <span className="font-medium text-blue-600 hover:text-blue-700">Click to browse</span>
-                {' '}or drag PDF here
+                <span className="font-medium text-blue-600 hover:text-blue-700">{t('pdfDropzone.clickToBrowse')}</span>
+                {' '}{t('pdfDropzone.orDragHere')}
               </p>
               <p className="text-xs text-gray-500">
-                Maximum file size: {maxSizeMB}MB
+                {t('pdfDropzone.maxFileSize', { size: maxSizeMB })}
               </p>
             </div>
           )}

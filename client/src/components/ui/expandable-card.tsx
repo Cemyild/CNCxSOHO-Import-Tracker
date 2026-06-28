@@ -4,6 +4,7 @@ import React, { useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { useLocation } from "wouter";
+import { useTranslation } from "react-i18next";
 import {
   Card,
   CardContent,
@@ -37,41 +38,42 @@ interface StatusBadgeProps {
 
 // Status Badge component for displaying user-friendly status labels
 function StatusBadge({ status, type }: StatusBadgeProps) {
+  const { t } = useTranslation();
   const getStatusLabel = (rawStatus?: string, statusType?: CardType) => {
-    if (!rawStatus) return 'Unknown';
+    if (!rawStatus) return t('expandableCard.statusUnknown');
     if (!statusType) return rawStatus;
-    
+
     const statusMappings: Record<CardType, Record<string, string>> = {
       import: {
-        'created': 'Created',
-        'tax_calc_insurance_sent': 'Tax Calc & Insurance Sent',
-        'arrived': 'Arrived',
-        'transit_started': 'Transit Started',
-        'transit_in_process': 'Transit in Process',
-        'tareks_application': 'Tareks Application',
-        'tareks_approved': 'Tareks Approved',
-        'import_started': 'Import Started',
-        'import_finished': 'Import Finished',
-        'delivered': 'Delivered',
-        'closed': 'Closed'
+        'created': t('expandableCard.import.created'),
+        'tax_calc_insurance_sent': t('expandableCard.import.taxCalcInsuranceSent'),
+        'arrived': t('expandableCard.import.arrived'),
+        'transit_started': t('expandableCard.import.transitStarted'),
+        'transit_in_process': t('expandableCard.import.transitInProcess'),
+        'tareks_application': t('expandableCard.import.tareksApplication'),
+        'tareks_approved': t('expandableCard.import.tareksApproved'),
+        'import_started': t('expandableCard.import.importStarted'),
+        'import_finished': t('expandableCard.import.importFinished'),
+        'delivered': t('expandableCard.import.delivered'),
+        'closed': t('expandableCard.import.closed')
       },
       document: {
-        'import_doc_pending': 'Import Doc. Pending',
-        'import_doc_received': 'Import Doc. Received',
-        'pod_sent': 'POD Sent',
-        'expense_documents_sent': 'Expense & Documents Sent',
-        'closed': 'Closed'
+        'import_doc_pending': t('expandableCard.document.importDocPending'),
+        'import_doc_received': t('expandableCard.document.importDocReceived'),
+        'pod_sent': t('expandableCard.document.podSent'),
+        'expense_documents_sent': t('expandableCard.document.expenseDocumentsSent'),
+        'closed': t('expandableCard.document.closed')
       },
       payment: {
-        'tarietter_sent': 'Tarietter Sent',
-        'waiting_adv_payment': 'Waiting Adv. Payment',
-        'advance_payment_received': 'Advance Payment Received',
-        'final_balance_letter_sent': 'Final Balance Letter Sent',
-        'balance_received': 'Balance Received',
-        'closed': 'Closed'
+        'tarietter_sent': t('expandableCard.payment.tarietterSent'),
+        'waiting_adv_payment': t('expandableCard.payment.waitingAdvPayment'),
+        'advance_payment_received': t('expandableCard.payment.advancePaymentReceived'),
+        'final_balance_letter_sent': t('expandableCard.payment.finalBalanceLetterSent'),
+        'balance_received': t('expandableCard.payment.balanceReceived'),
+        'closed': t('expandableCard.payment.closed')
       }
     };
-    
+
     return statusMappings[statusType][rawStatus] || rawStatus;
   };
   
@@ -141,10 +143,18 @@ export function DashboardCard({
   count,
   isLoading = false,
 }: DashboardCardProps) {
+  const { t } = useTranslation();
   const { animatedHeight } = useExpandable();
   const { isAllExpanded, toggleAllExpanded } = useCardsContext();
   const contentRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
+
+  // Map the logic-key title to a localized display label
+  const titleLabels: Record<DashboardCardProps['title'], string> = {
+    'Active Procedures': t('expandableCard.titleActiveProcedures'),
+    'Pending Documents': t('expandableCard.titlePendingDocuments'),
+    'Awaiting Payment': t('expandableCard.titleAwaitingPayment'),
+  };
 
   // Use the shared expansion state
   useEffect(() => {
@@ -214,14 +224,14 @@ export function DashboardCard({
     >
       <CardHeader className="p-0 mb-6">
         <div className="flex flex-col items-center w-full">
-          <h3 className="text-2xl font-bold text-gray-800 text-center mb-3">{title}</h3>
-          <Button 
+          <h3 className="text-2xl font-bold text-gray-800 text-center mb-3">{titleLabels[title] || title}</h3>
+          <Button
             onClick={handleCardClick}
-            variant="ghost" 
+            variant="ghost"
             size="sm"
             className="flex items-center text-sm text-gray-600 hover:text-gray-800 transition-colors"
           >
-            {isAllExpanded ? 'Collapse' : 'Expand'}
+            {isAllExpanded ? t('expandableCard.collapse') : t('expandableCard.expand')}
             <ChevronDown className={`ml-1 h-4 w-4 transform transition-transform ${isAllExpanded ? 'rotate-180' : ''}`} />
           </Button>
         </div>
@@ -230,7 +240,7 @@ export function DashboardCard({
       <CardContent className="p-0">
         <div className="flex justify-center mb-4">
           <span className="text-base font-medium text-gray-700 bg-gray-50 px-3 py-1 rounded-full">
-            {count} {count === 1 ? 'procedure' : 'procedures'}
+            {t('expandableCard.procedureCount', { count })}
           </span>
         </div>
 
@@ -251,7 +261,7 @@ export function DashboardCard({
                   className="mt-4 pt-4 border-t border-gray-200"
                   style={{ overflow: 'visible' }}
                 >
-                  <h4 className="text-sm font-medium text-gray-700 mb-4">References</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-4">{t('expandableCard.references')}</h4>
                   <div 
                     className="space-y-3 pb-2"
                     style={{ height: 'auto', maxHeight: 'none', overflow: 'visible' }}
@@ -290,7 +300,7 @@ export function DashboardCard({
                         </div>
                       ))
                     ) : (
-                      <div className="text-sm text-gray-500 p-4 text-center">No procedures to display</div>
+                      <div className="text-sm text-gray-500 p-4 text-center">{t('expandableCard.noProcedures')}</div>
                     )}
                   </div>
                 </motion.div>

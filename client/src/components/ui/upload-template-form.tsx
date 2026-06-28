@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Upload, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTranslation } from 'react-i18next';
 
 export function UploadTemplateForm() {
   const [file, setFile] = useState<File | null>(null);
@@ -12,6 +13,7 @@ export function UploadTemplateForm() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] || null;
@@ -28,7 +30,7 @@ export function UploadTemplateForm() {
     
     // Check if it's a DOCX file
     if (selectedFile.type !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      setError('Please select a valid Word document (.docx) file');
+      setError(t('uploadTemplateForm.invalidDocxError'));
       setFile(null);
       return;
     }
@@ -40,7 +42,7 @@ export function UploadTemplateForm() {
     e.preventDefault();
     
     if (!file) {
-      setError('Please select a template file');
+      setError(t('uploadTemplateForm.selectFileError'));
       return;
     }
     
@@ -70,18 +72,18 @@ export function UploadTemplateForm() {
       if (response.ok) {
         setSuccess(true);
         toast({
-          title: 'Template Uploaded',
-          description: 'Your PDF template has been uploaded successfully.',
+          title: t('uploadTemplateForm.uploadedToastTitle'),
+          description: t('uploadTemplateForm.uploadedToastDesc'),
         });
       } else {
-        throw new Error(data.error || data.message || 'Failed to upload template');
+        throw new Error(data.error || data.message || t('uploadTemplateForm.uploadFailedError'));
       }
     } catch (err) {
       console.error('Error uploading template:', err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      setError(err instanceof Error ? err.message : t('uploadTemplateForm.unknownError'));
       toast({
-        title: 'Upload Failed',
-        description: err instanceof Error ? err.message : 'An unknown error occurred',
+        title: t('uploadTemplateForm.uploadFailedToastTitle'),
+        description: err instanceof Error ? err.message : t('uploadTemplateForm.unknownError'),
         variant: 'destructive',
       });
     } finally {
@@ -92,15 +94,15 @@ export function UploadTemplateForm() {
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
-        <CardTitle>Upload PDF Template</CardTitle>
+        <CardTitle>{t('uploadTemplateForm.cardTitle')}</CardTitle>
         <CardDescription>
-          Upload your Adobe PDF document generation template (.docx) file.
+          {t('uploadTemplateForm.cardDescription')}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="template">Template File</Label>
+            <Label htmlFor="template">{t('uploadTemplateForm.templateFileLabel')}</Label>
             <div className="flex items-center gap-2">
               <Input 
                 id="template" 
@@ -126,7 +128,7 @@ export function UploadTemplateForm() {
             {success && (
               <div className="text-sm flex items-center gap-2 text-green-600 mt-1">
                 <CheckCircle className="h-4 w-4" />
-                <span>Template uploaded successfully</span>
+                <span>{t('uploadTemplateForm.successMessage')}</span>
               </div>
             )}
           </div>
@@ -140,35 +142,35 @@ export function UploadTemplateForm() {
               {uploading ? (
                 <>
                   <span className="animate-spin mr-2">⟳</span>
-                  Uploading...
+                  {t('uploadTemplateForm.uploading')}
                 </>
               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
-                  Upload Template
+                  {t('uploadTemplateForm.uploadButton')}
                 </>
               )}
             </Button>
           </div>
           
           <div className="text-xs text-muted-foreground mt-4 space-y-2 bg-gray-50 p-3 rounded-md border">
-            <div className="font-medium text-sm text-gray-800">Template Requirements:</div>
+            <div className="font-medium text-sm text-gray-800">{t('uploadTemplateForm.requirementsTitle')}</div>
             <ul className="list-disc pl-4 space-y-1">
-              <li>Must be a Word document (.docx file)</li>
-              <li>Must be tagged using Adobe Document Generation Tagger</li>
-              <li>Should include merge fields that match the data structure</li>
-              <li>Recommended size: less than 2MB</li>
+              <li>{t('uploadTemplateForm.req1')}</li>
+              <li>{t('uploadTemplateForm.req2')}</li>
+              <li>{t('uploadTemplateForm.req3')}</li>
+              <li>{t('uploadTemplateForm.req4')}</li>
             </ul>
-            <div className="font-medium text-sm text-gray-800 mt-2">Important Notes:</div>
+            <div className="font-medium text-sm text-gray-800 mt-2">{t('uploadTemplateForm.notesTitle')}</div>
             <ul className="list-disc pl-4 space-y-1">
-              <li>This will replace any existing template</li>
-              <li>The template must use valid Adobe text tags like <code>&#123;&#123;company.name&#125;&#125;</code></li>
-              <li>If your template has formatting issues, try simplifying the design</li>
-              <li>For complex templates, consider Adobe Experience Manager (AEM) for advanced tag support</li>
+              <li>{t('uploadTemplateForm.note1')}</li>
+              <li>{t('uploadTemplateForm.note2')} <code>&#123;&#123;company.name&#125;&#125;</code></li>
+              <li>{t('uploadTemplateForm.note3')}</li>
+              <li>{t('uploadTemplateForm.note4')}</li>
             </ul>
             <div className="text-blue-600 mt-2">
               <a href="https://developer.adobe.com/document-services/docs/overview/document-generation-api/templatetags/" target="_blank" rel="noopener noreferrer" className="underline">
-                Learn more about Adobe template tagging
+                {t('uploadTemplateForm.learnMore')}
               </a>
             </div>
           </div>

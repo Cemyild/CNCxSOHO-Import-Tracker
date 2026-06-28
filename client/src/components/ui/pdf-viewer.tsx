@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut, RotateCcw, RotateCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from './button';
 import { Skeleton } from './skeleton';
 
@@ -18,6 +19,7 @@ interface PDFViewerProps {
 }
 
 export const PDFViewer: React.FC<PDFViewerProps> = ({ url, filename, onDownload }) => {
+  const { t } = useTranslation();
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1);
@@ -59,7 +61,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, filename, onDownload 
     });
     
     // Set a user-friendly error message
-    setLoadError(`Failed to load PDF: ${error.message}`);
+    setLoadError(t('pdfViewer.loadFailed', { message: error.message }));
     setIsLoading(false);
     
     // Additional console log with specific error details for debugging
@@ -176,7 +178,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, filename, onDownload 
       return { data };
     } catch (error) {
       console.error('[PDFViewer] CRITICAL ERROR in fetchPDF:', error);
-      setLoadError(`Failed to fetch PDF: ${error.message}`);
+      setLoadError(t('pdfViewer.fetchFailed', { message: error.message }));
       throw error;
     }
   }
@@ -262,7 +264,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, filename, onDownload 
               className="h-8 px-2"
             >
               <Download className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Download</span>
+              <span className="hidden sm:inline">{t('pdfViewer.download')}</span>
             </Button>
           )}
         </div>
@@ -279,12 +281,12 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, filename, onDownload 
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium mb-2">Failed to load document</h3>
+            <h3 className="text-lg font-medium mb-2">{t('pdfViewer.failedToLoadDocument')}</h3>
             <p className="text-sm text-muted-foreground mb-4">{loadError}</p>
             {onDownload && (
               <Button onClick={onDownload} className="mt-2">
                 <Download className="h-4 w-4 mr-2" />
-                Download Instead
+                {t('pdfViewer.downloadInstead')}
               </Button>
             )}
           </div>
@@ -298,15 +300,15 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, filename, onDownload 
               <div className="flex items-center justify-center w-full">
                 <div className="flex flex-col items-center">
                   <Skeleton className="h-[500px] w-[400px] bg-gray-200 dark:bg-gray-700" />
-                  <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading document...</div>
+                  <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">{t('pdfViewer.loadingDocument')}</div>
                 </div>
               </div>
             }
             noData={
               <div className="flex flex-col items-center justify-center text-center p-8 max-w-md">
-                <p className="text-lg font-medium mb-2">No PDF document</p>
+                <p className="text-lg font-medium mb-2">{t('pdfViewer.noDocument')}</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  There was no document data found.
+                  {t('pdfViewer.noDocumentData')}
                 </p>
               </div>
             }
@@ -325,9 +327,9 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, filename, onDownload 
               }
               error={
                 <div className="flex flex-col items-center justify-center text-center p-8 max-w-md">
-                  <p className="text-lg font-medium mb-2 text-red-500">Error rendering page</p>
+                  <p className="text-lg font-medium mb-2 text-red-500">{t('pdfViewer.errorRenderingPage')}</p>
                   <p className="text-sm text-muted-foreground mb-4">
-                    There was a problem displaying this page of the document.
+                    {t('pdfViewer.errorRenderingPageDesc')}
                   </p>
                 </div>
               }
@@ -346,7 +348,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, filename, onDownload 
               onClick={() => setPageNumber(1)}
               disabled={pageNumber === 1}
             >
-              First
+              {t('pdfViewer.first')}
             </Button>
             
             <Button
@@ -355,11 +357,11 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, filename, onDownload 
               onClick={previousPage}
               disabled={pageNumber <= 1}
             >
-              Previous
+              {t('pdfViewer.previous')}
             </Button>
-            
+
             <span className="text-sm px-2">
-              Page {pageNumber} of {numPages}
+              {t('pdfViewer.pageOf', { current: pageNumber, total: numPages })}
             </span>
             
             <Button
@@ -368,16 +370,16 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ url, filename, onDownload 
               onClick={nextPage}
               disabled={pageNumber >= numPages}
             >
-              Next
+              {t('pdfViewer.next')}
             </Button>
-            
+
             <Button
-              variant="outline" 
+              variant="outline"
               size="sm"
               onClick={() => setPageNumber(numPages)}
               disabled={pageNumber === numPages}
             >
-              Last
+              {t('pdfViewer.last')}
             </Button>
           </div>
         </div>

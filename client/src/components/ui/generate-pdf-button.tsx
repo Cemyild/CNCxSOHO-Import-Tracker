@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { FileText, Loader2, Eye, Download, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -39,12 +40,13 @@ export function GeneratePdfButton({
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const handleGetPdf = async (viewMode: 'download' | 'view') => {
     if (!procedureReference) {
       toast({
-        title: "Error",
-        description: "Procedure reference is required",
+        title: t('common.error'),
+        description: t('generatePdf.toast.referenceRequired'),
         variant: "destructive",
       });
       return;
@@ -66,8 +68,8 @@ export function GeneratePdfButton({
         window.open(url, '_blank');
         
         toast({
-          title: "PDF Report",
-          description: "Your PDF report is opening in a new tab.",
+          title: t('generatePdf.toast.reportTitle'),
+          description: t('generatePdf.toast.openingNewTab'),
         });
       } else {
         // For downloading, fetch and process
@@ -76,13 +78,13 @@ export function GeneratePdfButton({
         });
 
         if (!response.ok) {
-          let errorMessage = 'Failed to generate PDF';
+          let errorMessage = t('generatePdf.errors.generateFailed');
           try {
             const errorData = await response.json();
             errorMessage = errorData.message || errorMessage;
           } catch (e) {
             // If response is not JSON, use status text
-            errorMessage = `Server error: ${response.status} ${response.statusText}`;
+            errorMessage = t('generatePdf.errors.serverError', { status: response.status, statusText: response.statusText });
           }
           throw new Error(errorMessage);
         }
@@ -93,7 +95,7 @@ export function GeneratePdfButton({
         // If received content is not PDF, this is an error
         if (contentType && !contentType.includes('application/pdf')) {
           console.error('Received non-PDF content. Content type:', contentType);
-          throw new Error('The server did not return a PDF document. The service may not be functioning correctly.');
+          throw new Error(t('generatePdf.errors.notPdf'));
         }
 
         // Get the PDF blob from the response
@@ -110,8 +112,8 @@ export function GeneratePdfButton({
               if (arr[0] !== 0x25 || arr[1] !== 0x50 || arr[2] !== 0x44 || arr[3] !== 0x46) {
                 console.warn('File does not have PDF signature bytes.');
                 toast({
-                  title: "Invalid PDF Format",
-                  description: "The generated file does not appear to be a valid PDF. It may be corrupted.",
+                  title: t('generatePdf.toast.invalidFormatTitle'),
+                  description: t('generatePdf.toast.invalidFormatDesc'),
                   variant: "destructive",
                 });
                 return;
@@ -136,28 +138,28 @@ export function GeneratePdfButton({
         document.body.removeChild(a);
         
         toast({
-          title: "PDF Generated",
-          description: "The PDF report has been generated and downloaded successfully.",
+          title: t('generatePdf.toast.generatedTitle'),
+          description: t('generatePdf.toast.generatedDesc'),
         });
       }
     } catch (error) {
       console.error('Error generating PDF:', error);
       
       // Store error details for dialog
-      setErrorDetails(error instanceof Error ? 
-        `${error.message}\n${error.stack || ''}` : 
-        "An unknown error occurred"
+      setErrorDetails(error instanceof Error ?
+        `${error.message}\n${error.stack || ''}` :
+        t('generatePdf.errors.unknown')
       );
       setShowErrorDialog(true);
       
       toast({
-        title: "PDF Generation Failed",
-        description: "There was an error generating the PDF. See details for more information.",
+        title: t('generatePdf.toast.failedTitle'),
+        description: t('generatePdf.toast.failedDesc'),
         variant: "destructive",
         action: (
           <Button variant="outline" size="sm" onClick={() => setShowErrorDialog(true)}>
             <AlertCircle className="h-4 w-4 mr-1" />
-            Details
+            {t('generatePdf.details')}
           </Button>
         ),
       });
@@ -185,26 +187,26 @@ export function GeneratePdfButton({
             {isGenerating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating...
+                {t('generatePdf.generating')}
               </>
             ) : (
               <>
                 <FileText className="mr-2 h-4 w-4" />
-                Generate PDF
+                {t('generatePdf.generate')}
               </>
             )}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>PDF Report Options</DropdownMenuLabel>
+          <DropdownMenuLabel>{t('generatePdf.reportOptions')}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => handleGetPdf('view')} disabled={isGenerating}>
             <Eye className="mr-2 h-4 w-4" />
-            View in Browser
+            {t('generatePdf.viewInBrowser')}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleGetPdf('download')} disabled={isGenerating}>
             <Download className="mr-2 h-4 w-4" />
-            Download File
+            {t('generatePdf.downloadFile')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -212,15 +214,15 @@ export function GeneratePdfButton({
       <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>PDF Generation Error</AlertDialogTitle>
+            <AlertDialogTitle>{t('generatePdf.errorDialog.title')}</AlertDialogTitle>
             <AlertDialogDescription>
               <p className="mb-4">
-                There was a problem generating your PDF report. This may be due to:
+                {t('generatePdf.errorDialog.intro')}
               </p>
               <ul className="list-disc pl-6 mb-4 space-y-2">
-                <li>Missing procedure data</li>
-                <li>Server error during PDF generation</li>
-                <li>Network connectivity problem</li>
+                <li>{t('generatePdf.errorDialog.reasonMissingData')}</li>
+                <li>{t('generatePdf.errorDialog.reasonServerError')}</li>
+                <li>{t('generatePdf.errorDialog.reasonNetwork')}</li>
               </ul>
               {errorDetails && (
                 <div className="bg-muted p-2 rounded text-sm mt-4 font-mono overflow-auto max-h-40">
@@ -228,14 +230,14 @@ export function GeneratePdfButton({
                 </div>
               )}
               <p className="mt-4">
-                The PDF is generated using jsPDF. If the problem persists, please try again or contact support.
+                {t('generatePdf.errorDialog.footerNote')}
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Close</AlertDialogCancel>
+            <AlertDialogCancel>{t('generatePdf.close')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => retryGeneration('download')}>
-              Try Again
+              {t('generatePdf.tryAgain')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

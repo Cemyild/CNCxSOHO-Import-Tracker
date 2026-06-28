@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Download } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from './button';
 import { Skeleton } from './skeleton';
 
@@ -10,6 +11,7 @@ interface TextViewerProps {
 }
 
 export const TextViewer: React.FC<TextViewerProps> = ({ url, filename, onDownload }) => {
+  const { t } = useTranslation();
   const [content, setContent] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,7 @@ export const TextViewer: React.FC<TextViewerProps> = ({ url, filename, onDownloa
         setIsLoading(false);
       } catch (err) {
         console.error('Error fetching text content:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error occurred');
+        setError(err instanceof Error ? err.message : t('docViewers.unknownError'));
         setIsLoading(false);
       }
     };
@@ -67,7 +69,7 @@ export const TextViewer: React.FC<TextViewerProps> = ({ url, filename, onDownloa
             className="h-8 px-2 ml-2"
           >
             <Download className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Download</span>
+            <span className="hidden sm:inline">{t('docViewers.download')}</span>
           </Button>
         )}
       </div>
@@ -91,12 +93,12 @@ export const TextViewer: React.FC<TextViewerProps> = ({ url, filename, onDownloa
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium mb-2">Failed to load content</h3>
+            <h3 className="text-lg font-medium mb-2">{t('docViewers.failedToLoadContent')}</h3>
             <p className="text-sm text-muted-foreground mb-4">{error}</p>
             {onDownload && (
               <Button onClick={onDownload} className="mt-2">
                 <Download className="h-4 w-4 mr-2" />
-                Download Instead
+                {t('docViewers.downloadInstead')}
               </Button>
             )}
           </div>

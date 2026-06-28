@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ZoomIn, ZoomOut, RotateCcw, RotateCw, Download } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from './button';
 import { Skeleton } from './skeleton';
 
@@ -10,6 +11,7 @@ interface ImageViewerProps {
 }
 
 export const ImageViewer: React.FC<ImageViewerProps> = ({ url, alt, onDownload }) => {
+  const { t } = useTranslation();
   const [scale, setScale] = useState<number>(1);
   const [rotation, setRotation] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -50,7 +52,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ url, alt, onDownload }
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     console.error('Error loading image:', e);
     setIsLoading(false);
-    setError('Failed to load image. The image might be corrupted or inaccessible.');
+    setError(t('docViewers.imageLoadError'));
   };
 
   return (
@@ -108,7 +110,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ url, alt, onDownload }
               className="h-8 px-2"
             >
               <Download className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Download</span>
+              <span className="hidden sm:inline">{t('docViewers.download')}</span>
             </Button>
           )}
         </div>
@@ -125,12 +127,12 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ url, alt, onDownload }
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium mb-2">Failed to load image</h3>
+            <h3 className="text-lg font-medium mb-2">{t('docViewers.failedToLoadImage')}</h3>
             <p className="text-sm text-muted-foreground mb-4">{error}</p>
             {onDownload && (
               <Button onClick={onDownload} className="mt-2">
                 <Download className="h-4 w-4 mr-2" />
-                Download Instead
+                {t('docViewers.downloadInstead')}
               </Button>
             )}
           </div>

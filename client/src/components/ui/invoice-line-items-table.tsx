@@ -1,4 +1,5 @@
 import React, { useState, useRef, ChangeEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
   currency,
   exchangeRate = 1
 }) => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -156,14 +158,14 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       setIsAddDialogOpen(false);
       resetForm();
       toast({
-        title: 'Success',
-        description: 'Invoice line item created successfully',
+        title: t('common.success'),
+        description: t('invoiceLineItems.toast.createSuccess'),
       });
     },
     onError: (error) => {
       toast({
-        title: 'Error',
-        description: `Failed to create invoice line item: ${error}`,
+        title: t('common.error'),
+        description: t('invoiceLineItems.toast.createError', { error }),
         variant: 'destructive',
       });
     }
@@ -180,14 +182,14 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       setSelectedItem(null);
       resetForm();
       toast({
-        title: 'Success',
-        description: 'Invoice line item updated successfully',
+        title: t('common.success'),
+        description: t('invoiceLineItems.toast.updateSuccess'),
       });
     },
     onError: (error) => {
       toast({
-        title: 'Error',
-        description: `Failed to update invoice line item: ${error}`,
+        title: t('common.error'),
+        description: t('invoiceLineItems.toast.updateError', { error }),
         variant: 'destructive',
       });
     }
@@ -201,14 +203,14 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoice-line-items/procedure', procedureReference] });
       toast({
-        title: 'Success',
-        description: 'Invoice line item deleted successfully',
+        title: t('common.success'),
+        description: t('invoiceLineItems.toast.deleteSuccess'),
       });
     },
     onError: (error) => {
       toast({
-        title: 'Error',
-        description: `Failed to delete invoice line item: ${error}`,
+        title: t('common.error'),
+        description: t('invoiceLineItems.toast.deleteError', { error }),
         variant: 'destructive',
       });
     }
@@ -228,8 +230,12 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       
       // Show success toast with more detailed information
       toast({
-        title: 'Calculation Complete',
-        description: `Updated ${data.totalLineItems} items using ${data.distributionMethod} distribution. The Total Cost is ${formatCurrency(data.totalCostUSD, 'USD')}`,
+        title: t('invoiceLineItems.toast.calcCompleteTitle'),
+        description: t('invoiceLineItems.toast.calcCompleteDesc', {
+          count: data.totalLineItems,
+          method: data.distributionMethod,
+          total: formatCurrency(data.totalCostUSD, 'USD'),
+        }),
         variant: 'default',
       });
       
@@ -249,8 +255,8 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
     onError: (error) => {
       setIsCalculating(false);
       toast({
-        title: 'Calculation Failed',
-        description: `Failed to calculate costs: ${error}`,
+        title: t('invoiceLineItems.toast.calcFailedTitle'),
+        description: t('invoiceLineItems.toast.calcFailedDesc', { error }),
         variant: 'destructive',
       });
     }
@@ -266,14 +272,14 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       setIsBulkUploadDialogOpen(false);
       setBulkItems('');
       toast({
-        title: 'Success',
-        description: 'Bulk line items created successfully',
+        title: t('common.success'),
+        description: t('invoiceLineItems.toast.bulkCreateSuccess'),
       });
     },
     onError: (error) => {
       toast({
-        title: 'Error',
-        description: `Failed to create bulk line items: ${error}`,
+        title: t('common.error'),
+        description: t('invoiceLineItems.toast.bulkCreateError', { error }),
         variant: 'destructive',
       });
     }
@@ -287,19 +293,19 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoice-line-items-config', procedureReference] });
       toast({
-        title: 'Success',
-        description: 'Configuration updated successfully',
+        title: t('common.success'),
+        description: t('invoiceLineItems.toast.configSuccess'),
       });
     },
     onError: (error) => {
       toast({
-        title: 'Error',
-        description: `Failed to update configuration: ${error}`,
+        title: t('common.error'),
+        description: t('invoiceLineItems.toast.configError', { error }),
         variant: 'destructive',
       });
     }
   });
-  
+
   // Delete all line items mutation
   const [isDeleteAllDialogOpen, setIsDeleteAllDialogOpen] = useState<boolean>(false);
   const deleteAllMutation = useMutation({
@@ -311,14 +317,14 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       queryClient.invalidateQueries({ queryKey: ['/api/invoice-line-items/procedure', procedureReference] });
       setIsDeleteAllDialogOpen(false);
       toast({
-        title: 'Success',
-        description: `Successfully deleted ${data.deletedCount} invoice line items`,
+        title: t('common.success'),
+        description: t('invoiceLineItems.toast.deleteAllSuccess', { count: data.deletedCount }),
       });
     },
     onError: (error) => {
       toast({
-        title: 'Error',
-        description: `Failed to delete all line items: ${error}`,
+        title: t('common.error'),
+        description: t('invoiceLineItems.toast.deleteAllError', { error }),
         variant: 'destructive',
       });
     }
@@ -369,7 +375,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
 
   // Handle delete confirmation
   const handleDelete = (id: number) => {
-    if (window.confirm('Are you sure you want to delete this line item?')) {
+    if (window.confirm(t('invoiceLineItems.confirmDelete'))) {
       deleteMutation.mutate(id);
     }
   };
@@ -402,7 +408,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       
       // Validate that it's an array
       if (!Array.isArray(items)) {
-        throw new Error('Input must be an array of line items');
+        throw new Error(t('invoiceLineItems.errors.mustBeArray'));
       }
       
       // Add procedureReference to each item
@@ -415,7 +421,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       bulkCreateMutation.mutate(itemsWithReference);
     } catch (error) {
       toast({
-        title: 'Invalid JSON format',
+        title: t('invoiceLineItems.toast.invalidJsonTitle'),
         description: String(error),
         variant: 'destructive',
       });
@@ -439,17 +445,17 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
   const calculateCosts = () => {
     if (!lineItemsData?.lineItems?.length) {
       toast({
-        title: 'No line items to calculate',
-        description: 'Please add at least one line item before calculating costs.',
+        title: t('invoiceLineItems.toast.noItemsTitle'),
+        description: t('invoiceLineItems.toast.noItemsDesc'),
         variant: 'destructive',
       });
       return;
     }
-    
+
     // Show start calculation toast
     toast({
-      title: 'Calculating costs',
-      description: 'Distributing expenses across line items...',
+      title: t('invoiceLineItems.toast.calculatingTitle'),
+      description: t('invoiceLineItems.toast.calculatingDesc'),
     });
     
     setIsCalculating(true);
@@ -529,15 +535,15 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
           setShowPreview(true);
         } else {
           toast({
-            title: 'Error',
-            description: 'No data found in CSV file',
+            title: t('common.error'),
+            description: t('invoiceLineItems.toast.noCsvData'),
             variant: 'destructive',
           });
         }
       },
       error: (error) => {
         toast({
-          title: 'Error parsing CSV',
+          title: t('invoiceLineItems.toast.csvParseErrorTitle'),
           description: error.message,
           variant: 'destructive',
         });
@@ -565,9 +571,9 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
   const handleProcessCSV = () => {
     try {
       // Validate that all required field mappings are set
-      if (!columnMapping.description || !columnMapping.quantity || 
+      if (!columnMapping.description || !columnMapping.quantity ||
           !columnMapping.unitPrice || !columnMapping.totalPrice) {
-        throw new Error('All field mappings must be selected');
+        throw new Error(t('invoiceLineItems.errors.mappingsRequired'));
       }
       
       // Transform CSV data to line items format
@@ -582,7 +588,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
         }
         
         return {
-          description: row[columnMapping.description] || 'Unnamed Item',
+          description: row[columnMapping.description] || t('invoiceLineItems.unnamedItem'),
           styleNo: columnMapping.styleNo ? row[columnMapping.styleNo] : null,
           quantity: quantity,
           unitPrice: unitPrice.toString(),
@@ -593,7 +599,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       
       // Validate items
       if (items.length === 0) {
-        throw new Error('No valid line items could be created from the CSV data');
+        throw new Error(t('invoiceLineItems.errors.noValidItems'));
       }
       
       // Submit the data
@@ -607,13 +613,13 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       setActiveTab('json');
     } catch (error) {
       toast({
-        title: 'Error processing CSV',
+        title: t('invoiceLineItems.toast.csvProcessErrorTitle'),
         description: String(error),
         variant: 'destructive',
       });
     }
   };
-  
+
   // Generate CSV template for download
   const generateCSVTemplate = () => {
     const headers = ['Description', 'Style', 'Quantity', 'UnitPrice', 'TotalPrice'];
@@ -643,30 +649,30 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
     <Card className="mt-4">
       <CardHeader>
         <CardTitle className="flex justify-between">
-          <span>Invoice Line Items</span>
+          <span>{t('invoiceLineItems.title')}</span>
           <div className="flex space-x-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsDeleteAllDialogOpen(true)} 
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteAllDialogOpen(true)}
               size="sm"
               className="bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700"
               disabled={!lineItemsData?.lineItems?.length}
             >
               <Trash2 className="h-4 w-4 mr-1" />
-              Delete All
+              {t('invoiceLineItems.deleteAll')}
             </Button>
             <Button variant="outline" onClick={() => setIsBulkUploadDialogOpen(true)} size="sm">
               <Upload className="h-4 w-4 mr-1" />
-              Bulk Upload
+              {t('invoiceLineItems.bulkUpload')}
             </Button>
             <Button onClick={() => setIsAddDialogOpen(true)} size="sm">
               <Plus className="h-4 w-4 mr-1" />
-              Add Item
+              {t('invoiceLineItems.addItem')}
             </Button>
           </div>
         </CardTitle>
         <CardDescription>
-          Manage individual invoice line items and calculate their true costs including expenses
+          {t('invoiceLineItems.description')}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -688,7 +694,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
           <div className="text-center py-4">
             <div className="flex flex-col items-center space-y-2">
               <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
-              <p>Loading line items...</p>
+              <p>{t('invoiceLineItems.loading')}</p>
             </div>
           </div>
         ) : null}
@@ -696,10 +702,10 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
         {/* Error state */}
         {!isLoadingLineItems && !isFetchingLineItems && !lineItemsData ? (
           <div className="text-center py-4 text-destructive">
-            <p>Error loading line items.</p>
+            <p>{t('invoiceLineItems.loadError')}</p>
             <Button variant="outline" size="sm" className="mt-2" onClick={() => refetchLineItems()}>
               <RefreshCw className="h-4 w-4 mr-2" />
-              Retry
+              {t('invoiceLineItems.retry')}
             </Button>
           </div>
         ) : null}
@@ -707,13 +713,13 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
         {/* Invalid data structure */}
         {!isLoadingLineItems && !isFetchingLineItems && lineItemsData && (!lineItemsData.lineItems || !Array.isArray(lineItemsData.lineItems)) ? (
           <div className="text-center py-4 text-destructive">
-            <p>Invalid line items data structure.</p>
+            <p>{t('invoiceLineItems.invalidData')}</p>
             <pre className="text-xs mt-2 bg-slate-100 p-2 rounded overflow-auto max-h-20">
               {JSON.stringify(lineItemsData, null, 2)}
             </pre>
             <Button variant="outline" size="sm" className="mt-2" onClick={() => refetchLineItems()}>
               <RefreshCw className="h-4 w-4 mr-2" />
-              Retry
+              {t('invoiceLineItems.retry')}
             </Button>
           </div>
         ) : null}
@@ -723,37 +729,37 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
           <>
             <div className="flex justify-between mb-4">
               <div>
-                <span className="text-sm font-medium">Distribution Method: </span>
-                <Button 
-                  variant="outline" 
+                <span className="text-sm font-medium">{t('invoiceLineItems.distributionMethod')} </span>
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={toggleDistributionMethod}
                 >
-                  {configData?.config?.distributionMethod === 'equal' ? 'Equal' : 'Proportional'}
+                  {configData?.config?.distributionMethod === 'equal' ? t('invoiceLineItems.equal') : t('invoiceLineItems.proportional')}
                 </Button>
                 <span className="text-xs ml-2 text-muted-foreground">
-                  {configData?.config?.distributionMethod === 'equal' 
-                    ? 'Expenses divided equally among items' 
-                    : 'Expenses allocated proportionally to item value'}
+                  {configData?.config?.distributionMethod === 'equal'
+                    ? t('invoiceLineItems.equalDesc')
+                    : t('invoiceLineItems.proportionalDesc')}
                 </span>
               </div>
               <div className="flex space-x-2">
-                <Button 
+                <Button
                   variant="outline"
                   size="sm"
                   onClick={() => refetchLineItems()}
                   disabled={isFetchingLineItems}
                 >
                   <RefreshCw className={`h-4 w-4 mr-1 ${isFetchingLineItems ? 'animate-spin' : ''}`} />
-                  Refresh
+                  {t('invoiceLineItems.refresh')}
                 </Button>
-                <Button 
+                <Button
                   onClick={calculateCosts}
                   disabled={isCalculating}
                   size="sm"
                 >
                   <Calculator className="h-4 w-4 mr-1" />
-                  {isCalculating ? 'Calculating...' : 'Calculate Costs'}
+                  {isCalculating ? t('invoiceLineItems.calculating') : t('invoiceLineItems.calculateCosts')}
                 </Button>
               </div>
             </div>
@@ -762,14 +768,14 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Style</TableHead>
-                    <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead className="text-right">Unit Price</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">Final Cost</TableHead>
-                    <TableHead className="text-right">Cost/Item</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t('invoiceLineItems.columns.description')}</TableHead>
+                    <TableHead>{t('invoiceLineItems.columns.style')}</TableHead>
+                    <TableHead className="text-right">{t('invoiceLineItems.columns.quantity')}</TableHead>
+                    <TableHead className="text-right">{t('invoiceLineItems.columns.unitPrice')}</TableHead>
+                    <TableHead className="text-right">{t('invoiceLineItems.columns.total')}</TableHead>
+                    <TableHead className="text-right">{t('invoiceLineItems.columns.finalCost')}</TableHead>
+                    <TableHead className="text-right">{t('invoiceLineItems.columns.costPerItem')}</TableHead>
+                    <TableHead className="text-right">{t('invoiceLineItems.columns.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -792,7 +798,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                             variant="ghost"
                             size="icon"
                             onClick={() => handleEdit(item)}
-                            title="Edit"
+                            title={t('invoiceLineItems.edit')}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -800,7 +806,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDelete(item.id)}
-                            title="Delete"
+                            title={t('invoiceLineItems.delete')}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -814,20 +820,20 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
             
             <div className="mt-4 flex justify-between">
               <div>
-                <p className="text-sm font-semibold">Items: {lineItemsData.lineItems.length}</p>
+                <p className="text-sm font-semibold">{t('invoiceLineItems.itemsLabel', { count: lineItemsData.lineItems.length })}</p>
                 {lineItemsData.lineItems.some((item: InvoiceLineItem) => item.costMultiplier) && (
                   <p className="text-sm">
-                    Cost Multiplier: {parseFloat(lineItemsData.lineItems[0].costMultiplier || '0').toFixed(4)}
+                    {t('invoiceLineItems.costMultiplier', { value: parseFloat(lineItemsData.lineItems[0].costMultiplier || '0').toFixed(4) })}
                   </p>
                 )}
               </div>
               <div>
                 <div className="text-right">
                   <p className="text-sm font-medium">
-                    Total Original Value: {formatCurrency(getTotalOriginalValue(), currency === 'USD' ? 'USD' : 'TRY')}
+                    {t('invoiceLineItems.totalOriginalValue', { value: formatCurrency(getTotalOriginalValue(), currency === 'USD' ? 'USD' : 'TRY') })}
                   </p>
                   <p className="text-sm font-bold">
-                    Total Final Cost: {formatCurrency(getTotalFinalCost(), currency === 'USD' ? 'USD' : 'TRY')}
+                    {t('invoiceLineItems.totalFinalCost', { value: formatCurrency(getTotalFinalCost(), currency === 'USD' ? 'USD' : 'TRY') })}
                   </p>
                 </div>
               </div>
@@ -838,8 +844,8 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
         {/* Empty state */}
         {!isLoadingLineItems && !isFetchingLineItems && lineItemsData && lineItemsData.lineItems && Array.isArray(lineItemsData.lineItems) && lineItemsData.lineItems.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            <p>No line items found for this invoice.</p>
-            <p className="text-sm mt-2">Click "Add Item" to create your first line item.</p>
+            <p>{t('invoiceLineItems.emptyTitle')}</p>
+            <p className="text-sm mt-2">{t('invoiceLineItems.emptyHint')}</p>
           </div>
         ) : null}
       </CardContent>
@@ -848,35 +854,35 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Invoice Line Item</DialogTitle>
+            <DialogTitle>{t('invoiceLineItems.addDialog.title')}</DialogTitle>
             <DialogDescription>
-              Add details for the new invoice line item.
+              {t('invoiceLineItems.addDialog.description')}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-1 gap-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{t('invoiceLineItems.fields.description')}</Label>
               <Input
                 id="description"
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                placeholder="Item description"
+                placeholder={t('invoiceLineItems.placeholders.description')}
               />
             </div>
             <div className="grid grid-cols-1 gap-2">
-              <Label htmlFor="styleNo">Style No</Label>
+              <Label htmlFor="styleNo">{t('invoiceLineItems.fields.styleNo')}</Label>
               <Input
                 id="styleNo"
                 name="styleNo"
                 value={formData.styleNo}
                 onChange={handleInputChange}
-                placeholder="Style number (optional)"
+                placeholder={t('invoiceLineItems.placeholders.styleNo')}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="quantity">Quantity</Label>
+                <Label htmlFor="quantity">{t('invoiceLineItems.fields.quantity')}</Label>
                 <Input
                   id="quantity"
                   name="quantity"
@@ -887,7 +893,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                 />
               </div>
               <div>
-                <Label htmlFor="unitPrice">Unit Price ({currency})</Label>
+                <Label htmlFor="unitPrice">{t('invoiceLineItems.fields.unitPrice', { currency })}</Label>
                 <Input
                   id="unitPrice"
                   name="unitPrice"
@@ -900,7 +906,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
               </div>
             </div>
             <div>
-              <Label htmlFor="totalPrice">Total Price ({currency})</Label>
+              <Label htmlFor="totalPrice">{t('invoiceLineItems.fields.totalPrice', { currency })}</Label>
               <Input
                 id="totalPrice"
                 name="totalPrice"
@@ -909,19 +915,19 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                 disabled
               />
               <p className="text-sm text-muted-foreground mt-1">
-                Auto-calculated from quantity × unit price
+                {t('invoiceLineItems.autoCalcNote')}
               </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-              Cancel
+              {t('invoiceLineItems.cancel')}
             </Button>
-            <Button 
+            <Button
               onClick={handleCreate}
               disabled={createMutation.isPending || !formData.description || parseFloat(formData.totalPrice) <= 0}
             >
-              {createMutation.isPending ? 'Saving...' : 'Save'}
+              {createMutation.isPending ? t('invoiceLineItems.saving') : t('invoiceLineItems.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -931,35 +937,35 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Invoice Line Item</DialogTitle>
+            <DialogTitle>{t('invoiceLineItems.editDialog.title')}</DialogTitle>
             <DialogDescription>
-              Update the details for this invoice line item.
+              {t('invoiceLineItems.editDialog.description')}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-1 gap-2">
-              <Label htmlFor="edit-description">Description</Label>
+              <Label htmlFor="edit-description">{t('invoiceLineItems.fields.description')}</Label>
               <Input
                 id="edit-description"
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                placeholder="Item description"
+                placeholder={t('invoiceLineItems.placeholders.description')}
               />
             </div>
             <div className="grid grid-cols-1 gap-2">
-              <Label htmlFor="edit-styleNo">Style No</Label>
+              <Label htmlFor="edit-styleNo">{t('invoiceLineItems.fields.styleNo')}</Label>
               <Input
                 id="edit-styleNo"
                 name="styleNo"
                 value={formData.styleNo}
                 onChange={handleInputChange}
-                placeholder="Style number (optional)"
+                placeholder={t('invoiceLineItems.placeholders.styleNo')}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="edit-quantity">Quantity</Label>
+                <Label htmlFor="edit-quantity">{t('invoiceLineItems.fields.quantity')}</Label>
                 <Input
                   id="edit-quantity"
                   name="quantity"
@@ -970,7 +976,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                 />
               </div>
               <div>
-                <Label htmlFor="edit-unitPrice">Unit Price ({currency})</Label>
+                <Label htmlFor="edit-unitPrice">{t('invoiceLineItems.fields.unitPrice', { currency })}</Label>
                 <Input
                   id="edit-unitPrice"
                   name="unitPrice"
@@ -983,7 +989,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
               </div>
             </div>
             <div>
-              <Label htmlFor="edit-totalPrice">Total Price ({currency})</Label>
+              <Label htmlFor="edit-totalPrice">{t('invoiceLineItems.fields.totalPrice', { currency })}</Label>
               <Input
                 id="edit-totalPrice"
                 name="totalPrice"
@@ -992,7 +998,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                 disabled
               />
               <p className="text-sm text-muted-foreground mt-1">
-                Auto-calculated from quantity × unit price
+                {t('invoiceLineItems.autoCalcNote')}
               </p>
             </div>
           </div>
@@ -1002,13 +1008,13 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
               setSelectedItem(null);
               resetForm();
             }}>
-              Cancel
+              {t('invoiceLineItems.cancel')}
             </Button>
-            <Button 
+            <Button
               onClick={handleUpdate}
               disabled={updateMutation.isPending || !formData.description || parseFloat(formData.totalPrice) <= 0}
             >
-              {updateMutation.isPending ? 'Updating...' : 'Update'}
+              {updateMutation.isPending ? t('invoiceLineItems.updating') : t('invoiceLineItems.update')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1018,26 +1024,26 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       <Dialog open={isDeleteAllDialogOpen} onOpenChange={setIsDeleteAllDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete All Line Items</DialogTitle>
+            <DialogTitle>{t('invoiceLineItems.deleteAllDialog.title')}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete all invoice line items for this procedure? This action cannot be undone.
+              {t('invoiceLineItems.deleteAllDialog.description')}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <p className="text-sm font-medium text-destructive">
-              This will permanently delete all {lineItemsData?.lineItems?.length || 0} line items.
+              {t('invoiceLineItems.deleteAllDialog.warning', { count: lineItemsData?.lineItems?.length || 0 })}
             </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteAllDialogOpen(false)}>
-              Cancel
+              {t('invoiceLineItems.cancel')}
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={() => deleteAllMutation.mutate()}
               disabled={deleteAllMutation.isPending}
             >
-              {deleteAllMutation.isPending ? 'Deleting...' : 'Delete All'}
+              {deleteAllMutation.isPending ? t('invoiceLineItems.deleting') : t('invoiceLineItems.deleteAll')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1058,9 +1064,9 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
       }}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>Bulk Upload Line Items</DialogTitle>
+            <DialogTitle>{t('invoiceLineItems.bulkDialog.title')}</DialogTitle>
             <DialogDescription>
-              Upload multiple line items at once via JSON or CSV format.
+              {t('invoiceLineItems.bulkDialog.description')}
             </DialogDescription>
           </DialogHeader>
           
@@ -1073,7 +1079,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
             <TabsContent value="json" className="mt-4">
               <div className="grid gap-4 py-2">
                 <div>
-                  <Label htmlFor="bulk-items">JSON Data</Label>
+                  <Label htmlFor="bulk-items">{t('invoiceLineItems.bulkDialog.jsonData')}</Label>
                   <textarea
                     id="bulk-items"
                     className="w-full min-h-[200px] p-2 border rounded-md font-mono text-sm"
@@ -1097,20 +1103,19 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
 ]'
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Each item must have description, quantity, unitPrice, and totalPrice fields.
-                    The styleNo field is optional. The procedureReference will be added automatically.
+                    {t('invoiceLineItems.bulkDialog.jsonNote')}
                   </p>
                 </div>
-                
+
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setIsBulkUploadDialogOpen(false)}>
-                    Cancel
+                    {t('invoiceLineItems.cancel')}
                   </Button>
-                  <Button 
+                  <Button
                     onClick={handleBulkUpload}
                     disabled={bulkCreateMutation.isPending || !bulkItems.trim()}
                   >
-                    {bulkCreateMutation.isPending ? 'Uploading...' : 'Upload'}
+                    {bulkCreateMutation.isPending ? t('invoiceLineItems.uploading') : t('invoiceLineItems.upload')}
                   </Button>
                 </DialogFooter>
               </div>
@@ -1121,16 +1126,16 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                 {!csvFile ? (
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="csv-file">Upload CSV File</Label>
+                      <Label htmlFor="csv-file">{t('invoiceLineItems.csv.uploadLabel')}</Label>
                       <div className="mt-2 flex items-center gap-3">
                         <Button
-                          variant="outline" 
+                          variant="outline"
                           onClick={() => fileInputRef.current?.click()}
                           className="w-full py-8 border-dashed border-2 flex flex-col items-center justify-center"
                         >
                           <FileUp className="h-6 w-6 mb-2" />
-                          <span>Click to browse or drop file here</span>
-                          <span className="text-xs text-muted-foreground mt-1">Supports .csv files</span>
+                          <span>{t('invoiceLineItems.csv.browseOrDrop')}</span>
+                          <span className="text-xs text-muted-foreground mt-1">{t('invoiceLineItems.csv.supports')}</span>
                         </Button>
                         <input 
                           type="file"
@@ -1150,7 +1155,7 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                           onClick={generateCSVTemplate}
                         >
                           <Download className="h-4 w-4 mr-1" />
-                          Download Template
+                          {t('invoiceLineItems.csv.downloadTemplate')}
                         </Button>
                       </div>
                     </div>
@@ -1159,9 +1164,9 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
                       <div>
-                        <h3 className="font-medium">File: {csvFile.name}</h3>
+                        <h3 className="font-medium">{t('invoiceLineItems.csv.fileLabel', { name: csvFile.name })}</h3>
                         <p className="text-sm text-muted-foreground">
-                          {csvData.length} rows found
+                          {t('invoiceLineItems.csv.rowsFound', { count: csvData.length })}
                         </p>
                       </div>
                       <Button
@@ -1174,38 +1179,38 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                           setShowPreview(false);
                         }}
                       >
-                        Change File
+                        {t('invoiceLineItems.csv.changeFile')}
                       </Button>
                     </div>
                     
                     <div>
-                      <Label htmlFor="delimiter">Delimiter</Label>
+                      <Label htmlFor="delimiter">{t('invoiceLineItems.csv.delimiter')}</Label>
                       <Select
                         value={csvDelimiter}
                         onValueChange={handleDelimiterChange}
                       >
                         <SelectTrigger id="delimiter" className="w-full">
-                          <SelectValue placeholder="Select delimiter" />
+                          <SelectValue placeholder={t('invoiceLineItems.csv.selectDelimiter')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value=",">Comma (,)</SelectItem>
-                          <SelectItem value=";">Semicolon (;)</SelectItem>
-                          <SelectItem value="\t">Tab</SelectItem>
+                          <SelectItem value=",">{t('invoiceLineItems.csv.comma')}</SelectItem>
+                          <SelectItem value=";">{t('invoiceLineItems.csv.semicolon')}</SelectItem>
+                          <SelectItem value="\t">{t('invoiceLineItems.csv.tab')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    
+
                     <div>
-                      <h3 className="font-medium mb-2">Map Columns</h3>
+                      <h3 className="font-medium mb-2">{t('invoiceLineItems.csv.mapColumns')}</h3>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label htmlFor="description-field">Description</Label>
+                          <Label htmlFor="description-field">{t('invoiceLineItems.columns.description')}</Label>
                           <Select
                             value={columnMapping.description}
                             onValueChange={(value) => handleColumnMappingChange('description', value)}
                           >
                             <SelectTrigger id="description-field">
-                              <SelectValue placeholder="Select field" />
+                              <SelectValue placeholder={t('invoiceLineItems.csv.selectField')} />
                             </SelectTrigger>
                             <SelectContent>
                               {csvHeaders.map((header) => (
@@ -1218,16 +1223,16 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                         </div>
 
                         <div>
-                          <Label htmlFor="style-field">Style</Label>
+                          <Label htmlFor="style-field">{t('invoiceLineItems.columns.style')}</Label>
                           <Select
                             value={columnMapping.styleNo}
                             onValueChange={(value) => handleColumnMappingChange('styleNo', value)}
                           >
                             <SelectTrigger id="style-field">
-                              <SelectValue placeholder="Select field (optional)" />
+                              <SelectValue placeholder={t('invoiceLineItems.csv.selectFieldOptional')} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">None (Optional)</SelectItem>
+                              <SelectItem value="none">{t('invoiceLineItems.csv.noneOptional')}</SelectItem>
                               {csvHeaders.map((header) => (
                                 <SelectItem key={header} value={header}>
                                   {header}
@@ -1238,13 +1243,13 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                         </div>
                         
                         <div>
-                          <Label htmlFor="quantity-field">Quantity</Label>
+                          <Label htmlFor="quantity-field">{t('invoiceLineItems.columns.quantity')}</Label>
                           <Select
                             value={columnMapping.quantity}
                             onValueChange={(value) => handleColumnMappingChange('quantity', value)}
                           >
                             <SelectTrigger id="quantity-field">
-                              <SelectValue placeholder="Select field" />
+                              <SelectValue placeholder={t('invoiceLineItems.csv.selectField')} />
                             </SelectTrigger>
                             <SelectContent>
                               {csvHeaders.map((header) => (
@@ -1257,13 +1262,13 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                         </div>
                         
                         <div>
-                          <Label htmlFor="unit-price-field">Unit Price</Label>
+                          <Label htmlFor="unit-price-field">{t('invoiceLineItems.columns.unitPrice')}</Label>
                           <Select
                             value={columnMapping.unitPrice}
                             onValueChange={(value) => handleColumnMappingChange('unitPrice', value)}
                           >
                             <SelectTrigger id="unit-price-field">
-                              <SelectValue placeholder="Select field" />
+                              <SelectValue placeholder={t('invoiceLineItems.csv.selectField')} />
                             </SelectTrigger>
                             <SelectContent>
                               {csvHeaders.map((header) => (
@@ -1276,13 +1281,13 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                         </div>
                         
                         <div>
-                          <Label htmlFor="total-price-field">Total Price</Label>
+                          <Label htmlFor="total-price-field">{t('invoiceLineItems.csv.totalPriceLabel')}</Label>
                           <Select
                             value={columnMapping.totalPrice}
                             onValueChange={(value) => handleColumnMappingChange('totalPrice', value)}
                           >
                             <SelectTrigger id="total-price-field">
-                              <SelectValue placeholder="Select field" />
+                              <SelectValue placeholder={t('invoiceLineItems.csv.selectField')} />
                             </SelectTrigger>
                             <SelectContent>
                               {csvHeaders.map((header) => (
@@ -1299,8 +1304,8 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                     {showPreview && csvPreview.length > 0 && (
                       <div>
                         <div className="flex justify-between items-center mb-2">
-                          <h3 className="font-medium">Preview</h3>
-                          <span className="text-xs text-muted-foreground">Showing first {csvPreview.length} rows</span>
+                          <h3 className="font-medium">{t('invoiceLineItems.csv.preview')}</h3>
+                          <span className="text-xs text-muted-foreground">{t('invoiceLineItems.csv.showingFirst', { count: csvPreview.length })}</span>
                         </div>
                         <div className="border rounded overflow-x-auto">
                           <Table>
@@ -1329,19 +1334,19 @@ const InvoiceLineItemsTable: React.FC<InvoiceLineItemsTableProps> = ({
                     
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setIsBulkUploadDialogOpen(false)}>
-                        Cancel
+                        {t('invoiceLineItems.cancel')}
                       </Button>
-                      <Button 
+                      <Button
                         onClick={handleProcessCSV}
                         disabled={
-                          bulkCreateMutation.isPending || 
-                          !columnMapping.description || 
-                          !columnMapping.quantity || 
-                          !columnMapping.unitPrice || 
+                          bulkCreateMutation.isPending ||
+                          !columnMapping.description ||
+                          !columnMapping.quantity ||
+                          !columnMapping.unitPrice ||
                           !columnMapping.totalPrice
                         }
                       >
-                        {bulkCreateMutation.isPending ? 'Uploading...' : 'Upload'}
+                        {bulkCreateMutation.isPending ? t('invoiceLineItems.uploading') : t('invoiceLineItems.upload')}
                       </Button>
                     </DialogFooter>
                   </div>
