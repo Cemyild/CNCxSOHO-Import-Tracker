@@ -78,11 +78,15 @@ app.use(session({
   }
 }));
 
-// Auth gate: tüm /api istekleri giriş gerektirir (görüntüleme dahil).
-// Giriş; oturum çerezi VEYA imzalı Bearer anahtarı ile sağlanabilir (ön yüz ikisini de gönderir).
-// Muaf: login (giriş yapmak için) ve /api/auth/me (giriş durumunu kendi kontrol eder).
-const AUTH_EXEMPT_PATHS = new Set(['/api/auth/login', '/api/auth/me']);
+// Auth gate: yazma istekleri (oluştur/değiştir/sil) giriş gerektirir.
+// NOT: Görüntüleme (GET) bilinçli olarak muaftır — front-end'in birçok okuma/export
+// isteği (window.open ile açılan PDF/Excel ve credentials taşımayan ham fetch'ler)
+// Authorization anahtarı taşıyamıyor; GET'leri zorunlu kılmak onları kırıyordu.
+// Okuma korumasını (rapor madde B) ileride front-end tutarlı auth'a geçirilerek ekleriz.
+// Giriş; oturum çerezi VEYA imzalı Bearer anahtarı ile sağlanabilir.
+const AUTH_EXEMPT_PATHS = new Set(['/api/auth/login']);
 app.use((req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
   if (!req.path.startsWith('/api')) return next();
   if (AUTH_EXEMPT_PATHS.has(req.path)) return next();
 
