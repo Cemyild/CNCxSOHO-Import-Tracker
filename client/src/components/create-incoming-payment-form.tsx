@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -49,6 +50,7 @@ interface CreateIncomingPaymentFormProps {
 export function CreateIncomingPaymentForm({ isOpen, onClose, onSuccess }: CreateIncomingPaymentFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   // Get today's date formatted as YYYY-MM-DD for the date input
   const today = new Date().toISOString().split('T')[0];
@@ -79,8 +81,8 @@ export function CreateIncomingPaymentForm({ isOpen, onClose, onSuccess }: Create
       setIsSubmitting(false);
       console.error('Error creating payment:', error);
       toast({
-        title: 'Error',
-        description: `Failed to create payment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: t('payments.toast.error'),
+        description: t('payments.incomingForm.failCreate', { msg: error instanceof Error ? error.message : 'Unknown error' }),
         variant: 'destructive',
       });
     },
@@ -97,7 +99,7 @@ export function CreateIncomingPaymentForm({ isOpen, onClose, onSuccess }: Create
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Create New Incoming Payment</DialogTitle>
+          <DialogTitle>{t('payments.incomingForm.title')}</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -107,9 +109,9 @@ export function CreateIncomingPaymentForm({ isOpen, onClose, onSuccess }: Create
               name="paymentId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Payment ID</FormLabel>
+                  <FormLabel>{t('payments.incomingForm.paymentId')}</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., INV-2023-001" {...field} />
+                    <Input placeholder={t('payments.incomingForm.paymentIdPlaceholder')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -121,7 +123,7 @@ export function CreateIncomingPaymentForm({ isOpen, onClose, onSuccess }: Create
               name="dateReceived"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Date Received</FormLabel>
+                  <FormLabel>{t('payments.incomingForm.dateReceived')}</FormLabel>
                   <FormControl>
                     <Input type="date" {...field} />
                   </FormControl>
@@ -135,9 +137,9 @@ export function CreateIncomingPaymentForm({ isOpen, onClose, onSuccess }: Create
               name="payerInfo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Payer Information</FormLabel>
+                  <FormLabel>{t('payments.incomingForm.payerInfo')}</FormLabel>
                   <FormControl>
-                    <Input placeholder="Company name or payer details" {...field} />
+                    <Input placeholder={t('payments.incomingForm.payerInfoPlaceholder')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -150,7 +152,7 @@ export function CreateIncomingPaymentForm({ isOpen, onClose, onSuccess }: Create
                 name="totalAmount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Total Amount (₺)</FormLabel>
+                    <FormLabel>{t('payments.incomingForm.totalAmount')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <span className="absolute left-3 top-2.5">₺</span>
@@ -158,7 +160,7 @@ export function CreateIncomingPaymentForm({ isOpen, onClose, onSuccess }: Create
                           type="number"
                           step="0.01"
                           min="0.01"
-                          placeholder="0.00"
+                          placeholder={t('payments.incomingForm.amountPlaceholder')}
                           className="pl-7"
                           {...field}
                         />
@@ -174,11 +176,11 @@ export function CreateIncomingPaymentForm({ isOpen, onClose, onSuccess }: Create
                 name="currency"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Currency</FormLabel>
+                    <FormLabel>{t('payments.incomingForm.currency')}</FormLabel>
                     <FormControl>
                       <Input value="TL" disabled className="bg-gray-100" />
                     </FormControl>
-                    <p className="text-sm text-muted-foreground">All payments are recorded in Turkish Lira (₺)</p>
+                    <p className="text-sm text-muted-foreground">{t('payments.incomingForm.currencyNote')}</p>
                   </FormItem>
                 )}
               />
@@ -189,10 +191,10 @@ export function CreateIncomingPaymentForm({ isOpen, onClose, onSuccess }: Create
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Notes (Optional)</FormLabel>
+                  <FormLabel>{t('payments.incomingForm.notes')}</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Any additional information about this payment"
+                      placeholder={t('payments.incomingForm.notesPlaceholder')}
                       className="resize-none"
                       {...field}
                     />
@@ -204,10 +206,10 @@ export function CreateIncomingPaymentForm({ isOpen, onClose, onSuccess }: Create
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-                Cancel
+                {t('payments.incomingForm.cancel')}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Creating...' : 'Create Payment'}
+                {isSubmitting ? t('payments.incomingForm.creating') : t('payments.incomingForm.createPayment')}
               </Button>
             </DialogFooter>
           </form>

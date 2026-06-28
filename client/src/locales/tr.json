@@ -219,6 +219,24 @@
       "errorServer": "Sunucu işleme hatası",
       "errorNetwork": "Ağ bağlantı sorunu",
       "close": "Kapat"
+    },
+    "incomingForm": {
+      "title": "Yeni Gelen Ödeme Oluştur",
+      "paymentId": "Ödeme No",
+      "paymentIdPlaceholder": "örn. INV-2023-001",
+      "dateReceived": "Alınma Tarihi",
+      "payerInfo": "Ödeyen Bilgisi",
+      "payerInfoPlaceholder": "Firma adı veya ödeyen bilgileri",
+      "totalAmount": "Toplam Tutar (₺)",
+      "amountPlaceholder": "0,00",
+      "currency": "Para Birimi",
+      "currencyNote": "Tüm ödemeler Türk Lirası (₺) olarak kaydedilir",
+      "notes": "Notlar (İsteğe bağlı)",
+      "notesPlaceholder": "Bu ödemeyle ilgili ek bilgiler",
+      "cancel": "İptal",
+      "creating": "Oluşturuluyor...",
+      "createPayment": "Ödeme Oluştur",
+      "failCreate": "Ödeme oluşturulamadı: {{msg}}"
     }
   },
   "paymentsTable": {

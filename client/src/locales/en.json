@@ -219,6 +219,24 @@
       "errorServer": "Server processing error",
       "errorNetwork": "Network connectivity problem",
       "close": "Close"
+    },
+    "incomingForm": {
+      "title": "Create New Incoming Payment",
+      "paymentId": "Payment ID",
+      "paymentIdPlaceholder": "e.g., INV-2023-001",
+      "dateReceived": "Date Received",
+      "payerInfo": "Payer Information",
+      "payerInfoPlaceholder": "Company name or payer details",
+      "totalAmount": "Total Amount (₺)",
+      "amountPlaceholder": "0.00",
+      "currency": "Currency",
+      "currencyNote": "All payments are recorded in Turkish Lira (₺)",
+      "notes": "Notes (Optional)",
+      "notesPlaceholder": "Any additional information about this payment",
+      "cancel": "Cancel",
+      "creating": "Creating...",
+      "createPayment": "Create Payment",
+      "failCreate": "Failed to create payment: {{msg}}"
     }
   },
   "paymentsTable": {
