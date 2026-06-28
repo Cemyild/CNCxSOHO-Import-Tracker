@@ -14,7 +14,7 @@
 - Yetkisiz rol → HTTP **403** `{ message: 'Bu işlem için yetkiniz yok' }`. Giriş yok → HTTP **401** `{ message: 'Giriş gerekli' }`.
 - Formal test framework yok; saf mantık `tsx` ile test edilir, route davranışı yayın sonrası `curl` ile doğrulanır.
 - MCP (`/mcp/*`) `/api` dışındadır; hiçbir değişiklik MCP'ye dokunmaz.
-- Geçiş: kullanıcı `merve.vural`'ı `accountant` yapmadan kurallar **yayına alınmaz** (Task 7 ön koşulu).
+- Geçiş (kullanıcı tercihi): **önce kod yayına alınır, sonra** kullanıcı `merve.vural`'ı `accountant` yapar. Bu güvenli — merve rol atanana kadar `user` yetkisinde kalır (finansal silemez), adminler kesintisiz tam yetkilidir. Bunun için User Management ekranına `accountant` seçeneği eklenmelidir (Task 6b).
 - Roller: `admin` = cem.yildirim, admin · `accountant` = merve.vural · `user` = nilesh.kamble, burak.bulbul.
 
 ---
@@ -357,9 +357,55 @@ git commit -m "feat(rbac): restrict user management to admin"
 
 ---
 
+### Task 6b: Frontend — User Management'a Muhasebeci (accountant) seçeneği
+
+**Files:**
+- Modify: `client/src/pages/settings.tsx` (rol tipleri + iki rol dropdown)
+
+**Interfaces:** yok (UI değişikliği).
+
+- [ ] **Step 1: Rol tiplerini genişlet**
+
+`settings.tsx` içinde `'admin' | 'user'` geçen 4 yeri `'admin' | 'user' | 'accountant'` yap (satır ~66 tip tanımı, ~154 başlangıç state, ~992 ve ~1044 onChange cast'leri):
+```bash
+grep -n "'admin' | 'user'" client/src/pages/settings.tsx
+```
+Her birini `'admin' | 'user' | 'accountant'` ile değiştir.
+
+- [ ] **Step 2: Create User dropdown'una accountant ekle**
+
+`settings.tsx` ~995-996 (Create User dialog):
+```tsx
+// ÖNCE
+<option value="user">User</option>
+<option value="admin">Admin</option>
+// SONRA
+<option value="user">User</option>
+<option value="accountant">Muhasebeci</option>
+<option value="admin">Admin</option>
+```
+
+- [ ] **Step 3: Edit User dropdown'una accountant ekle**
+
+`settings.tsx` ~1047-1048 (Edit User dialog) — aynı üç option'lı blokla değiştir.
+
+- [ ] **Step 4: Tip kontrolü**
+
+Run: `npx tsc 2>&1 | grep -iE "settings.tsx" || echo "OK"`
+Expected: `OK`
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add client/src/pages/settings.tsx
+git commit -m "feat(rbac): add accountant role option to User Management UI"
+```
+
+---
+
 ### Task 7: Yayın ve canlı doğrulama
 
-**ÖN KOŞUL (kullanıcı aksiyonu):** Kullanıcı, User Management ekranından `merve.vural`'ı `accountant` yapmış olmalı. Bu yapılmadan yayına geçilmez.
+**Not:** Geçiş sırası kullanıcı tercihiyle değişti — önce yayın, **sonra** kullanıcı `merve.vural`'ı `accountant` yapar (Step 5'te). Adminler zaten admin olduğundan yayın güvenlidir.
 
 **Files:** yok (deploy + doğrulama)
 
