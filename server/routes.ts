@@ -548,8 +548,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/users/:id", requireRole('admin'), async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
-      const userData = req.body;
-      const user = await storage.updateUser(userId, userData);
+      // Yalnızca düzenlenebilir alanları al. Client'tan gelen createdAt/lastLogin gibi
+      // timestamp string'leri drizzle'da `value.toISOString` hatası verir; ayrıca
+      // id/createdAt gibi alanların ezilmesini engelleriz (mass-assignment koruması).
+      const { username, email, role, password } = req.body ?? {};
+      const userData: Partial<{ username: string; email: string; role: string; password: string }> = {};
+      if (username !== undefined) userData.username = username;
+      if (email !== undefined) userData.email = email;
+      if (role !== undefined) userData.role = role;
+      if (password !== undefined && password !== "") userData.password = password;
+      const user = await storage.updateUser(userId, userData as any);
       res.json({ user: { ...user, password: undefined } });
     } catch (error) {
       res
