@@ -2580,5 +2580,22 @@
     "wordNeedsSoftware": "Word documents require specialized software to view.",
     "cannotPreview": "The file type \"{{fileType}}\" cannot be previewed in the browser.",
     "downloadToView": "Download to View"
+  },
+  "themeToggle": {
+    "toggleTheme": "Toggle theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "a11y": {
+    "morePages": "More pages",
+    "previous": "Previous",
+    "next": "Next",
+    "toggleSidebar": "Toggle Sidebar",
+    "close": "Close",
+    "previousSlide": "Previous slide",
+    "nextSlide": "Next slide",
+    "more": "More",
+    "backgroundPaths": "Background Paths"
   }
 }

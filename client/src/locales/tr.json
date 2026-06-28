@@ -2580,5 +2580,22 @@
     "wordNeedsSoftware": "Word belgelerini görüntülemek için özel bir yazılım gerekir.",
     "cannotPreview": "\"{{fileType}}\" dosya türü tarayıcıda önizlenemez.",
     "downloadToView": "Görüntülemek için İndir"
+  },
+  "themeToggle": {
+    "toggleTheme": "Temayı değiştir",
+    "light": "Açık",
+    "dark": "Koyu",
+    "system": "Sistem"
+  },
+  "a11y": {
+    "morePages": "Daha fazla sayfa",
+    "previous": "Önceki",
+    "next": "Sonraki",
+    "toggleSidebar": "Kenar çubuğunu aç/kapat",
+    "close": "Kapat",
+    "previousSlide": "Önceki slayt",
+    "nextSlide": "Sonraki slayt",
+    "more": "Daha fazla",
+    "backgroundPaths": "Arka Plan"
   }
 }
