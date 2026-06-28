@@ -11,11 +11,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useId, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, setAuthToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export function SignInDialog() {
+  const { t } = useTranslation();
   const id = useId();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -42,14 +44,14 @@ export function SignInDialog() {
       window.location.href = '/dashboard';
       
       toast({
-        title: "Success",
-        description: "Successfully logged in!",
+        title: t('common.success'),
+        description: t('login.successDesc'),
       });
     },
     onError: (error) => {
       toast({
-        title: "Login Failed",
-        description: error.message || "Invalid credentials",
+        title: t('login.failedTitle'),
+        description: error.message || t('login.invalidCredentials'),
         variant: "destructive",
       });
     },
@@ -65,33 +67,33 @@ export function SignInDialog() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline">Sign in</Button>
+        <Button variant="outline">{t('login.signIn')}</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Sign in</DialogTitle>
+          <DialogTitle>{t('login.signIn')}</DialogTitle>
           <DialogDescription>
-            Enter your credentials to login to your account.
+            {t('login.description')}
           </DialogDescription>
         </DialogHeader>
 
         <form className="space-y-4 py-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
-            <Label htmlFor={`${id}-username`}>Username</Label>
-            <Input 
-              id={`${id}-username`} 
-              placeholder="Enter your username" 
-              type="text" 
-              required 
+            <Label htmlFor={`${id}-username`}>{t('login.username')}</Label>
+            <Input
+              id={`${id}-username`}
+              placeholder={t('login.usernamePlaceholder')}
+              type="text"
+              required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor={`${id}-password`}>Password</Label>
+            <Label htmlFor={`${id}-password`}>{t('login.password')}</Label>
             <Input
               id={`${id}-password`}
-              placeholder="Enter your password"
+              placeholder={t('login.passwordPlaceholder')}
               type="password"
               required
               value={password}
@@ -102,19 +104,19 @@ export function SignInDialog() {
             <div className="flex items-center gap-2">
               <Checkbox id={`${id}-remember`} />
               <Label htmlFor={`${id}-remember`} className="font-normal text-muted-foreground">
-                Remember me
+                {t('login.rememberMe')}
               </Label>
             </div>
             <a className="text-sm underline hover:no-underline" href="#">
-              Forgot password?
+              {t('login.forgotPassword')}
             </a>
           </div>
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             className="w-full border-t pt-4 mt-4"
             disabled={loginMutation.isPending}
           >
-            {loginMutation.isPending ? "Signing in..." : "Sign in"}
+            {loginMutation.isPending ? t('login.signingIn') : t('login.signIn')}
           </Button>
         </form>
       </DialogContent>

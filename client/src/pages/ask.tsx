@@ -1,12 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  Calendar,
-  Home,
-  Inbox,
-  Search,
-  Settings,
-  BarChart2,
-  Calculator,
   Sparkles,
   Send,
   Loader2,
@@ -41,17 +35,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-const items = [
-  { title: "Dashboard", url: "/dashboard", icon: Home },
-  { title: "Procedures", url: "/procedures", icon: Inbox },
-  { title: "Expenses", url: "/expenses", icon: Calendar },
-  { title: "Payments", url: "/payments", icon: Search },
-  { title: "Tax Calculation", url: "/tax-calculation", icon: Calculator },
-  { title: "Reports", url: "/reports", icon: BarChart2 },
-  { title: "Ask CNC?", url: "/ask", icon: Sparkles },
-  { title: "Settings", url: "/settings", icon: Settings },
-];
-
 interface Block {
   type: "table" | "chart";
   title?: string;
@@ -77,15 +60,6 @@ interface Message {
   toolCalls?: ToolCall[];
   pending?: boolean;
 }
-
-const SUGGESTIONS = [
-  "How many procedures did we run in January 2026, and what was the total invoice value?",
-  "How much VAT was paid this year?",
-  "Top 5 issuers by total fees paid in the last 6 months",
-  "Show monthly procedure count for the last 12 months as a chart",
-  "Total customs tax paid for ALO LLC this year",
-  "Which TR HS codes require AZO dye test?",
-];
 
 function fmtNum(v: any): string {
   if (v == null) return "—";
@@ -154,6 +128,7 @@ function TableBlock({ block }: { block: Block }) {
 }
 
 function TraceBlock({ calls }: { calls: ToolCall[] }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   if (!calls || calls.length === 0) return null;
   const dataCalls = calls.filter((c) => c.name !== "present_answer");
@@ -170,7 +145,7 @@ function TraceBlock({ calls }: { calls: ToolCall[] }) {
         data-testid="ask-trace-toggle"
       >
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        <span>How AI got this ({calls.length} call{calls.length === 1 ? "" : "s"})</span>
+        <span>{t('ask.howAiGot', { count: calls.length })}</span>
         <span className="ml-auto font-normal opacity-70 truncate">{summary}</span>
       </button>
       {open && (
@@ -211,7 +186,9 @@ function renderMarkdown(text: string): React.ReactNode {
 }
 
 export default function AskPage() {
+  const { t } = useTranslation();
   const { toast } = useToast();
+  const suggestions = t('ask.suggestions', { returnObjects: true }) as string[];
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isAsking, setIsAsking] = useState(false);
@@ -237,9 +214,9 @@ export default function AskPage() {
         todayISO: new Date().toISOString().slice(0, 10),
       });
       if (!res.ok) {
-        const t = await res.text();
-        let msg = `Failed (${res.status})`;
-        try { msg = JSON.parse(t).error ?? JSON.parse(t).detail ?? msg; } catch {}
+        const body = await res.text();
+        let msg = t('ask.failedStatus', { status: res.status });
+        try { msg = JSON.parse(body).error ?? JSON.parse(body).detail ?? msg; } catch {}
         throw new Error(msg);
       }
       const data = await res.json();
@@ -249,7 +226,7 @@ export default function AskPage() {
         if (last?.role === "assistant" && last.pending) {
           next[next.length - 1] = {
             role: "assistant",
-            text: data.answer ?? "(no answer)",
+            text: data.answer ?? t('ask.noAnswer'),
             blocks: data.blocks,
             toolCalls: Array.isArray(data.tool_calls) ? data.tool_calls : undefined,
           };
@@ -263,14 +240,14 @@ export default function AskPage() {
         if (last?.role === "assistant" && last.pending) {
           next[next.length - 1] = {
             role: "assistant",
-            text: `Error: ${err?.message ?? "Request failed"}`,
+            text: t('ask.errorPrefix', { msg: err?.message ?? t('ask.requestFailed') }),
           };
         }
         return next;
       });
       toast({
-        title: "Error",
-        description: err?.message ?? "Request failed",
+        title: t('common.error'),
+        description: err?.message ?? t('ask.requestFailed'),
         variant: "destructive",
       });
     } finally {
@@ -284,15 +261,15 @@ export default function AskPage() {
   };
 
   return (
-    <PageLayout title="Ask CNC?" navItems={items}>
+    <PageLayout title={t('nav.askCnc')}>
       <div className="flex flex-col h-[calc(100vh-100px)] w-full max-w-screen-2xl mx-auto px-4 md:px-6 lg:px-8 py-4">
         <div className="mb-4">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Sparkles className="h-6 w-6 text-blue-600" />
-            Ask CNC?
+            {t('nav.askCnc')}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Ask natural-language questions about procedures, taxes, expenses, payments, products, and TR HS codes.
+            {t('ask.subtitle')}
           </p>
         </div>
 
@@ -301,9 +278,9 @@ export default function AskPage() {
           {messages.length === 0 ? (
             <Card>
               <CardContent className="pt-6">
-                <div className="text-sm font-medium mb-3">Example questions:</div>
+                <div className="text-sm font-medium mb-3">{t('ask.exampleQuestions')}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {SUGGESTIONS.map((q, i) => (
+                  {suggestions.map((q, i) => (
                     <Button
                       key={i}
                       variant="outline"
@@ -332,7 +309,7 @@ export default function AskPage() {
                       {m.pending ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Loader2 className="h-4 w-4 animate-spin" />
-                          Thinking…
+                          {t('ask.thinking')}
                         </div>
                       ) : (
                         <>
@@ -377,7 +354,7 @@ export default function AskPage() {
                 handleSubmit(e as any);
               }
             }}
-            placeholder="Type your question…"
+            placeholder={t('ask.placeholder')}
             rows={2}
             disabled={isAsking}
             data-testid="ask-input"

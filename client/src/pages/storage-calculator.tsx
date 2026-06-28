@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { format } from "date-fns";
 import { CalendarIcon, RefreshCw, Warehouse } from "lucide-react";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -117,6 +118,7 @@ function BreakdownRow({
 }
 
 export default function StorageCalculatorPage() {
+  const { t } = useTranslation();
   const [weightKg, setWeightKg] = useState<string>("");
   const [startAt, setStartAt] = useState<Date | undefined>(undefined);
   const [timeStr, setTimeStr] = useState<string>("00:00");
@@ -137,13 +139,13 @@ export default function StorageCalculatorPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (typeof data.rate !== "number" || data.rate <= 0) {
-        throw new Error("Invalid rate");
+        throw new Error(t('storageCalc.invalidRate'));
       }
       setRateInput(data.rate.toFixed(4));
       setRateSource("TCMB");
       setRateDate(data.date ?? null);
     } catch (err: any) {
-      setRateError("Kur otomatik alınamadı, manuel girin");
+      setRateError(t('storageCalc.rateAutoFailed'));
       setRateSource(null);
     } finally {
       setRateLoading(false);
@@ -206,17 +208,17 @@ export default function StorageCalculatorPage() {
   const totalTry = breakdown && rateValid ? breakdown.total * rateNum : null;
 
   return (
-    <PageLayout title="Storage Calculator">
+    <PageLayout title={t('nav.storageCalculator')}>
       <div className="max-w-2xl mx-auto py-8 space-y-6">
         <div className="flex items-center gap-3">
           <Warehouse className="h-6 w-6 text-muted-foreground" />
-          <h2 className="text-xl font-semibold">Storage Calculator</h2>
+          <h2 className="text-xl font-semibold">{t('nav.storageCalculator')}</h2>
         </div>
 
         <div className="rounded-lg border bg-card p-6 space-y-5">
           {/* Total Chargeable Weight */}
           <div className="space-y-2">
-            <Label htmlFor="weight">Total Chargeable Weight</Label>
+            <Label htmlFor="weight">{t('storageCalc.totalChargeableWeight')}</Label>
             <div className="relative">
               <Input
                 id="weight"
@@ -237,7 +239,7 @@ export default function StorageCalculatorPage() {
 
           {/* Starting Date / Time */}
           <div className="space-y-2">
-            <Label>Starting Date / Time</Label>
+            <Label>{t('storageCalc.startingDateTime')}</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -251,7 +253,7 @@ export default function StorageCalculatorPage() {
                   {startAt ? (
                     format(startAt, "PPP 'at' HH:mm")
                   ) : (
-                    <span>Pick a date and time</span>
+                    <span>{t('storageCalc.pickDateTime')}</span>
                   )}
                 </Button>
               </PopoverTrigger>
@@ -264,7 +266,7 @@ export default function StorageCalculatorPage() {
                 />
                 <div className="border-t p-3 flex items-center gap-2">
                   <Label htmlFor="time" className="text-sm">
-                    Time
+                    {t('storageCalc.time')}
                   </Label>
                   <Input
                     id="time"
@@ -281,14 +283,14 @@ export default function StorageCalculatorPage() {
           {/* USD/TRY Rate */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="rate">USD/TRY Rate</Label>
+              <Label htmlFor="rate">{t('storageCalc.usdTryRate')}</Label>
               <span className="text-xs text-muted-foreground">
                 {rateLoading
-                  ? "Loading…"
+                  ? t('storageCalc.loading')
                   : rateSource === "TCMB"
                     ? `TCMB${rateDate ? ` · ${rateDate}` : ""}`
                     : rateSource === "manual"
-                      ? "Manual"
+                      ? t('storageCalc.manual')
                       : rateError ?? ""}
               </span>
             </div>
@@ -315,7 +317,7 @@ export default function StorageCalculatorPage() {
                 size="icon"
                 onClick={fetchRate}
                 disabled={rateLoading}
-                title="Refresh from TCMB"
+                title={t('storageCalc.refreshTcmb')}
               >
                 <RefreshCw
                   className={cn("h-4 w-4", rateLoading && "animate-spin")}
@@ -328,44 +330,46 @@ export default function StorageCalculatorPage() {
         {/* Result */}
         <div className="rounded-lg border bg-card p-6 space-y-4">
           <div className="flex items-baseline justify-between">
-            <div className="text-sm text-muted-foreground">Result</div>
+            <div className="text-sm text-muted-foreground">{t('storageCalc.result')}</div>
             <div className="text-xs text-muted-foreground">
-              Now (Istanbul): {ISTANBUL_FMT.format(now)}
+              {t('storageCalc.nowIstanbul', { time: ISTANBUL_FMT.format(now) })}
             </div>
           </div>
 
           {!canCalculate ? (
             <div className="text-sm text-muted-foreground">
-              Hesaplama için her iki alanı da doldurun.
+              {t('storageCalc.fillBothFields')}
             </div>
           ) : !breakdown ? (
             <div className="text-sm text-amber-600 dark:text-amber-400">
-              Başlangıç tarihi henüz geçmemiş — hesaplama için startAt geçmiş bir zaman olmalı.
+              {t('storageCalc.startNotPassed')}
             </div>
           ) : (
             <>
               <div className="text-sm space-y-1">
                 <div>
-                  Chargeable Weight:{" "}
+                  {t('storageCalc.chargeableWeight')}{" "}
                   <span className="font-medium text-foreground">
                     {weightNum.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} kg
                   </span>
                 </div>
                 <div>
-                  Start:{" "}
+                  {t('storageCalc.start')}{" "}
                   <span className="font-medium text-foreground">
                     {format(startAt!, "PPP HH:mm")}
                   </span>
                 </div>
                 <div>
-                  Elapsed:{" "}
+                  {t('storageCalc.elapsed')}{" "}
                   <span className="font-medium text-foreground">
-                    {Math.floor(breakdown.hoursElapsed)} h{" "}
-                    {Math.floor((breakdown.hoursElapsed % 1) * 60)} min
+                    {t('storageCalc.elapsedValue', {
+                      hours: Math.floor(breakdown.hoursElapsed),
+                      minutes: Math.floor((breakdown.hoursElapsed % 1) * 60),
+                    })}
                   </span>
                   {" — "}
                   <span className="font-medium text-foreground">
-                    {breakdown.currentDay}. gün
+                    {t('storageCalc.dayN', { day: breakdown.currentDay })}
                   </span>
                 </div>
               </div>
@@ -374,40 +378,40 @@ export default function StorageCalculatorPage() {
                 <table className="w-full text-sm">
                   <thead className="text-xs text-muted-foreground border-b">
                     <tr>
-                      <th className="text-left py-2 pr-2 font-normal">Bracket</th>
-                      <th className="text-left py-2 pr-2 font-normal">Range</th>
-                      <th className="text-right py-2 pr-2 font-normal">Days</th>
-                      <th className="text-right py-2 font-normal">Amount (USD)</th>
+                      <th className="text-left py-2 pr-2 font-normal">{t('storageCalc.bracket')}</th>
+                      <th className="text-left py-2 pr-2 font-normal">{t('storageCalc.range')}</th>
+                      <th className="text-right py-2 pr-2 font-normal">{t('storageCalc.days')}</th>
+                      <th className="text-right py-2 font-normal">{t('storageCalc.amountUsd')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     <BreakdownRow
                       label="A"
-                      range="Day 1 (0–24h)"
+                      range={t('storageCalc.rangeDay1')}
                       days={breakdown.daysA}
                       amount={breakdown.amountA}
                     />
                     <BreakdownRow
                       label="B"
-                      range="Days 2–3 (24–72h)"
+                      range={t('storageCalc.rangeDays23')}
                       days={breakdown.daysB}
                       amount={breakdown.amountB}
                     />
                     <BreakdownRow
                       label="C"
-                      range="Days 4–14"
+                      range={t('storageCalc.rangeDays414')}
                       days={breakdown.daysC}
                       amount={breakdown.amountC}
                     />
                     <BreakdownRow
                       label="D"
-                      range="Day 15+"
+                      range={t('storageCalc.rangeDay15')}
                       days={breakdown.daysD}
                       amount={breakdown.amountD}
                     />
                     <BreakdownRow
                       label="E"
-                      range="Handling (weight × $0.110)"
+                      range={t('storageCalc.rangeHandling')}
                       days={null}
                       amount={breakdown.amountE}
                     />
@@ -415,7 +419,7 @@ export default function StorageCalculatorPage() {
                   <tfoot className="border-t">
                     <tr>
                       <td colSpan={3} className="text-right py-3 pr-2 font-semibold">
-                        Total
+                        {t('storageCalc.total')}
                       </td>
                       <td className="text-right py-3 font-semibold tabular-nums">
                         ${fmtUsd(breakdown.total)}
@@ -427,7 +431,7 @@ export default function StorageCalculatorPage() {
                           colSpan={3}
                           className="text-right py-1 pr-2 text-sm text-muted-foreground"
                         >
-                          Total in TRY (× {rateNum.toFixed(4)})
+                          {t('storageCalc.totalTry', { rate: rateNum.toFixed(4) })}
                         </td>
                         <td className="text-right py-1 font-semibold tabular-nums text-primary">
                           ₺{fmtTry(totalTry)}
@@ -440,7 +444,7 @@ export default function StorageCalculatorPage() {
 
               {totalTry === null && (
                 <div className="text-xs text-muted-foreground italic">
-                  TL eşdeğeri için geçerli bir USD/TRY kuru girin.
+                  {t('storageCalc.enterValidRate')}
                 </div>
               )}
             </>
