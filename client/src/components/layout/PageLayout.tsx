@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { User, ChevronsUpDown, LogOut } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, clearAuthToken } from '@/lib/queryClient';
@@ -31,6 +32,7 @@ type PageLayoutProps = {
 
 export function PageLayout({ title, children }: PageLayoutProps) {
   const navItems = defaultNavItems;
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -97,15 +99,15 @@ export function PageLayout({ title, children }: PageLayoutProps) {
                 <SidebarGroupContent>
                   <SidebarMenu className="pl-[15%]">
                     {navItems.map((item) => (
-                      <SidebarMenuItem key={item.title}>
+                      <SidebarMenuItem key={item.titleKey}>
                         <SidebarMenuButton
                           asChild
-                          tooltip={item.title}
+                          tooltip={t(item.titleKey)}
                           className="text-[1.1em]"
                         >
                           <a href={item.url}>
                             <item.icon />
-                            <span>{item.title}</span>
+                            <span>{t(item.titleKey)}</span>
                           </a>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -122,10 +124,10 @@ export function PageLayout({ title, children }: PageLayoutProps) {
                     <User className="h-5 w-5 rounded-md" />
                     <div className="flex flex-col items-start">
                       <span className="text-sm font-medium">
-                        {currentUser?.username || 'Loading...'}
+                        {currentUser?.username || t('common.loading')}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {currentUser?.email || 'Loading...'}
+                        {currentUser?.email || t('common.loading')}
                       </span>
                     </div>
                   </div>
@@ -141,7 +143,7 @@ export function PageLayout({ title, children }: PageLayoutProps) {
                   className="w-full justify-start gap-2 mt-2 text-muted-foreground hover:text-foreground"
                 >
                   <LogOut className="h-4 w-4" />
-                  {logoutMutation.isPending ? 'Logging out...' : 'Logout'}
+                  {logoutMutation.isPending ? t('common.loggingOut') : t('common.logout')}
                 </Button>
               </SidebarGroup>
             </SidebarFooter>

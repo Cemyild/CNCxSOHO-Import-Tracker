@@ -14,21 +14,21 @@ import {
 } from "lucide-react";
 
 export type NavItem = {
-  title: string;
+  titleKey: string;
   url: string;
   icon: ComponentType<any>;
 };
 
 export const defaultNavItems: NavItem[] = [
-  { title: "Dashboard", url: "/dashboard", icon: Home },
-  { title: "Procedures", url: "/procedures", icon: Inbox },
-  { title: "Expenses", url: "/expenses", icon: Calendar },
-  { title: "Payments", url: "/payments", icon: Search },
-  { title: "Tax Calculation", url: "/tax-calculation", icon: Calculator },
-  { title: "Storage Calculator", url: "/storage-calculator", icon: Warehouse },
-  { title: "Reports", url: "/reports", icon: BarChart2 },
-  { title: "Bulk Download", url: "/bulk-download", icon: Archive },
-  { title: "Ask CNC?", url: "/ask", icon: Sparkles },
-  { title: "Invoice Maker", url: "/invoice-maker", icon: FileText },
-  { title: "Settings", url: "/settings", icon: Settings },
+  { titleKey: "nav.dashboard", url: "/dashboard", icon: Home },
+  { titleKey: "nav.procedures", url: "/procedures", icon: Inbox },
+  { titleKey: "nav.expenses", url: "/expenses", icon: Calendar },
+  { titleKey: "nav.payments", url: "/payments", icon: Search },
+  { titleKey: "nav.taxCalculation", url: "/tax-calculation", icon: Calculator },
+  { titleKey: "nav.storageCalculator", url: "/storage-calculator", icon: Warehouse },
+  { titleKey: "nav.reports", url: "/reports", icon: BarChart2 },
+  { titleKey: "nav.bulkDownload", url: "/bulk-download", icon: Archive },
+  { titleKey: "nav.askCnc", url: "/ask", icon: Sparkles },
+  { titleKey: "nav.invoiceMaker", url: "/invoice-maker", icon: FileText },
+  { titleKey: "nav.settings", url: "/settings", icon: Settings },
 ];
