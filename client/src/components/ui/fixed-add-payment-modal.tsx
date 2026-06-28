@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { queryClient } from "@/lib/queryClient";
 
 import {
@@ -75,6 +76,7 @@ export default function AddPaymentModal({
   onPaymentCreated,
   initialProcedureReference,
 }: AddPaymentModalProps) {
+  const { t } = useTranslation();
   // Track submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -137,8 +139,8 @@ export default function AddPaymentModal({
       }
 
       toast({
-        title: "Success",
-        description: "Payment has been created successfully",
+        title: t("payments.toast.success"),
+        description: t("payments.addForm.createdDesc"),
       });
 
       // Invalidate queries to refresh data
@@ -156,8 +158,8 @@ export default function AddPaymentModal({
     } catch (error) {
       console.error("Error creating payment:", error);
       toast({
-        title: "Error",
-        description: "Failed to create payment. Please try again.",
+        title: t("payments.toast.error"),
+        description: t("payments.addForm.failCreate"),
         variant: "destructive",
       });
     } finally {
@@ -188,8 +190,8 @@ export default function AddPaymentModal({
         >
           {/* Header */}
           <div className="px-6 py-4 border-b">
-            <h2 className="text-lg font-semibold">Add New Payment</h2>
-            <p className="text-sm text-gray-500">Create a new payment record for a procedure.</p>
+            <h2 className="text-lg font-semibold">{t("payments.addForm.title")}</h2>
+            <p className="text-sm text-gray-500">{t("payments.addForm.subtitle")}</p>
           </div>
 
           {/* Form */}
@@ -202,7 +204,7 @@ export default function AddPaymentModal({
                   name="procedureReference"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Procedure Reference</FormLabel>
+                      <FormLabel>{t("payments.addForm.procedureReference")}</FormLabel>
                       <Select
                         onValueChange={field.onChange}
                         value={field.value}
@@ -210,7 +212,7 @@ export default function AddPaymentModal({
                       >
                         <FormControl>
                           <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select a procedure" />
+                            <SelectValue placeholder={t("payments.addForm.selectProcedure")} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent
@@ -220,7 +222,7 @@ export default function AddPaymentModal({
                         >
                           {isProceduresLoading ? (
                             <SelectItem value="loading" disabled>
-                              Loading procedures...
+                              {t("payments.addForm.loadingProcedures")}
                             </SelectItem>
                           ) : proceduresData?.procedures?.length > 0 ? (
                             proceduresData.procedures.map((procedure: any) => (
@@ -234,7 +236,7 @@ export default function AddPaymentModal({
                             ))
                           ) : (
                             <SelectItem value="no-procedures" disabled>
-                              No procedures available
+                              {t("payments.addForm.noProcedures")}
                             </SelectItem>
                           )}
                         </SelectContent>
@@ -250,7 +252,7 @@ export default function AddPaymentModal({
                   name="paymentType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Payment Type</FormLabel>
+                      <FormLabel>{t("payments.addForm.paymentType")}</FormLabel>
                       <Select
                         onValueChange={field.onChange}
                         value={field.value}
@@ -258,7 +260,7 @@ export default function AddPaymentModal({
                       >
                         <FormControl>
                           <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select payment type" />
+                            <SelectValue placeholder={t("payments.addForm.selectPaymentType")} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent
@@ -266,8 +268,8 @@ export default function AddPaymentModal({
                           sideOffset={5}
                           className="z-[200]"
                         >
-                          <SelectItem value="advance" className="cursor-pointer">Advance Payment</SelectItem>
-                          <SelectItem value="balance" className="cursor-pointer">Balance Payment</SelectItem>
+                          <SelectItem value="advance" className="cursor-pointer">{t("payments.addForm.advancePayment")}</SelectItem>
+                          <SelectItem value="balance" className="cursor-pointer">{t("payments.addForm.balancePayment")}</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -281,12 +283,12 @@ export default function AddPaymentModal({
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Amount (TRY)</FormLabel>
+                      <FormLabel>{t("payments.addForm.amount")}</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
                           step="0.01"
-                          placeholder="Enter amount"
+                          placeholder={t("payments.addForm.enterAmount")}
                           {...field}
                           onChange={(e) => {
                             const value = e.target.value ? parseFloat(e.target.value) : undefined;
@@ -305,7 +307,7 @@ export default function AddPaymentModal({
                   name="paymentDate"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>Payment Date</FormLabel>
+                      <FormLabel>{t("payments.addForm.paymentDate")}</FormLabel>
                       <div className="relative">
                         <Popover>
                           <PopoverTrigger asChild>
@@ -320,7 +322,7 @@ export default function AddPaymentModal({
                                 {field.value ? (
                                   format(field.value, "PPP")
                                 ) : (
-                                  <span>Pick a date</span>
+                                  <span>{t("payments.addForm.pickDate")}</span>
                                 )}
                                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                               </Button>
@@ -352,10 +354,10 @@ export default function AddPaymentModal({
                   name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Description (Optional)</FormLabel>
+                      <FormLabel>{t("payments.addForm.description")}</FormLabel>
                       <FormControl>
                         <Textarea
-                          placeholder="Enter payment description or notes"
+                          placeholder={t("payments.addForm.descriptionPlaceholder")}
                           className="resize-none"
                           {...field}
                         />
@@ -373,10 +375,10 @@ export default function AddPaymentModal({
                     onClick={onClose}
                     disabled={isSubmitting}
                   >
-                    Cancel
+                    {t("payments.addForm.cancel")}
                   </Button>
                   <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? "Adding..." : "Add Payment"}
+                    {isSubmitting ? t("payments.addForm.adding") : t("payments.addForm.addPayment")}
                   </Button>
                 </div>
               </form>

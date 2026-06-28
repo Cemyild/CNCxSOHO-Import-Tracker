@@ -237,6 +237,29 @@
       "creating": "Creating...",
       "createPayment": "Create Payment",
       "failCreate": "Failed to create payment: {{msg}}"
+    },
+    "addForm": {
+      "title": "Add New Payment",
+      "subtitle": "Create a new payment record for a procedure.",
+      "procedureReference": "Procedure Reference",
+      "selectProcedure": "Select a procedure",
+      "loadingProcedures": "Loading procedures...",
+      "noProcedures": "No procedures available",
+      "paymentType": "Payment Type",
+      "selectPaymentType": "Select payment type",
+      "advancePayment": "Advance Payment",
+      "balancePayment": "Balance Payment",
+      "amount": "Amount (TRY)",
+      "enterAmount": "Enter amount",
+      "paymentDate": "Payment Date",
+      "pickDate": "Pick a date",
+      "description": "Description (Optional)",
+      "descriptionPlaceholder": "Enter payment description or notes",
+      "cancel": "Cancel",
+      "adding": "Adding...",
+      "addPayment": "Add Payment",
+      "createdDesc": "Payment has been created successfully",
+      "failCreate": "Failed to create payment. Please try again."
     }
   },
   "paymentsTable": {

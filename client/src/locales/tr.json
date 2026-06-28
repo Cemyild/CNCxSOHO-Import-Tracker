@@ -237,6 +237,29 @@
       "creating": "Oluşturuluyor...",
       "createPayment": "Ödeme Oluştur",
       "failCreate": "Ödeme oluşturulamadı: {{msg}}"
+    },
+    "addForm": {
+      "title": "Yeni Ödeme Ekle",
+      "subtitle": "Bir işlem için yeni ödeme kaydı oluşturun.",
+      "procedureReference": "İşlem Referansı",
+      "selectProcedure": "Bir işlem seçin",
+      "loadingProcedures": "İşlemler yükleniyor...",
+      "noProcedures": "Uygun işlem yok",
+      "paymentType": "Ödeme Tipi",
+      "selectPaymentType": "Ödeme tipi seçin",
+      "advancePayment": "Avans Ödeme",
+      "balancePayment": "Bakiye Ödeme",
+      "amount": "Tutar (TRY)",
+      "enterAmount": "Tutar girin",
+      "paymentDate": "Ödeme Tarihi",
+      "pickDate": "Tarih seçin",
+      "description": "Açıklama (İsteğe bağlı)",
+      "descriptionPlaceholder": "Ödeme açıklaması veya notlar girin",
+      "cancel": "İptal",
+      "adding": "Ekleniyor...",
+      "addPayment": "Ödeme Ekle",
+      "createdDesc": "Ödeme başarıyla oluşturuldu",
+      "failCreate": "Ödeme oluşturulamadı. Lütfen tekrar deneyin."
     }
   },
   "paymentsTable": {
