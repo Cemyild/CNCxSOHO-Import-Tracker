@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { FileText, Download, Eye, Loader2, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 
 type GeneratePaymentReportButtonProps = {
   variant?: 'default' | 'outline' | 'secondary';
@@ -38,7 +39,8 @@ export function GeneratePaymentReportButton({
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   
   const { toast } = useToast();
-  
+  const { t } = useTranslation();
+
   // No longer need PDF generation methods as we're using Excel reports exclusively
   
   return (
@@ -55,36 +57,36 @@ export function GeneratePaymentReportButton({
             {isGenerating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating...
+                {t('payments.report.generating')}
               </>
             ) : (
               <>
                 <FileText className="mr-2 h-4 w-4" />
-                Payment Report
+                {t('payments.report.paymentReport')}
               </>
             )}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Report Options</DropdownMenuLabel>
+          <DropdownMenuLabel>{t('payments.report.reportOptions')}</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem 
+          <DropdownMenuItem
             onClick={() => {
               window.open('/api/direct-report/html-report', '_blank');
               toast({
-                title: 'Success',
-                description: 'Report opened in new tab.',
+                title: t('payments.toast.success'),
+                description: t('payments.report.reportOpenedTab'),
               });
-            }} 
+            }}
             disabled={isGenerating}
           >
             <Eye className="mr-2 h-4 w-4" />
-            View in Browser
+            {t('payments.report.viewInBrowser')}
           </DropdownMenuItem>
-          
+
           <DropdownMenuSeparator />
-          
-          <DropdownMenuLabel>Excel Downloads</DropdownMenuLabel>
+
+          <DropdownMenuLabel>{t('payments.report.excelDownloads')}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           
           <DropdownMenuItem 
@@ -92,15 +94,15 @@ export function GeneratePaymentReportButton({
               setIsGenerating(true);
               window.open('/api/template-excel-report/download', '_blank');
               toast({
-                title: 'Success',
-                description: 'Excel report download started.',
+                title: t('payments.toast.success'),
+                description: t('payments.report.excelStarted'),
               });
               setTimeout(() => setIsGenerating(false), 1000);
-            }} 
+            }}
             disabled={isGenerating}
           >
             <FileDown className="mr-2 h-4 w-4" />
-            Excel Report
+            {t('payments.report.excelReport')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -108,15 +110,15 @@ export function GeneratePaymentReportButton({
       <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excel Report Generation Error</AlertDialogTitle>
+            <AlertDialogTitle>{t('payments.report.errorTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
               <p className="mb-4">
-                There was a problem generating your Excel report. This may be due to:
+                {t('payments.report.errorIntro')}
               </p>
               <ul className="list-disc pl-6 mb-4 space-y-2">
-                <li>Missing payment data</li>
-                <li>Server processing error</li>
-                <li>Network connectivity problem</li>
+                <li>{t('payments.report.errorMissingData')}</li>
+                <li>{t('payments.report.errorServer')}</li>
+                <li>{t('payments.report.errorNetwork')}</li>
               </ul>
               {errorDetails && (
                 <div className="bg-muted p-2 rounded text-sm mt-4 font-mono overflow-auto max-h-40">
@@ -126,7 +128,7 @@ export function GeneratePaymentReportButton({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Close</AlertDialogCancel>
+            <AlertDialogCancel>{t('payments.report.close')}</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

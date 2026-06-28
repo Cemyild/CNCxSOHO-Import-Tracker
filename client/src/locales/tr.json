@@ -203,6 +203,22 @@
       "overpaid": "Fazla Ödendi",
       "balance": "Bakiye",
       "viewDetails": "Detayları Gör"
+    },
+    "report": {
+      "generating": "Oluşturuluyor...",
+      "paymentReport": "Ödeme Raporu",
+      "reportOptions": "Rapor Seçenekleri",
+      "viewInBrowser": "Tarayıcıda Görüntüle",
+      "excelDownloads": "Excel İndirmeleri",
+      "excelReport": "Excel Raporu",
+      "reportOpenedTab": "Rapor yeni sekmede açıldı.",
+      "excelStarted": "Excel raporu indirme başladı.",
+      "errorTitle": "Excel Raporu Oluşturma Hatası",
+      "errorIntro": "Excel raporunuz oluşturulurken bir sorun oluştu. Nedeni şunlar olabilir:",
+      "errorMissingData": "Eksik ödeme verisi",
+      "errorServer": "Sunucu işleme hatası",
+      "errorNetwork": "Ağ bağlantı sorunu",
+      "close": "Kapat"
     }
   },
   "paymentsTable": {

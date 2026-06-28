@@ -203,6 +203,22 @@
       "overpaid": "Overpaid",
       "balance": "Balance",
       "viewDetails": "View Details"
+    },
+    "report": {
+      "generating": "Generating...",
+      "paymentReport": "Payment Report",
+      "reportOptions": "Report Options",
+      "viewInBrowser": "View in Browser",
+      "excelDownloads": "Excel Downloads",
+      "excelReport": "Excel Report",
+      "reportOpenedTab": "Report opened in new tab.",
+      "excelStarted": "Excel report download started.",
+      "errorTitle": "Excel Report Generation Error",
+      "errorIntro": "There was a problem generating your Excel report. This may be due to:",
+      "errorMissingData": "Missing payment data",
+      "errorServer": "Server processing error",
+      "errorNetwork": "Network connectivity problem",
+      "close": "Close"
     }
   },
   "paymentsTable": {
