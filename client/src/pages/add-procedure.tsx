@@ -311,7 +311,7 @@ export default function AddProcedurePage() {
                 currency: form.getValues("currency") || "USD",
               };
             }}
-            onCreated={() => setLocation("/procedures")}
+            onCreated={(reference) => setLocation(`/procedure-details?reference=${encodeURIComponent(reference)}`)}
           />
         )}
 
