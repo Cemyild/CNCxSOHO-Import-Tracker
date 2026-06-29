@@ -263,6 +263,12 @@ muhafazası ile tutarlı).
   mertebesinde). Beyanname/masraf okuyucuları Sonnet, sınıflandırıcı Haiku.
 - **MCP politikası:** Bu özellik tamamen app'in UI/endpoint'leri içinde çalışır;
   hiçbir MCP write/extract tool'u kullanılmaz.
+- **Akıllı masraf okuyucusunun sayfa-sayısı sezgisi:** Mevcut okuyucu, belgeyi
+  sayfa sayısına göre (1-2 sayfa → hizmet faturası, 3+ → masraf makbuzu) ayırıyor.
+  Sadece `expense_tax_service` sayfaları gönderildiğinde bu sezgi yanıltabilir.
+  Azaltma: yönlendirmede masraf/vergi sayfaları ile hizmet faturası sayfalarını
+  ayrı alt-PDF'lere bölmeyi veya okuyucudan dönen kalem bazlı `type` alanına
+  güvenmeyi (sayfa-sayısı sezgisi yerine) uygulama planında netleştir.
 
 ## 9. Test stratejisi
 
