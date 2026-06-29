@@ -72,6 +72,7 @@ export function groupPagesByType(
   const groups = Object.fromEntries(
     PAGE_TYPES.map((t) => [t, [] as number[]]),
   ) as Record<PageType, number[]>;
+  // c.type is a validated PageType (parseClassificationResponse coerces unknown values to "other"), so the membership guard is purely defensive.
   for (const c of classifications) {
     if (groups[c.type]) groups[c.type].push(c.page);
   }

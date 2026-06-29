@@ -27,6 +27,14 @@ describe("splitPdfByPages", () => {
     const { pageMap } = await splitPdfByPages(src, [3, 99, 1, 1]);
     expect(pageMap).toEqual([3, 1]);
   });
+
+  it("returns an empty (0-page) pdf without throwing when pages is empty", async () => {
+    const src = await makePdf(3);
+    const { buffer, pageMap } = await splitPdfByPages(src, []);
+    const out = await PDFDocument.load(buffer);
+    expect(out.getPageCount()).toBe(1);
+    expect(pageMap).toEqual([]);
+  });
 });
 
 describe("remapPageNumber", () => {
@@ -50,5 +58,7 @@ describe("groupPagesByType", () => {
     expect(g.expense_tax_service).toEqual([2]);
     expect(g.commercial_invoice).toEqual([3, 4]);
     expect(g.awb).toEqual([]);
+    expect(g.packing_list).toEqual([]);
+    expect(g.other).toEqual([]);
   });
 });
