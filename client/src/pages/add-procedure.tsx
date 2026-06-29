@@ -3,7 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useLocation } from "wouter";
-import { 
+import {
   Calendar,
   Home,
   Inbox,
@@ -18,6 +18,9 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
+
+import { PdfUploadDropzone } from "@/components/ui/pdf-upload-dropzone";
+import type { AnalyzeDocumentResult } from "@/components/procedure-import/types";
 
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
@@ -120,6 +123,8 @@ export default function AddProcedurePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzeResult, setAnalyzeResult] = useState<AnalyzeDocumentResult | null>(null);
 
   // Initialize the form with default values
   const form = useForm<ProcedureFormValues>({
@@ -143,6 +148,49 @@ export default function AddProcedurePage() {
       usdtl_rate: "",
     },
   });
+
+  // PDF upload + auto-fill handler
+  const handleDocumentUpload = async (file: File) => {
+    setIsAnalyzing(true);
+    try {
+      const formData = new FormData();
+      formData.append("pdf", file);
+      const res = await apiRequest("POST", "/api/procedures/analyze-document", formData);
+      const { result } = await res.json();
+      setAnalyzeResult(result as AnalyzeDocumentResult);
+
+      // Prefill header form fields
+      const h = result.header;
+      form.setValue("shipper", h.shipper || "");
+      form.setValue("invoice_no", h.invoice_no || "");
+      // invoice_date is z.date() — parse the string into a Date
+      if (h.invoice_date) {
+        const parsed = new Date(h.invoice_date);
+        if (!isNaN(parsed.getTime())) form.setValue("invoice_date", parsed);
+      }
+      form.setValue("amount", h.amount ? String(h.amount) : "");
+      form.setValue("currency", h.currency || "USD");
+      form.setValue("piece", h.piece ? String(h.piece) : "");
+      form.setValue("package", h.package ? String(h.package) : "");
+      form.setValue("kg", h.kg ? String(h.kg) : "");
+      form.setValue("awb_number", h.awbNumber || "");
+      form.setValue("customs", h.customs || "");
+      form.setValue("import_dec_number", h.importDeclarationNumber || "");
+      // import_dec_date is z.date() — parse the string into a Date
+      if (h.importDeclarationDate) {
+        const parsed = new Date(h.importDeclarationDate);
+        if (!isNaN(parsed.getTime())) form.setValue("import_dec_date", parsed);
+      }
+      form.setValue("usdtl_rate", h.usdTlRate ? String(h.usdTlRate) : "");
+
+      toast({ title: t("procedureImport.toastAnalyzedTitle"), description: t("procedureImport.toastAnalyzedDesc") });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast({ title: t("procedureImport.toastAnalyzeFailedTitle"), description: message, variant: "destructive" });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   // Form submission handler
   const onSubmit = async (values: ProcedureFormValues) => {
@@ -220,6 +268,20 @@ export default function AddProcedurePage() {
             {t("procedurePages.backToProcedures")}
           </Button>
         </div>
+
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle>{t("procedureImport.uploadTitle")}</CardTitle>
+            <CardDescription>{t("procedureImport.uploadDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PdfUploadDropzone
+              title={t("procedureImport.uploadTitle")}
+              onFileSelect={handleDocumentUpload}
+              isAnalyzing={isAnalyzing}
+            />
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
