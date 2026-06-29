@@ -14,7 +14,7 @@ import {
   type ExpenseReceiptResult,
 } from "./extractors/expense-receipt";
 import { extractFromPdf } from "./document-extraction";
-import { uploadFile } from "./object-storage";
+import { uploadFile, getFile } from "./object-storage";
 
 export interface ImportHeader {
   shipper: string;
@@ -264,4 +264,256 @@ export async function analyzeProcedureDocument(
     expensePageMap: expenseSplit.pageMap,
     productResult,
   });
+}
+
+// ---------------------------------------------------------------------------
+// CreateFromDocumentInput + buildCreateInserts (pure, TDD-tested)
+// ---------------------------------------------------------------------------
+
+export interface CreateFromDocumentInput {
+  reference: string;
+  header: ImportHeader;
+  taxes: AnalyzeDocumentResult["taxes"] | null;
+  expenses: ImportExpenseDraft[];
+  serviceInvoices: ImportServiceInvoiceDraft[];
+  products: ImportProductDraft[];
+  documents: ImportDocumentDraft[];
+  pdfObjectKey: string;
+  pdfOriginalFilename: string;
+  userId?: number;
+}
+
+const s = (v: unknown): string => (v === null || v === undefined ? "" : String(v));
+
+export function buildCreateInserts(input: CreateFromDocumentInput, userId: number) {
+  const ref = input.reference;
+  const h = input.header;
+
+  const procedureValues = {
+    reference: ref,
+    shipper: h.shipper || null,
+    invoice_no: h.invoice_no || null,
+    invoice_date: h.invoice_date || null,
+    amount: s(h.amount || 0),
+    currency: h.currency || "USD",
+    package: h.package ? String(h.package) : null,
+    kg: h.kg ? String(h.kg) : null,
+    piece: h.piece || null,
+    awb_number: h.awbNumber || null,
+    customs: h.customs || null,
+    import_dec_number: h.importDeclarationNumber || null,
+    import_dec_date: h.importDeclarationDate || null,
+    usdtl_rate: h.usdTlRate ? String(h.usdTlRate) : null,
+    createdBy: userId,
+  };
+
+  let taxValues: any = null;
+  if (input.taxes) {
+    const t = input.taxes;
+    const anyTax = t.customsTax || t.additionalCustomsTax || t.kkdf || t.vat || t.stampTax;
+    if (anyTax) {
+      taxValues = {
+        procedureReference: ref,
+        customsTax: s(t.customsTax || 0),
+        additionalCustomsTax: s(t.additionalCustomsTax || 0),
+        kkdf: s(t.kkdf || 0),
+        vat: s(t.vat || 0),
+        stampTax: s(t.stampTax || 0),
+        createdBy: userId,
+      };
+    }
+  }
+
+  const expenseValues = input.expenses.map((e) => ({
+    procedureReference: ref,
+    category: e.category,
+    amount: s(e.amount || 0),
+    currency: e.currency || "TRY",
+    invoiceNumber: e.invoiceNumber || null,
+    invoiceDate: e.invoiceDate || null,
+    documentNumber: e.documentNumber || null,
+    policyNumber: null,
+    issuer: e.issuer || null,
+    notes: null,
+    createdBy: userId,
+  }));
+
+  const serviceInvoiceValues = input.serviceInvoices.map((si) => ({
+    procedureReference: ref,
+    amount: s(si.amount || 0),
+    currency: si.currency || "TRY",
+    invoiceNumber: si.invoiceNumber,
+    date: si.date,
+    notes: si.notes || null,
+    createdBy: userId,
+  }));
+
+  const productItems = input.products.map((p, i) => ({
+    line_number: i + 1,
+    style: p.style,
+    cost: s(p.cost || 0),
+    unit_count: p.unit_count || 0,
+    total_value: s(p.total_value || 0),
+    tr_hs_code: p.tr_hs_code || null,
+    hts_code: p.hts_code || null,
+  }));
+
+  return { procedureValues, taxValues, expenseValues, serviceInvoiceValues, productItems };
+}
+
+// ---------------------------------------------------------------------------
+// attachPages helper (best-effort, NOT in transaction)
+// ---------------------------------------------------------------------------
+
+async function attachPages(opts: {
+  pdfBuffer: Buffer;
+  originalPages: number[];
+  procedureReference: string;
+  expenseType: "import_expense" | "service_invoice" | "import_document";
+  expenseId: number;
+  importDocumentType?: string;
+  filenameHint: string;
+  userId: number;
+}): Promise<boolean> {
+  try {
+    const { buffer } = await splitPdfByPages(opts.pdfBuffer, opts.originalPages);
+    const objectKey = await uploadFile(buffer, opts.filenameHint, "application/pdf", opts.procedureReference);
+    const { storage } = await import("./storage");
+    const doc: any = {
+      procedureReference: opts.procedureReference,
+      expenseType: opts.expenseType,
+      expenseId: opts.expenseId,
+      originalFilename: opts.filenameHint,
+      objectKey,
+      fileSize: buffer.length,
+      fileType: "application/pdf",
+      uploadedBy: opts.userId,
+    };
+    if (opts.importDocumentType) doc.importDocumentType = opts.importDocumentType;
+    await storage.uploadExpenseDocument(doc);
+    return true;
+  } catch (e) {
+    console.error("[create-from-document] attach failed:", e);
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// createProcedureFromDocument — atomic DB write + best-effort attachments
+// ---------------------------------------------------------------------------
+
+export async function createProcedureFromDocument(
+  input: CreateFromDocumentInput,
+): Promise<{ reference: string; attachments: { ok: number; failed: number } }> {
+  const userId = input.userId || 3;
+  const inserts = buildCreateInserts(input, userId);
+
+  // Lazy-import DB and schema to avoid top-level initialization during testing.
+  const { db } = await import("./db");
+  const {
+    procedures,
+    taxes: taxesTable,
+    importExpenses,
+    importServiceInvoices,
+    taxCalculations,
+    taxCalculationItems,
+  } = await import("@shared/schema");
+
+  // Pre-reset sequences to avoid PK collisions (best effort).
+  for (const seq of ["procedures_id_seq", "taxes_id_seq"]) {
+    try {
+      await (db as any).execute(
+        `SELECT setval('${seq}', (SELECT COALESCE(MAX(id),0) FROM ${seq.replace("_id_seq", "")}) + 1, false)`,
+      );
+    } catch { /* ignore */ }
+  }
+
+  // 1) Atomic DB write. Capture inserted rows via RETURNING so attachment can
+  // match each draft to its saved id by index — a single multi-row INSERT ...
+  // RETURNING yields rows in the same order as the VALUES list (Postgres
+  // guarantees this), so we never rely on an unordered SELECT.
+  const created = await db.transaction(async (tx) => {
+    const [procedure] = await tx.insert(procedures).values(inserts.procedureValues as any).returning();
+
+    if (inserts.taxValues) {
+      await tx.insert(taxesTable).values(inserts.taxValues as any);
+    }
+
+    let expenseRows: any[] = [];
+    if (inserts.expenseValues.length) {
+      expenseRows = await tx.insert(importExpenses).values(inserts.expenseValues as any).returning();
+    }
+
+    let serviceRows: any[] = [];
+    if (inserts.serviceInvoiceValues.length) {
+      serviceRows = await tx.insert(importServiceInvoices).values(inserts.serviceInvoiceValues as any).returning();
+    }
+
+    if (inserts.productItems.length) {
+      const [calc] = await tx
+        .insert(taxCalculations)
+        .values({
+          reference: input.reference,
+          procedure_id: procedure.id,
+          invoice_no: input.header.invoice_no || null,
+          total_value: String(input.header.amount || 0),
+          total_quantity: input.products.reduce((sum, p) => sum + (p.unit_count || 0), 0),
+          currency_rate: input.header.usdTlRate ? String(input.header.usdTlRate) : "0",
+          status: "draft",
+        } as any)
+        .returning();
+      await tx
+        .insert(taxCalculationItems)
+        .values(inserts.productItems.map((it) => ({ ...it, tax_calculation_id: calc.id })) as any);
+    }
+
+    return { procedure, expenseRows, serviceRows };
+  });
+
+  // 2) Best-effort document attachment (NOT part of the transaction)
+  let ok = 0;
+  let failed = 0;
+  try {
+    const { buffer: pdfBuffer } = await getFile(input.pdfObjectKey);
+
+    // Attach each expense's source page. created.expenseRows[i] corresponds to
+    // input.expenses[i] (RETURNING preserves VALUES order).
+    for (let i = 0; i < input.expenses.length; i++) {
+      const exp = input.expenses[i];
+      const row = created.expenseRows[i];
+      if (exp.originalPage && row) {
+        (await attachPages({
+          pdfBuffer, originalPages: [exp.originalPage], procedureReference: input.reference,
+          expenseType: "import_expense", expenseId: row.id,
+          filenameHint: `expense-${exp.category}-p${exp.originalPage}.pdf`, userId,
+        })) ? ok++ : failed++;
+      }
+    }
+
+    for (let i = 0; i < input.serviceInvoices.length; i++) {
+      const si = input.serviceInvoices[i];
+      const row = created.serviceRows[i];
+      if (si.originalPage && row) {
+        (await attachPages({
+          pdfBuffer, originalPages: [si.originalPage], procedureReference: input.reference,
+          expenseType: "service_invoice", expenseId: row.id,
+          filenameHint: `service-invoice-${si.invoiceNumber}-p${si.originalPage}.pdf`, userId,
+        })) ? ok++ : failed++;
+      }
+    }
+
+    // Attach classified documents to "Import Documents".
+    for (const doc of input.documents) {
+      (await attachPages({
+        pdfBuffer, originalPages: doc.originalPages, procedureReference: input.reference,
+        expenseType: "import_document", expenseId: created.procedure.id,
+        importDocumentType: doc.importDocumentType,
+        filenameHint: `${doc.importDocumentType}.pdf`, userId,
+      })) ? ok++ : failed++;
+    }
+  } catch (e) {
+    console.error("[create-from-document] attachment phase error:", e);
+  }
+
+  return { reference: input.reference, attachments: { ok, failed } };
 }
