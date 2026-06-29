@@ -4,6 +4,7 @@ import {
   splitPdfByPages,
   remapPageNumber,
   groupPagesByType,
+  parseClassificationResponse,
   type PageClassification,
 } from "./document-router";
 
@@ -60,5 +61,38 @@ describe("groupPagesByType", () => {
     expect(g.awb).toEqual([]);
     expect(g.packing_list).toEqual([]);
     expect(g.other).toEqual([]);
+  });
+});
+
+describe("parseClassificationResponse", () => {
+  it("parses a clean JSON array", () => {
+    const raw = `[{"page":1,"type":"customs_declaration"},{"page":2,"type":"commercial_invoice"}]`;
+    expect(parseClassificationResponse(raw, 2)).toEqual([
+      { page: 1, type: "customs_declaration" },
+      { page: 2, type: "commercial_invoice" },
+    ]);
+  });
+
+  it("strips markdown fences and surrounding text", () => {
+    const raw = "Here:\n```json\n[{\"page\":1,\"type\":\"awb\"}]\n```\n";
+    expect(parseClassificationResponse(raw, 1)).toEqual([
+      { page: 1, type: "awb" },
+    ]);
+  });
+
+  it("fills missing pages with 'other' and coerces unknown types", () => {
+    const raw = `[{"page":1,"type":"banana"}]`;
+    expect(parseClassificationResponse(raw, 3)).toEqual([
+      { page: 1, type: "other" },
+      { page: 2, type: "other" },
+      { page: 3, type: "other" },
+    ]);
+  });
+
+  it("returns all-other on unparseable input", () => {
+    expect(parseClassificationResponse("no json here", 2)).toEqual([
+      { page: 1, type: "other" },
+      { page: 2, type: "other" },
+    ]);
   });
 });
