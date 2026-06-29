@@ -66,6 +66,7 @@ import rateLimit from "express-rate-limit";
 // Import Zod for validation
 import { z } from "zod";
 import { registerBulkDownloadRoutes } from "./bulk-download";
+import { analyzeProcedureDocument } from "./procedure-document-import";
 
 // Configure multer for memory storage (for cloud uploads)
 // This stores files in memory instead of on disk so we can upload to object storage
@@ -10106,6 +10107,25 @@ Return ONLY valid JSON.`;
       console.error("[Customs Declaration PDF] Analysis error:", error);
       res.status(500).json({
         error: "Failed to analyze customs declaration document",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.post("/api/procedures/analyze-document", requireClaudeAuth, pdfUpload.single('pdf'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "PDF file is required" });
+      }
+      if (req.file.size > 20 * 1024 * 1024) {
+        return res.status(400).json({ error: "PDF file exceeds 20MB limit" });
+      }
+      const result = await analyzeProcedureDocument(req.file.buffer, req.file.originalname || "procedure-document.pdf");
+      res.json({ success: true, result });
+    } catch (error) {
+      console.error("[Procedure Document Analyze] error:", error);
+      res.status(500).json({
+        error: "Failed to analyze procedure document",
         details: error instanceof Error ? error.message : String(error),
       });
     }
