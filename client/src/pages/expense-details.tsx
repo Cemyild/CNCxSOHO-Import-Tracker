@@ -51,6 +51,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 import type { Procedure } from "@shared/schema";
 
@@ -194,16 +195,10 @@ export default function ExpenseDetailsPage() {
       
       console.log(`Converting ${usdAmount} USD to ${tlAmount} TL using rate ${procedure.usdtl_rate}`);
       
-      const response = await fetch(`/api/procedures/${procedure.reference}/freight`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          freightAmount: tlAmount
-        }),
+      const response = await apiRequest('POST', `/api/procedures/${procedure.reference}/freight`, {
+        freightAmount: tlAmount
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to update freight amount');

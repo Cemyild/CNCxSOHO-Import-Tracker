@@ -6,6 +6,7 @@ import { Upload, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTranslation } from 'react-i18next';
+import { apiRequest } from "@/lib/queryClient";
 
 export function UploadTemplateForm() {
   const [file, setFile] = useState<File | null>(null);
@@ -58,11 +59,7 @@ export function UploadTemplateForm() {
       // Log FormData content (for debugging)
       console.log('FormData has file:', formData.has('template'));
       
-      const response = await fetch('/api/pdf/upload-template', {
-        method: 'POST',
-        body: formData,
-        // Don't set Content-Type header - the browser will set it with the boundary
-      });
+      const response = await apiRequest('POST', '/api/pdf/upload-template', formData);
       
       console.log('Response status:', response.status);
       

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
 
 import {
   Table,
@@ -380,10 +381,8 @@ export function PaymentsTable({ onAddPayment, onDeletePayment, procedureReferenc
   // Handle delete payment (now deletes all payments for a procedure)
   const handleDeletePayment = async (paymentId: number) => {
     try {
-      const response = await fetch(`/api/payments/${paymentId}`, {
-        method: "DELETE",
-      });
-      
+      const response = await apiRequest("DELETE", `/api/payments/${paymentId}`);
+
       if (!response.ok) {
         throw new Error("Failed to delete payment");
       }

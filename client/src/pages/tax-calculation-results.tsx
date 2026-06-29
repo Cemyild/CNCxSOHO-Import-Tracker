@@ -188,12 +188,8 @@ export default function TaxCalculationResultsPage() {
 
   const performBeyannameExport = async (customMappings: Record<string, string>) => {
     try {
-      const response = await fetch(`/api/tax-calculation/calculations/${id}/export/beyanname`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customMappings }),
-      });
-      
+      const response = await apiRequest('POST', `/api/tax-calculation/calculations/${id}/export/beyanname`, { customMappings });
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.details || error.error || 'Export failed');
@@ -288,12 +284,8 @@ export default function TaxCalculationResultsPage() {
   const handleAdvTaxletterGenerate = async (modalData: any) => {
     setIsExportingAdvTaxletter(true);
     try {
-      const response = await fetch(`/api/tax-calculation/calculations/${id}/export/adv-taxletter`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(modalData),
-      });
-      
+      const response = await apiRequest('POST', `/api/tax-calculation/calculations/${id}/export/adv-taxletter`, modalData);
+
       if (!response.ok) {
         throw new Error('Adv. Taxletter PDF export failed');
       }

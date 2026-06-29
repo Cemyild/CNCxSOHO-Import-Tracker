@@ -20,6 +20,7 @@ import {
 import { FileSpreadsheet, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
+import { apiRequest } from "@/lib/queryClient";
 
 interface ProductItem {
   tempId?: string;
@@ -112,10 +113,7 @@ export function DocumentUploadDialog({
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("/api/tax-calculation/extract-products", {
-        method: "POST",
-        body: formData,
-      });
+      const response = await apiRequest("POST", "/api/tax-calculation/extract-products", formData);
 
       await handleExtractionResponse(response, file.name);
     } catch {
@@ -142,11 +140,7 @@ export function DocumentUploadDialog({
     setFileName(key.split("/").pop() ?? key);
     setIsLoading(true);
     try {
-      const response = await fetch("/api/tax-calculation/extract-products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ s3_key: key }),
-      });
+      const response = await apiRequest("POST", "/api/tax-calculation/extract-products", { s3_key: key });
       await handleExtractionResponse(response, key.split("/").pop() ?? key);
     } catch {
       toast({

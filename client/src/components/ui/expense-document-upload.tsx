@@ -78,10 +78,7 @@ export function ExpenseDocumentUpload({
       formData.append('expenseId', expenseId.toString());
       
       // Create a custom axios request with FormData
-      return fetch('/api/expense-documents', {
-        method: 'POST',
-        body: formData,
-      }).then(response => {
+      return apiRequest('POST', '/api/expense-documents', formData).then(response => {
         if (!response.ok) {
           throw new Error('Upload failed');
         }
@@ -131,9 +128,7 @@ export function ExpenseDocumentUpload({
   // Mutation for deleting documents
   const deleteMutation = useMutation({
     mutationFn: (documentId: number) => {
-      return fetch(`/api/expense-documents/${documentId}`, {
-        method: 'DELETE',
-      }).then(response => {
+      return apiRequest('DELETE', `/api/expense-documents/${documentId}`).then(response => {
         if (!response.ok) {
           throw new Error('Delete failed');
         }

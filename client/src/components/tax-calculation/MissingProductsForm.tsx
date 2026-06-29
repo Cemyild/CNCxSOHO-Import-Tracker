@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/hooks/use-toast';
 import { Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { apiRequest } from '@/lib/queryClient';
 
 interface Product {
   style: string;
@@ -157,11 +158,7 @@ export function MissingProductsForm({
     try {
       console.log(`[FORM] Saving product ${currentIndex + 1}/${products.length}:`, formData.style);
       
-      const response = await fetch('/api/tax-calculation/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
+      const response = await apiRequest('POST', '/api/tax-calculation/products', formData);
       
       if (!response.ok) {
         const error = await response.json();

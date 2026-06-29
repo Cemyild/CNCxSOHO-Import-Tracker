@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { ClipboardList, Download } from "lucide-react";
 
 type TareksProcedure = {
@@ -89,10 +90,8 @@ export function TareksProceduresList() {
       id: number;
       tareks_status: string;
     }) => {
-      const res = await fetch(`/api/procedures/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tareks_status }),
+      const res = await apiRequest("PATCH", `/api/procedures/${id}`, {
+        tareks_status,
       });
       if (!res.ok) throw new Error("Failed to update status");
       return res.json();

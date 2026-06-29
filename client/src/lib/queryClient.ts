@@ -22,21 +22,24 @@ export async function apiRequest(
 ): Promise<Response> {
   try {
     const headers: Record<string, string> = {};
-    
-    if (data) {
+
+    // FormData (file uploads) must NOT get a JSON Content-Type — the browser
+    // sets multipart boundaries itself. Only JSON bodies are stringified.
+    const isFormData = typeof FormData !== "undefined" && data instanceof FormData;
+    if (data && !isFormData) {
       headers["Content-Type"] = "application/json";
     }
-    
+
     // Add authentication token if available
     const token = getAuthToken();
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
-    
+
     const res = await fetch(url, {
       method,
       headers,
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ? (isFormData ? (data as FormData) : JSON.stringify(data)) : undefined,
       credentials: "include",
       ...options
     });

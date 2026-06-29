@@ -677,30 +677,14 @@ export default function ExpenseEntryPage() {
           });
           
           // Create expense document record linking the PDF to the expense
-          const formData = new FormData();
-          formData.append('procedureReference', procedure.reference);
-          formData.append('expenseType', 'import_expense');
-          formData.append('expenseId', responseData.expense.id.toString());
-          formData.append('objectKey', analyzedExpensePdf.objectKey);
-          formData.append('originalFilename', analyzedExpensePdf.originalFilename);
-          formData.append('fileSize', analyzedExpensePdf.fileSize.toString());
-          formData.append('fileType', analyzedExpensePdf.fileType);
-          
-          const attachResponse = await fetch('/api/expense-documents/attach', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              procedureReference: procedure.reference,
-              expenseType: 'import_expense',
-              expenseId: responseData.expense.id,
-              objectKey: analyzedExpensePdf.objectKey,
-              originalFilename: analyzedExpensePdf.originalFilename,
-              fileSize: analyzedExpensePdf.fileSize,
-              fileType: analyzedExpensePdf.fileType
-            }),
-            credentials: 'include'
+          const attachResponse = await apiRequest('POST', '/api/expense-documents/attach', {
+            procedureReference: procedure.reference,
+            expenseType: 'import_expense',
+            expenseId: responseData.expense.id,
+            objectKey: analyzedExpensePdf.objectKey,
+            originalFilename: analyzedExpensePdf.originalFilename,
+            fileSize: analyzedExpensePdf.fileSize,
+            fileType: analyzedExpensePdf.fileType
           });
           
           if (attachResponse.ok) {
@@ -845,19 +829,7 @@ export default function ExpenseEntryPage() {
       const formData = new FormData();
       formData.append('pdf', file);
 
-      // Get auth token from localStorage
-      const authToken = localStorage.getItem('authToken');
-      const headers: Record<string, string> = {};
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
-      }
-
-      const response = await fetch('/api/expenses/analyze-pdf/tax', {
-        method: 'POST',
-        headers,
-        body: formData,
-        credentials: 'include'
-      });
+      const response = await apiRequest('POST', '/api/expenses/analyze-pdf/tax', formData);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -919,19 +891,7 @@ export default function ExpenseEntryPage() {
       const formData = new FormData();
       formData.append('pdf', file);
 
-      // Get auth token from localStorage
-      const authToken = localStorage.getItem('authToken');
-      const headers: Record<string, string> = {};
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
-      }
-
-      const response = await fetch('/api/expenses/analyze-pdf/import-expense', {
-        method: 'POST',
-        headers,
-        body: formData,
-        credentials: 'include'
-      });
+      const response = await apiRequest('POST', '/api/expenses/analyze-pdf/import-expense', formData);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -995,19 +955,7 @@ export default function ExpenseEntryPage() {
       const formData = new FormData();
       formData.append('pdf', file);
 
-      // Get auth token from localStorage
-      const authToken = localStorage.getItem('authToken');
-      const headers: Record<string, string> = {};
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
-      }
-
-      const response = await fetch('/api/expenses/analyze-pdf/service-invoice', {
-        method: 'POST',
-        headers,
-        body: formData,
-        credentials: 'include'
-      });
+      const response = await apiRequest('POST', '/api/expenses/analyze-pdf/service-invoice', formData);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -1069,12 +1017,6 @@ export default function ExpenseEntryPage() {
     setRecognizedTaxes(null);
     setUploadedPdfFile(null);
 
-    const authToken = localStorage.getItem('authToken');
-    const headers: Record<string, string> = {};
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
     let allItems: RecognizedItem[] = [];
     let combinedTaxes = {
       customsTax: 0,
@@ -1101,12 +1043,7 @@ export default function ExpenseEntryPage() {
           const formData = new FormData();
           formData.append('pdf', file);
 
-          const response = await fetch('/api/expenses/analyze-pdf/expense-receipt', {
-            method: 'POST',
-            headers,
-            body: formData,
-            credentials: 'include'
-          });
+          const response = await apiRequest('POST', '/api/expenses/analyze-pdf/expense-receipt', formData);
 
           if (!response.ok) {
             const errorData = await response.json();
@@ -1255,24 +1192,11 @@ export default function ExpenseEntryPage() {
     if (!uploadedPdfFile?.objectKey || !addMissingPageNumber) return;
     
     setIsAnalyzingMissingPage(true);
-    
-    const authToken = localStorage.getItem('authToken');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-    
+
     try {
-      const response = await fetch('/api/expenses/analyze-pdf/single-page', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          objectKey: uploadedPdfFile.objectKey,
-          pageNumber: addMissingPageNumber
-        }),
-        credentials: 'include'
+      const response = await apiRequest('POST', '/api/expenses/analyze-pdf/single-page', {
+        objectKey: uploadedPdfFile.objectKey,
+        pageNumber: addMissingPageNumber
       });
       
       if (!response.ok) {
@@ -1488,19 +1412,12 @@ export default function ExpenseEntryPage() {
         if (expense.pageNumber && expense.pdfObjectKey && responseData.expense?.id) {
           try {
             console.log(`[PDF Attach] Extracting page ${expense.pageNumber} for expense ${responseData.expense.id}`);
-            const extractResponse = await fetch('/api/expense-documents/extract-page', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                sourceObjectKey: expense.pdfObjectKey,
-                pageNumber: expense.pageNumber,
-                procedureReference: procedure.reference,
-                expenseType: 'import_expense',
-                expenseId: responseData.expense.id
-              }),
-              credentials: 'include'
+            const extractResponse = await apiRequest('POST', '/api/expense-documents/extract-page', {
+              sourceObjectKey: expense.pdfObjectKey,
+              pageNumber: expense.pageNumber,
+              procedureReference: procedure.reference,
+              expenseType: 'import_expense',
+              expenseId: responseData.expense.id
             });
 
             if (extractResponse.ok) {
@@ -1542,19 +1459,12 @@ export default function ExpenseEntryPage() {
         if (serviceInvoice.pageNumber && serviceInvoice.pdfObjectKey && responseData.invoice?.id) {
           try {
             console.log(`[PDF Attach] Extracting page ${serviceInvoice.pageNumber} for service invoice ${responseData.invoice.id}`);
-            const extractResponse = await fetch('/api/expense-documents/extract-page', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                sourceObjectKey: serviceInvoice.pdfObjectKey,
-                pageNumber: serviceInvoice.pageNumber,
-                procedureReference: procedure.reference,
-                expenseType: 'service_invoice',
-                expenseId: responseData.invoice.id
-              }),
-              credentials: 'include'
+            const extractResponse = await apiRequest('POST', '/api/expense-documents/extract-page', {
+              sourceObjectKey: serviceInvoice.pdfObjectKey,
+              pageNumber: serviceInvoice.pageNumber,
+              procedureReference: procedure.reference,
+              expenseType: 'service_invoice',
+              expenseId: responseData.invoice.id
             });
 
             if (extractResponse.ok) {
@@ -1764,21 +1674,14 @@ export default function ExpenseEntryPage() {
             pdfObjectKey: analyzedServicePdf.objectKey
           });
           
-          const attachResponse = await fetch('/api/expense-documents/attach', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              procedureReference: procedure.reference,
-              expenseType: 'service_invoice',
-              expenseId: invoiceId,
-              objectKey: analyzedServicePdf.objectKey,
-              originalFilename: analyzedServicePdf.originalFilename,
-              fileSize: analyzedServicePdf.fileSize,
-              fileType: analyzedServicePdf.fileType
-            }),
-            credentials: 'include'
+          const attachResponse = await apiRequest('POST', '/api/expense-documents/attach', {
+            procedureReference: procedure.reference,
+            expenseType: 'service_invoice',
+            expenseId: invoiceId,
+            objectKey: analyzedServicePdf.objectKey,
+            originalFilename: analyzedServicePdf.originalFilename,
+            fileSize: analyzedServicePdf.fileSize,
+            fileType: analyzedServicePdf.fileType
           });
           
           if (attachResponse.ok) {

@@ -259,10 +259,8 @@ export default function PaymentsPage() {
   // Handle payment deletion (procedure payments)
   const handleDeletePayment = async (paymentId: number) => {
     try {
-      const response = await fetch(`/api/payments/${paymentId}`, {
-        method: 'DELETE',
-      });
-      
+      const response = await apiRequest('DELETE', `/api/payments/${paymentId}`);
+
       if (!response.ok) {
         throw new Error('Failed to delete payment');
       }
@@ -295,13 +293,8 @@ export default function PaymentsPage() {
       setIsDeleting(true);
       
       // Use all-payments endpoint to avoid route conflict with :id parameter
-      const response = await fetch(`/api/all-payments/reset`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
+      const response = await apiRequest('DELETE', `/api/all-payments/reset`);
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to delete all payments');

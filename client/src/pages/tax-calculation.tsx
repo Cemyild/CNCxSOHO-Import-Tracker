@@ -126,10 +126,7 @@ export default function TaxCalculationPage() {
     try {
       setIsImporting(true);
       
-      const response = await fetch('/api/tax-calculation/import-products', {
-        method: 'POST',
-        body: formData
-      });
+      const response = await apiRequest('POST', '/api/tax-calculation/import-products', formData);
       
       const result = await response.json();
       
@@ -180,10 +177,7 @@ export default function TaxCalculationPage() {
     try {
       setIsImporting(true);
       
-      const response = await fetch('/api/tax-calculation/import-hs-codes', {
-        method: 'POST',
-        body: formData
-      });
+      const response = await apiRequest('POST', '/api/tax-calculation/import-hs-codes', formData);
       
       const result = await response.json();
       

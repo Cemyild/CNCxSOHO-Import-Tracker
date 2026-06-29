@@ -17,6 +17,7 @@ import { Upload, FileSpreadsheet, Check, AlertCircle, ArrowRight } from "lucide-
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { useTranslation } from "react-i18next";
+import { apiRequest } from "@/lib/queryClient";
 
 interface EnrichmentPreviewItem {
   procedureId: number;
@@ -58,10 +59,7 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
     formData.append('file', file);
 
     try {
-      const response = await fetch('/api/enrichment/preview', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await apiRequest('POST', '/api/enrichment/preview', formData);
 
       if (!response.ok) throw new Error('Preview generation failed');
 
@@ -116,13 +114,7 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
       });
 
     try {
-      const response = await fetch('/api/enrichment/apply', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ updates: updatesToApply }),
-      });
+      const response = await apiRequest('POST', '/api/enrichment/apply', { updates: updatesToApply });
 
       if (!response.ok) throw new Error('Update failed');
 

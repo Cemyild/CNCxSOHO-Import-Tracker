@@ -164,12 +164,7 @@ export default function BulkDownloadPage() {
     setDownloading(true);
     setDownloadProgress(0);
     try {
-      const res = await fetch("/api/bulk-download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        credentials: "include",
-      });
+      const res = await apiRequest("POST", "/api/bulk-download", body);
       if (!res.ok) {
         const errText = await res.text();
         throw new Error(`HTTP ${res.status}: ${errText}`);

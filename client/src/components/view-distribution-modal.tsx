@@ -13,6 +13,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency, formatDate } from '../lib/formatters';
+import { apiRequest } from '@/lib/queryClient';
 
 interface ViewDistributionModalProps {
   isOpen: boolean;
@@ -259,12 +260,7 @@ export function ViewDistributionModal({
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      const response = await fetch(`/api/payment-distributions/${distributionId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+      const response = await apiRequest('DELETE', `/api/payment-distributions/${distributionId}`, undefined, {
         signal: controller.signal
       });
       

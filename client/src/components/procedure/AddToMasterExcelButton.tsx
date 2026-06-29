@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { FileSpreadsheet, Loader2 } from "lucide-react";
 
 interface Props {
@@ -35,9 +36,9 @@ export function AddToMasterExcelButton({ procedureReference }: Props) {
   const [isWorking, setIsWorking] = useState(false);
 
   const appendAndDownload = async () => {
-    const res = await fetch(
-      `/api/procedures/${encodeURIComponent(procedureReference)}/append-to-master-excel`,
-      { method: "POST", credentials: "include" }
+    const res = await apiRequest(
+      "POST",
+      `/api/procedures/${encodeURIComponent(procedureReference)}/append-to-master-excel`
     );
 
     if (res.status === 412) {
@@ -92,11 +93,7 @@ export function AddToMasterExcelButton({ procedureReference }: Props) {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const upRes = await fetch("/api/master-excel/upload", {
-        method: "POST",
-        body: fd,
-        credentials: "include",
-      });
+      const upRes = await apiRequest("POST", "/api/master-excel/upload", fd);
       if (!upRes.ok) {
         const data = await readMaybeJson(upRes);
         throw new Error(data?.error ?? `Upload failed (${upRes.status})`);

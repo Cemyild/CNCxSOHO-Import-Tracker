@@ -5,7 +5,7 @@ import { z } from "zod";
 import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 
 import {
   Dialog,
@@ -126,13 +126,7 @@ export default function AddPaymentModal({
   const onSubmit = async (values: PaymentFormValues) => {
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/payments", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
-      });
+      const response = await apiRequest("POST", "/api/payments", values);
 
       if (!response.ok) {
         throw new Error("Failed to create payment");

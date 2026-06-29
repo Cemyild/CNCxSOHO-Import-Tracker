@@ -99,10 +99,7 @@ export function ImportDocumentUpload({
       formData.append('importDocumentType', file.documentType);
       
       // Create a custom fetch request with FormData
-      return fetch('/api/expense-documents', {
-        method: 'POST',
-        body: formData,
-      }).then(response => {
+      return apiRequest('POST', '/api/expense-documents', formData).then(response => {
         if (!response.ok) {
           throw new Error('Upload failed');
         }
@@ -157,10 +154,8 @@ export function ImportDocumentUpload({
 
   // Mutation for deleting documents
   const deleteMutation = useMutation({
-    mutationFn: (documentId: number) => 
-      fetch(`/api/expense-documents/${documentId}`, {
-        method: 'DELETE',
-      }).then(response => {
+    mutationFn: (documentId: number) =>
+      apiRequest('DELETE', `/api/expense-documents/${documentId}`).then(response => {
         if (!response.ok) {
           throw new Error('Delete failed');
         }

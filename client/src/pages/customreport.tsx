@@ -407,20 +407,14 @@ export default function CustomReportPage() {
       const excelData: string[][] = [tableData.headers, ...tableData.rows];
       
       // Create Excel workbook
-      const response = await fetch('/api/custom-report/export-excel', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          data: excelData,
-          reportType: selectedReportType,
-          dateRange: dateRange ? {
-            from: format(dateRange.from!, 'yyyy-MM-dd'),
-            to: format(dateRange.to!, 'yyyy-MM-dd')
-          } : undefined,
-          totalRows: reportData.length
-        })
+      const response = await apiRequest('POST', '/api/custom-report/export-excel', {
+        data: excelData,
+        reportType: selectedReportType,
+        dateRange: dateRange ? {
+          from: format(dateRange.from!, 'yyyy-MM-dd'),
+          to: format(dateRange.to!, 'yyyy-MM-dd')
+        } : undefined,
+        totalRows: reportData.length
       })
 
       if (!response.ok) {
@@ -487,13 +481,7 @@ export default function CustomReportPage() {
         categories: selectedCategories.length > 0 ? selectedCategories : undefined
       }
 
-      const response = await fetch('/api/custom-report/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(filters)
-      })
+      const response = await apiRequest('POST', '/api/custom-report/generate', filters)
 
       if (!response.ok) {
         throw new Error('Failed to generate report')
