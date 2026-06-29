@@ -54,6 +54,7 @@ import excelEnrichmentRouter from "./excel-enrichment";
 // Import Claude AI utilities
 import claude from "./claude";
 import { extractCustomsDeclaration } from "./extractors/customs-declaration";
+import { extractExpenseReceipt } from "./extractors/expense-receipt";
 import { extractFromPdf, extractFromExcel } from "./document-extraction";
 import {
   buildProcedureMasterRows,
@@ -9735,400 +9736,39 @@ ONLY output the raw JSON object starting with { and ending with }.`;
       if (!req.file) {
         return res.status(400).json({ error: "PDF file is required" });
       }
-
       if (req.file.size > 20 * 1024 * 1024) {
         return res.status(400).json({ error: "PDF file exceeds 20MB limit" });
       }
 
-      const base64Pdf = req.file.buffer.toString('base64');
+      const data = await extractExpenseReceipt(req.file.buffer);
 
-      // Combined prompt that detects document type and extracts data in one call
-      const prompt = `Count the pages in this PDF.
-
-DOCUMENT TYPE RULES:
-- 1-2 pages: SERVICE INVOICE → extract total amount only
-- 3+ pages: EXPENSE RECEIPT → the FIRST PAGE lists ALL expenses, following pages contain invoices/receipts
-
-=== SERVICE INVOICE (1-2 pages) ===
-{
-  "documentType": "service_invoice",
-  "pageCount": <number>,
-  "items": [{
-    "description": "Service Invoice",
-    "amount": <TOTAL>,
-    "currency": "TRY",
-    "suggestedCategory": "service_invoice",
-    "type": "service_invoice",
-    "invoiceNumber": "<from Fatura No field>",
-    "invoiceDate": "<YYYY-MM-DD>",
-    "receiptNumber": "",
-    "issuer": "<company name>",
-    "pageNumber": 1
-  }],
-  "taxes": {},
-  "totalTaxFromExpenseReceipt": 0,
-  "documentInfo": {}
-}
-
-=== EXPENSE RECEIPT (3+ pages) ===
-
-**THE FIRST PAGE IS THE EXPENSE RECEIPT (Masraf Makbuzu)**
-It contains a TABLE listing ALL expenses for this shipment. Each row typically has:
-- Expense description (Açıklama): Nakliye, Ordino, Sigorta, Ardiye, Vergiler, etc.
-- Amount (Tutar): The cost in TRY
-- Document Number (Belge No / Makbuz No / Evrak No): The receipt/document number for this expense
-
-**STEP 1: READ THE FIRST PAGE - EXTRACT EXPENSES WITH DOCUMENT NUMBERS**
-Extract every SERVICE EXPENSE from page 1 (Nakliye, Ordino, Sigorta, Ardiye, TAREKS, etc.)
-SKIP "Vergiler" or "Toplam Vergi" - this is just a total, NOT an individual item!
-Record totalTaxFromExpenseReceipt = the "Vergiler" amount (for reference only)
-
-**CRITICAL - EXTRACT DOCUMENT NUMBER FROM PAGE 1 TABLE:**
-- Look for a column labeled "Belge No", "Makbuz No", "Evrak No", or "Document No" in the expense table on page 1
-- Each expense row should have its own document number in this column
-- Store this value in the "receiptNumber" field for each item
-- This is DIFFERENT from invoiceNumber which comes from the individual invoice pages later
-
-**STEP 2: FIND THE TAX RECEIPT PAGE - EXTRACT INDIVIDUAL TAXES**
-CRITICAL: Search ALL pages to find the TAX RECEIPT (Vergi Makbuzu, Tahsilat Makbuzu, Gümrük Vergisi Tahakkuku).
-The tax receipt shows a BREAKDOWN of each tax type with individual amounts:
-- Gümrük Vergisi (Customs Tax) → suggestedCategory: "customs_tax"
-- İlave Gümrük Vergisi (Additional Customs Tax) → suggestedCategory: "additional_customs_tax"
-- KKDF → suggestedCategory: "kkdf"
-- KDV / Katma Değer Vergisi (VAT) → suggestedCategory: "vat"
-- Damga Vergisi (Stamp Tax) → suggestedCategory: "stamp_tax"
-
-ADD EACH TAX AS A SEPARATE ITEM with type="tax". DO NOT add a "total tax" item!
-IMPORTANT: Record the "pageNumber" (1-indexed) where each tax item was found!
-
-**STEP 3: SCAN ALL OTHER PAGES FOR INVOICES/RECEIPTS**
-For EACH expense from Step 1, search pages 2+ to find the matching invoice.
-Match by: AMOUNT (Toplam/Genel Toplam) or by service description
-CRITICAL: Record the "pageNumber" (1-indexed) where each matching invoice was found!
-
-**HOW TO FIND INVOICE NUMBER (Fatura No) - MANDATORY FOR EACH EXPENSE:**
-- Location: TOP-RIGHT area of invoice, document header, or anywhere on page
-- SEARCH FOR THESE LABELS (look for ANY of these):
-  * "Fatura No", "Fatura No:", "e-Fatura No:", "ETTN:", "Belge No:"
-  * "Payment Advice No", "Makbuz No", "Makbuz No:"
-  * "Invoice No", "Invoice Number", "Receipt No", "Document No"
-- ACCEPT ANY FORMAT: numbers, letters, alphanumeric strings of any length
-- Examples: "ABC2025000000001", "12345", "FA-2025-001", "MAKBUZ-123"
-- RULE: If you find ANY labeled document/invoice number, ALWAYS extract it exactly as shown (trim whitespace only)
-- DO NOT leave empty if a label with a value is visible on the page!
-
-**HOW TO FIND INVOICE DATE (Fatura Tarihi) - MANDATORY FOR EACH EXPENSE:**
-- Location: Near invoice number, document header, or anywhere on invoice page
-- SEARCH FOR THESE LABELS (look for ANY of these):
-  * "Fatura Tarihi", "Tarih", "Düzenleme Tarihi"
-  * "Date", "Invoice Date", "Payment Date", "Issue Date"
-- ACCEPT ANY DATE FORMAT you find:
-  * DD.MM.YYYY (e.g., 04.12.2025)
-  * DD/MM/YYYY (e.g., 04/12/2025)
-  * DD-MM-YYYY (e.g., 04-12-2025)
-  * YYYY-MM-DD (e.g., 2025-12-04)
-  * DD.MM.YY (e.g., 04.12.25)
-  * Text months (e.g., "4 Aralık 2025", "December 4, 2025")
-- RULE: If you find ANY labeled date, ALWAYS extract it in DD.MM.YYYY format
-- DO NOT leave empty if a date is visible on the invoice page!
-
-**HOW TO FIND ISSUER:**
-- Location: TOP of invoice in seller (Satıcı) section
-
-EXPENSE CATEGORIES (type="expense"):
-- export_registry_fee (İTKİB, İhracat Kayıt)
-- insurance (Sigorta, Poliçe)
-- awb_fee (Ordino, AWB, Hava Yolu)
-- airport_storage_fee (Havalimanı Ardiye)
-- bonded_warehouse_storage_fee (Antrepo Ardiye)
-- transportation (Nakliye, Taşıma)
-- international_transportation (Uluslararası Nakliye)
-- tareks_fee (TAREKS, TSE)
-- customs_inspection (Gümrük Muayene)
-- azo_test (AZO Testi)
-- other
-
-TAX CATEGORIES (type="tax") - EACH MUST BE SEPARATE:
-- customs_tax (Gümrük Vergisi)
-- additional_customs_tax (İlave Gümrük Vergisi)
-- kkdf (KKDF)
-- vat (KDV)
-- stamp_tax (Damga Vergisi)
-
-OUTPUT FORMAT:
-{
-  "documentType": "expense_receipt",
-  "pageCount": <number>,
-  "items": [
-    {
-      "description": "Nakliye",
-      "amount": 2500.00,
-      "currency": "TRY",
-      "suggestedCategory": "transportation",
-      "type": "expense",
-      "invoiceNumber": "ABC2025000000123",
-      "invoiceDate": "04.12.2025",
-      "receiptNumber": "",
-      "issuer": "ABC Nakliyat Ltd.",
-      "pageNumber": 3
-    },
-    {
-      "description": "Gümrük Vergisi",
-      "amount": 15000.00,
-      "currency": "TRY",
-      "suggestedCategory": "customs_tax",
-      "type": "tax",
-      "invoiceNumber": "",
-      "invoiceDate": "",
-      "receiptNumber": "",
-      "issuer": "",
-      "pageNumber": 2
-    },
-    {
-      "description": "İlave Gümrük Vergisi",
-      "amount": 500.00,
-      "currency": "TRY",
-      "suggestedCategory": "additional_customs_tax",
-      "type": "tax",
-      "invoiceNumber": "",
-      "invoiceDate": "",
-      "receiptNumber": "",
-      "issuer": "",
-      "pageNumber": 2
-    },
-    {
-      "description": "KKDF",
-      "amount": 1200.00,
-      "currency": "TRY",
-      "suggestedCategory": "kkdf",
-      "type": "tax",
-      "invoiceNumber": "",
-      "invoiceDate": "",
-      "receiptNumber": "",
-      "issuer": "",
-      "pageNumber": 2
-    },
-    {
-      "description": "KDV",
-      "amount": 8000.00,
-      "currency": "TRY",
-      "suggestedCategory": "vat",
-      "type": "tax",
-      "invoiceNumber": "",
-      "invoiceDate": "",
-      "receiptNumber": "",
-      "issuer": "",
-      "pageNumber": 2
-    },
-    {
-      "description": "Damga Vergisi",
-      "amount": 100.00,
-      "currency": "TRY",
-      "suggestedCategory": "stamp_tax",
-      "type": "tax",
-      "invoiceNumber": "",
-      "invoiceDate": "",
-      "receiptNumber": "",
-      "issuer": "",
-      "pageNumber": 2
-    }
-  ],
-  "taxes": {
-    "customsTax": 15000.00,
-    "additionalCustomsTax": 500.00,
-    "kkdf": 1200.00,
-    "vat": 8000.00,
-    "stampTax": 100.00
-  },
-  "totalTaxFromExpenseReceipt": 24800.00,
-  "documentInfo": {}
-}
-
-CRITICAL RULES:
-1. NEVER add "Vergiler" or "Toplam Vergi" as an item - it's just a total!
-2. Find the TAX RECEIPT page and extract EACH tax type separately
-3. Each tax (customs_tax, additional_customs_tax, kkdf, vat, stamp_tax) must be a SEPARATE item
-4. For expenses, find: invoiceNumber, invoiceDate, issuer from matching invoice pages
-5. Taxes go in both "items" array AND "taxes" object with individual amounts
-6. ALWAYS include "pageNumber" for each item - the page (1-indexed) where each matching invoice was found
-7. Return ONLY valid JSON
-8. MANDATORY - Two types of document numbers:
-   a) receiptNumber: Extract from PAGE 1's expense table - look for "Belge No", "Makbuz No", "Evrak No" column
-   b) invoiceNumber: Extract from INDIVIDUAL INVOICE PAGES - look for "Fatura No", "Payment Advice No", etc.
-   - NEVER confuse these - receiptNumber is from page 1 table, invoiceNumber is from invoice pages!
-9. MANDATORY - Invoice dates:
-   - invoiceDate: Look for "Fatura Tarihi", "Tarih", "Date", etc. on invoice pages
-   - Extract in DD.MM.YYYY format
-   - NEVER leave empty if a date is visible on the invoice page!`;
-
-      const result = await claude.analyzePdfWithClaude({
-        base64Data: base64Pdf,
-        prompt,
-        maxTokens: 8000,
-        temperature: 0  // More deterministic for precise data extraction
-      });
-
-      console.log("[PDF Analysis] Claude raw response:", result);
-
-      let parsedData;
-      try {
-        let cleanJson = result.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const jsonMatch = cleanJson.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-          console.error("[PDF Analysis] No JSON object found in response");
-          throw new Error('No JSON object found in Claude response');
-        }
-        cleanJson = jsonMatch[0];
-        console.log("[PDF Analysis] Extracted JSON:", cleanJson);
-        parsedData = JSON.parse(cleanJson);
-        console.log("[PDF Analysis] Parsed data:", JSON.stringify(parsedData, null, 2));
-      } catch (parseError) {
-        console.error("[PDF Analysis] JSON parse error:", parseError);
-        return res.status(500).json({
-          error: "Failed to parse extracted data",
-          details: "Claude returned invalid JSON format"
-        });
-      }
-
-      // Upload PDF to storage BEFORE checking document type so all document types have access to pdfFile
       let pdfObjectKey: string | null = null;
       try {
-        const { uploadFile } = await import('./object-storage');
         const sanitizedName = req.file.originalname?.replace(/[^a-zA-Z0-9.-]/g, '_') || 'expense-receipt.pdf';
         pdfObjectKey = await uploadFile(req.file.buffer, sanitizedName, 'application/pdf', 'expense-receipts');
-        console.log(`[Expense Receipt PDF] Uploaded to storage: ${pdfObjectKey}`);
-      } catch (uploadError: any) {
-        console.error("[Expense Receipt PDF] Failed to upload PDF to storage:", uploadError);
+      } catch (uploadError) {
+        console.error("[Expense Receipt PDF] Failed to upload PDF:", uploadError);
         pdfObjectKey = null;
       }
 
-      // Check if this is a service invoice based on documentType or pageCount
-      const documentType = parsedData.documentType || 'expense_receipt';
-      const pageCount = parsedData.pageCount || 5;
-      console.log(`[PDF Analysis] Document type: ${documentType}, Pages: ${pageCount}`);
-
-      if (documentType === 'service_invoice' || pageCount <= 2) {
-        // Handle as service invoice
-        const rawItems = parsedData.items || [];
-        parsedData.items = rawItems.map((item: any, index: number) => ({
-          id: `temp-${index}`,
-          description: item.description || 'Service Invoice',
-          amount: typeof item.amount === 'number' ? item.amount : parseFloat(item.amount) || 0,
-          currency: item.currency || 'TRY',
-          suggestedCategory: 'service_invoice',
-          type: 'service_invoice',
-          invoiceNumber: item.invoiceNumber || '',
-          invoiceDate: item.invoiceDate || '',
-          receiptNumber: item.receiptNumber || '',
-          issuer: item.issuer || '',
-          pageNumber: item.pageNumber || 1
-        }));
-
-        parsedData.taxes = {};
-        parsedData.expenses = [];
-
-        return res.json({
-          success: true,
-          data: parsedData,
-          documentType: 'service_invoice',
-          pdfFile: pdfObjectKey ? {
-            objectKey: pdfObjectKey,
-            originalFilename: req.file.originalname || 'service-invoice.pdf',
-            fileSize: req.file.size,
-            fileType: 'application/pdf',
-            pageCount: pageCount
-          } : null
-        });
-      }
-
-      // Validate the structure - handle both old (expenses) and new (items) format
-      const rawItems = parsedData.items || parsedData.expenses || [];
-      if (!Array.isArray(rawItems)) {
-        parsedData.items = [];
-      }
-
-      // Valid categories including taxes
-      const taxCategories = ['customs_tax', 'additional_customs_tax', 'kkdf', 'vat', 'stamp_tax'];
-      const expenseCategories = [
-        'export_registry_fee', 'insurance', 'awb_fee', 'airport_storage_fee',
-        'bonded_warehouse_storage_fee', 'transportation', 'international_transportation',
-        'tareks_fee', 'customs_inspection', 'azo_test', 'other'
-      ];
-      const allCategories = [...taxCategories, ...expenseCategories];
-
-      // Normalize each item
-      parsedData.items = rawItems.map((item: any, index: number) => {
-        const category = allCategories.includes(item.suggestedCategory) ? item.suggestedCategory : 'other';
-        const isTax = taxCategories.includes(category);
-        
-        return {
-          id: `temp-${index}`,
-          description: item.description || '',
-          amount: typeof item.amount === 'number' ? item.amount : parseFloat(item.amount) || 0,
-          currency: item.currency || 'TRY',
-          suggestedCategory: category,
-          type: isTax ? 'tax' : 'expense',
-          invoiceNumber: item.invoiceNumber || '',
-          invoiceDate: item.invoiceDate || '',
-          receiptNumber: item.receiptNumber || '',
-          issuer: item.issuer || '',
-          pageNumber: item.pageNumber || null
-        };
-      });
-
-      // Ensure taxes summary exists
-      if (!parsedData.taxes) {
-        parsedData.taxes = {
-          customsTax: 0,
-          additionalCustomsTax: 0,
-          kkdf: 0,
-          vat: 0,
-          stampTax: 0
-        };
-      }
-
-      // Calculate taxes from items if not provided in summary
-      const taxItems = parsedData.items.filter((item: any) => item.type === 'tax');
-      taxItems.forEach((item: any) => {
-        switch (item.suggestedCategory) {
-          case 'customs_tax':
-            parsedData.taxes.customsTax = (parsedData.taxes.customsTax || 0) + item.amount;
-            break;
-          case 'additional_customs_tax':
-            parsedData.taxes.additionalCustomsTax = (parsedData.taxes.additionalCustomsTax || 0) + item.amount;
-            break;
-          case 'kkdf':
-            parsedData.taxes.kkdf = (parsedData.taxes.kkdf || 0) + item.amount;
-            break;
-          case 'vat':
-            parsedData.taxes.vat = (parsedData.taxes.vat || 0) + item.amount;
-            break;
-          case 'stamp_tax':
-            parsedData.taxes.stampTax = (parsedData.taxes.stampTax || 0) + item.amount;
-            break;
-        }
-      });
-
-      // For backward compatibility, also include expenses array
-      parsedData.expenses = parsedData.items.filter((item: any) => item.type === 'expense');
-
-      // PDF was already uploaded at the start of this endpoint (before document type check)
+      // Preserve the legacy response shape consumed by expense-entry.tsx
+      const responseData: any = { ...data, expenses: data.items.filter((i) => i.type === "expense") };
       res.json({
         success: true,
-        data: parsedData,
+        data: responseData,
         pdfFile: pdfObjectKey ? {
           objectKey: pdfObjectKey,
           originalFilename: req.file.originalname || 'expense-receipt.pdf',
           fileSize: req.file.size,
           fileType: 'application/pdf',
-          pageCount: parsedData.pageCount || 1
-        } : null
+          pageCount: data.pageCount,
+        } : null,
       });
     } catch (error) {
       console.error("[Expense Receipt PDF] Analysis error:", error);
       res.status(500).json({
         error: "Failed to analyze expense receipt document",
-        details: error instanceof Error ? error.message : String(error)
+        details: error instanceof Error ? error.message : String(error),
       });
     }
   });
