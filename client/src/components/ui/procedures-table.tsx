@@ -3,6 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   ColumnDef, 
   ColumnFiltersState, 
@@ -256,10 +257,8 @@ const columns: ColumnDef<Procedure>[] = [
                         <AlertDialogAction 
                           onClick={async () => {
                             try {
-                              const res = await fetch(`/api/procedures/${row.original.id}`, {
-                                method: 'DELETE',
-                              });
-                              
+                              const res = await apiRequest('DELETE', `/api/procedures/${row.original.id}`);
+
                               if (!res.ok) {
                                 throw new Error("Failed to delete procedure");
                               }
