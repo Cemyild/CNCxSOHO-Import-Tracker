@@ -21,6 +21,7 @@ import { useTranslation } from "react-i18next";
 
 import { PdfUploadDropzone } from "@/components/ui/pdf-upload-dropzone";
 import type { AnalyzeDocumentResult } from "@/components/procedure-import/types";
+import { DocumentImportReview } from "@/components/procedure-import/DocumentImportReview";
 
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
@@ -282,6 +283,37 @@ export default function AddProcedurePage() {
             />
           </CardContent>
         </Card>
+
+        {analyzeResult && (
+          <DocumentImportReview
+            result={analyzeResult}
+            getReference={() => form.getValues("reference") || ""}
+            getHeader={() => {
+              const toYmd = (d: unknown): string => {
+                if (d instanceof Date && !isNaN(d.getTime())) {
+                  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                }
+                return typeof d === "string" ? d : "";
+              };
+              return {
+                shipper: form.getValues("shipper") || "",
+                package: Number(form.getValues("package")) || 0,
+                kg: Number(form.getValues("kg")) || 0,
+                piece: Number(form.getValues("piece")) || 0,
+                awbNumber: form.getValues("awb_number") || "",
+                customs: form.getValues("customs") || "",
+                importDeclarationNumber: form.getValues("import_dec_number") || "",
+                importDeclarationDate: toYmd(form.getValues("import_dec_date")),
+                usdTlRate: Number(form.getValues("usdtl_rate")) || 0,
+                invoice_no: form.getValues("invoice_no") || "",
+                invoice_date: toYmd(form.getValues("invoice_date")),
+                amount: Number(form.getValues("amount")) || 0,
+                currency: form.getValues("currency") || "USD",
+              };
+            }}
+            onCreated={() => setLocation("/procedures")}
+          />
+        )}
 
         <Card>
           <CardHeader>
