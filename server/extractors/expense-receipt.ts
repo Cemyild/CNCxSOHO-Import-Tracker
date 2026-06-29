@@ -331,7 +331,7 @@ export async function extractExpenseReceipt(
           invoiceDate: item.invoiceDate || "",
           receiptNumber: item.receiptNumber || "",
           issuer: item.issuer || "",
-          pageNumber: item.pageNumber ?? null,
+          pageNumber: item.pageNumber || null,
         };
       },
     );
