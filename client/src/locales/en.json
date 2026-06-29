@@ -785,6 +785,27 @@
     "toastDocumentUploadedTitle": "Document uploaded",
     "toastDocumentUploadedDesc": "Your document has been uploaded successfully"
   },
+  "procedureImport": {
+    "uploadTitle": "Upload PDF & auto-fill",
+    "uploadDescription": "Upload a single PDF containing the declaration, invoice, expenses and service invoices; the system fills everything in.",
+    "toastAnalyzedTitle": "Document read",
+    "toastAnalyzedDesc": "Details are below; review and click 'Create'.",
+    "toastAnalyzeFailedTitle": "Read failed",
+    "referenceRequiredTitle": "Reference required",
+    "referenceRequiredDesc": "Please enter a reference number first.",
+    "createdTitle": "Procedure created",
+    "createdDesc": "{{ok}} documents attached, {{failed}} failed.",
+    "createFailedTitle": "Create failed",
+    "taxesTitle": "Taxes",
+    "expensesTitle": "Import Expenses",
+    "serviceInvoicesTitle": "Service Invoices",
+    "productsTitle": "Products",
+    "remove": "Remove",
+    "createButton": "Create",
+    "creating": "Creating...",
+    "tax": { "customsTax": "Customs Tax", "additionalCustomsTax": "Add. Customs", "kkdf": "KKDF", "vat": "VAT", "stampTax": "Stamp" },
+    "col": { "category": "Category", "amount": "Amount", "currency": "Currency", "invoiceNumber": "Invoice No", "date": "Date", "page": "Page", "style": "Style", "unit": "Unit", "cost": "Unit Price", "totalValue": "Total", "trHsCode": "TR HS Code" }
+  },
   "invoiceMaker": {
     "typeNewValue": "Type new value...",
     "add": "Add",

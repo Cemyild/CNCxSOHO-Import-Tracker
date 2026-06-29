@@ -785,6 +785,27 @@
     "toastDocumentUploadedTitle": "Belge yüklendi",
     "toastDocumentUploadedDesc": "Belgeniz başarıyla yüklendi"
   },
+  "procedureImport": {
+    "uploadTitle": "PDF yükle ve otomatik doldur",
+    "uploadDescription": "Beyanname, fatura, masraf ve hizmet faturalarını içeren tek bir PDF yükleyin; sistem doldursun.",
+    "toastAnalyzedTitle": "Belge okundu",
+    "toastAnalyzedDesc": "Bilgiler aşağıda; kontrol edip 'Oluştur'a basın.",
+    "toastAnalyzeFailedTitle": "Okuma başarısız",
+    "referenceRequiredTitle": "Referans gerekli",
+    "referenceRequiredDesc": "Lütfen önce bir referans numarası girin.",
+    "createdTitle": "Prosedür oluşturuldu",
+    "createdDesc": "{{ok}} belge iliştirildi, {{failed}} başarısız.",
+    "createFailedTitle": "Oluşturma başarısız",
+    "taxesTitle": "Vergiler",
+    "expensesTitle": "İthalat Masrafları",
+    "serviceInvoicesTitle": "Hizmet Faturaları",
+    "productsTitle": "Ürünler",
+    "remove": "Kaldır",
+    "createButton": "Oluştur",
+    "creating": "Oluşturuluyor...",
+    "tax": { "customsTax": "Gümrük Vergisi", "additionalCustomsTax": "Ek Gümrük", "kkdf": "KKDF", "vat": "KDV", "stampTax": "Damga" },
+    "col": { "category": "Kategori", "amount": "Tutar", "currency": "Para Birimi", "invoiceNumber": "Fatura No", "date": "Tarih", "page": "Sayfa", "style": "Model", "unit": "Adet", "cost": "Birim Fiyat", "totalValue": "Toplam", "trHsCode": "TR HS Kodu" }
+  },
   "invoiceMaker": {
     "typeNewValue": "Yeni değer yazın...",
     "add": "Ekle",
