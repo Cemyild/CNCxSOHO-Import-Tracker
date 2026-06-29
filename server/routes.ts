@@ -66,7 +66,7 @@ import rateLimit from "express-rate-limit";
 // Import Zod for validation
 import { z } from "zod";
 import { registerBulkDownloadRoutes } from "./bulk-download";
-import { analyzeProcedureDocument } from "./procedure-document-import";
+import { analyzeProcedureDocument, createProcedureFromDocument } from "./procedure-document-import";
 
 // Configure multer for memory storage (for cloud uploads)
 // This stores files in memory instead of on disk so we can upload to object storage
@@ -10127,6 +10127,41 @@ Return ONLY valid JSON.`;
       res.status(500).json({
         error: "Failed to analyze procedure document",
         details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.post("/api/procedures/create-from-document", requireClaudeAuth, async (req, res) => {
+    try {
+      const body = req.body || {};
+      if (!body.reference || typeof body.reference !== "string" || !body.reference.trim()) {
+        return res.status(400).json({ error: "reference is required" });
+      }
+      if (!body.pdfObjectKey) {
+        return res.status(400).json({ error: "pdfObjectKey is required" });
+      }
+      const userId = body.user?.id || 3;
+
+      const result = await createProcedureFromDocument({
+        reference: body.reference.trim(),
+        header: body.header,
+        taxes: body.taxes ?? null,
+        expenses: Array.isArray(body.expenses) ? body.expenses : [],
+        serviceInvoices: Array.isArray(body.serviceInvoices) ? body.serviceInvoices : [],
+        products: Array.isArray(body.products) ? body.products : [],
+        documents: Array.isArray(body.documents) ? body.documents : [],
+        pdfObjectKey: body.pdfObjectKey,
+        pdfOriginalFilename: body.pdfOriginalFilename || "procedure-document.pdf",
+        userId,
+      });
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const isDup = msg.includes("duplicate key") || msg.includes("unique constraint");
+      res.status(isDup ? 409 : 500).json({
+        error: isDup ? "A procedure with this reference already exists" : "Failed to create procedure from document",
+        details: msg,
       });
     }
   });
