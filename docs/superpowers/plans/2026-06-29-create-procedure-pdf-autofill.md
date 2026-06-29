@@ -1492,18 +1492,23 @@ export async function createProcedureFromDocument(
     } catch { /* ignore */ }
   }
 
-  // 1) Atomic DB write
+  // 1) Atomic DB write. Capture inserted rows via RETURNING so attachment can
+  // match each draft to its saved id by index — a single multi-row INSERT ...
+  // RETURNING yields rows in the same order as the VALUES list (Postgres
+  // guarantees this), so we never rely on an unordered SELECT.
   const created = await db.transaction(async (tx) => {
     const [procedure] = await tx.insert(procedures).values(inserts.procedureValues).returning();
 
     if (inserts.taxValues) {
       await tx.insert(taxesTable).values(inserts.taxValues);
     }
+    let expenseRows: any[] = [];
     if (inserts.expenseValues.length) {
-      await tx.insert(importExpenses).values(inserts.expenseValues);
+      expenseRows = await tx.insert(importExpenses).values(inserts.expenseValues).returning();
     }
+    let serviceRows: any[] = [];
     if (inserts.serviceInvoiceValues.length) {
-      await tx.insert(importServiceInvoices).values(inserts.serviceInvoiceValues);
+      serviceRows = await tx.insert(importServiceInvoices).values(inserts.serviceInvoiceValues).returning();
     }
     if (inserts.productItems.length) {
       const [calc] = await tx
@@ -1522,7 +1527,7 @@ export async function createProcedureFromDocument(
         .insert(taxCalculationItems)
         .values(inserts.productItems.map((it) => ({ ...it, tax_calculation_id: calc.id })));
     }
-    return procedure;
+    return { procedure, expenseRows, serviceRows };
   });
 
   // 2) Best-effort document attachment (NOT part of the transaction)
@@ -1531,20 +1536,11 @@ export async function createProcedureFromDocument(
   try {
     const { buffer: pdfBuffer } = await getFile(input.pdfObjectKey);
 
-    // Re-read saved expense / service-invoice rows to get their ids for attachment.
-    const savedExpenses = await db
-      .select()
-      .from(importExpenses)
-      .where(eqRef(importExpenses, input.reference));
-    const savedServiceInvoices = await db
-      .select()
-      .from(importServiceInvoices)
-      .where(eqRef(importServiceInvoices, input.reference));
-
-    // Attach each expense's source page (match by order — inserts preserve order).
+    // Attach each expense's source page. created.expenseRows[i] corresponds to
+    // input.expenses[i] (RETURNING preserves VALUES order).
     for (let i = 0; i < input.expenses.length; i++) {
       const exp = input.expenses[i];
-      const row = savedExpenses[i];
+      const row = created.expenseRows[i];
       if (exp.originalPage && row) {
         (await attachPages({
           pdfBuffer, originalPages: [exp.originalPage], procedureReference: input.reference,
@@ -1555,7 +1551,7 @@ export async function createProcedureFromDocument(
     }
     for (let i = 0; i < input.serviceInvoices.length; i++) {
       const si = input.serviceInvoices[i];
-      const row = savedServiceInvoices[i];
+      const row = created.serviceRows[i];
       if (si.originalPage && row) {
         (await attachPages({
           pdfBuffer, originalPages: [si.originalPage], procedureReference: input.reference,
@@ -1568,7 +1564,7 @@ export async function createProcedureFromDocument(
     for (const doc of input.documents) {
       (await attachPages({
         pdfBuffer, originalPages: doc.originalPages, procedureReference: input.reference,
-        expenseType: "import_document", expenseId: created.id, importDocumentType: doc.importDocumentType,
+        expenseType: "import_document", expenseId: created.procedure.id, importDocumentType: doc.importDocumentType,
         filenameHint: `${doc.importDocumentType}.pdf`, userId,
       })) ? ok++ : failed++;
     }
@@ -1580,24 +1576,12 @@ export async function createProcedureFromDocument(
 }
 ```
 
-Dosyanın import bloğuna `eq` ekle ve `eqRef` yardımcı fonksiyonunu tanımla. En üstteki import'lara:
-```ts
-import { eq } from "drizzle-orm";
-```
-ve dosyada (fonksiyonların dışında) bir yardımcı:
-```ts
-// helper: build a procedureReference equality on a table that has that column
-function eqRef(table: { procedureReference: any }, ref: string) {
-  return eq(table.procedureReference, ref);
-}
-```
-
-> NOT: İliştirmede masraf/hizmet faturası kayıtları, EKLENME SIRASIYLA eşleştirilir (Drizzle bulk insert sırayı korur; `savedExpenses[i]` ↔ `input.expenses[i]`). Bu, `originalPage` doğru kayda gitsin diye yeterlidir.
+> NOT: İliştirmede masraf/hizmet faturası kayıtları, transaction içindeki `INSERT ... RETURNING` çıktısıyla (sıra garantili) eşleştirilir: `created.expenseRows[i]` ↔ `input.expenses[i]`. Ayrı bir `SELECT` (sırasız) kullanılmaz; bu yüzden `eq`/`eqRef` gerekmez.
 
 - [ ] **Step 6: Typecheck**
 
 Run: `npm run check`
-Expected: hata yok. (Hata çıkarsa: `eqRef`'in tip imzasını `any` ile gevşet; ya da doğrudan `eq(importExpenses.procedureReference, input.reference)` kullan.)
+Expected: hata yok. (Drizzle `.returning()` çıktısı `any[]` olarak tutulur; tip sorunu çıkarsa satır tipini `any` bırak.)
 
 - [ ] **Step 7: Birim testleri tekrar çalıştır + commit**
 
