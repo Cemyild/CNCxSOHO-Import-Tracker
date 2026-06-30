@@ -21,6 +21,7 @@ export interface InvoiceMetadata {
   invoice_no?: string;
   invoice_date?: string;
   shipper?: string;
+  currency?: string;
 }
 
 export interface ExtractionResult {
@@ -34,6 +35,7 @@ const PDF_PROMPT = `This is a commercial invoice PDF. Return a single JSON objec
 - invoice_no: invoice number / document number
 - invoice_date: invoice date in YYYY-MM-DD format
 - shipper: shipper / sender / exporter / consignor company name
+- currency: currency code used for unit prices and totals (e.g. USD, EUR, TRY)
 
 "products" — array of line items. Each item has these fields (use null if not found):
 - style: Style No. column
@@ -80,8 +82,9 @@ function parseInvoiceMetadata(invoice: any): InvoiceMetadata | undefined {
     invoice_no: trimOrUndef(invoice.invoice_no),
     invoice_date: trimOrUndef(invoice.invoice_date),
     shipper: trimOrUndef(invoice.shipper),
+    currency: trimOrUndef(invoice.currency),
   };
-  if (!m.invoice_no && !m.invoice_date && !m.shipper) return undefined;
+  if (!m.invoice_no && !m.invoice_date && !m.shipper && !m.currency) return undefined;
   return m;
 }
 

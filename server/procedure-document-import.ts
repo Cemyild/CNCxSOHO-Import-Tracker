@@ -14,6 +14,7 @@ import {
   type ExpenseReceiptResult,
 } from "./extractors/expense-receipt";
 import { extractFromPdf } from "./document-extraction";
+import { extractTaxes, type TaxData } from "./extractors/tax";
 import { uploadFile, getFile } from "./object-storage";
 
 export interface ImportHeader {
@@ -102,8 +103,10 @@ interface CombineParts {
       invoice_no?: string;
       invoice_date?: string;
       shipper?: string;
+      currency?: string;
     };
   } | null;
+  customsTaxes?: TaxData | null;
 }
 
 const DOC_TYPE_BY_PAGE_GROUP: Array<{
@@ -116,10 +119,24 @@ const DOC_TYPE_BY_PAGE_GROUP: Array<{
   { group: "awb", importDocumentType: "awb" },
 ];
 
+function pickTaxFields(t: TaxData): AnalyzeDocumentResult["taxes"] {
+  return {
+    customsTax: t.customsTax,
+    additionalCustomsTax: t.additionalCustomsTax,
+    kkdf: t.kkdf,
+    vat: t.vat,
+    stampTax: t.stampTax,
+  };
+}
+
+function hasNonZeroTax(t: TaxData): boolean {
+  return !!(t.customsTax || t.additionalCustomsTax || t.kkdf || t.vat || t.stampTax);
+}
+
 export function combineExtractionResults(
   parts: CombineParts,
 ): AnalyzeDocumentResult {
-  const { pdfFile, groups, customs, expenseResult, expensePageMap, productResult } =
+  const { pdfFile, groups, customs, expenseResult, expensePageMap, productResult, customsTaxes } =
     parts;
 
   const products: ImportProductDraft[] = (productResult?.products ?? []).map(
@@ -149,16 +166,19 @@ export function combineExtractionResults(
     invoice_no: productResult?.invoiceMetadata?.invoice_no || "",
     invoice_date: productResult?.invoiceMetadata?.invoice_date || "",
     amount: productTotal,
-    currency: "USD",
+    currency: productResult?.invoiceMetadata?.currency || "USD",
   };
 
-  const taxes = expenseResult?.taxes ?? {
-    customsTax: 0,
-    additionalCustomsTax: 0,
-    kkdf: 0,
-    vat: 0,
-    stampTax: 0,
-  };
+  const taxes =
+    customsTaxes && hasNonZeroTax(customsTaxes)
+      ? pickTaxFields(customsTaxes)
+      : expenseResult?.taxes ?? {
+          customsTax: 0,
+          additionalCustomsTax: 0,
+          kkdf: 0,
+          vat: 0,
+          stampTax: 0,
+        };
 
   const expenses: ImportExpenseDraft[] = [];
   const serviceInvoices: ImportServiceInvoiceDraft[] = [];
@@ -229,7 +249,7 @@ export async function analyzeProcedureDocument(
   const invoiceSplit = await splitPdfByPages(buffer, groups.commercial_invoice);
 
   // 4) route to readers in PARALLEL (any one failing must not kill the others)
-  const [customs, expenseResult, productResult] = await Promise.all([
+  const [customs, expenseResult, productResult, customsTaxes] = await Promise.all([
     customsSplit.pageMap.length
       ? extractCustomsDeclaration(customsSplit.buffer).catch((e) => {
           console.error("[analyze-document] customs extraction failed:", e);
@@ -248,6 +268,12 @@ export async function analyzeProcedureDocument(
           return null;
         })
       : Promise.resolve(null),
+    customsSplit.pageMap.length
+      ? extractTaxes(customsSplit.buffer).catch((e) => {
+          console.error("[analyze-document] customs tax extraction failed:", e);
+          return null;
+        })
+      : Promise.resolve(null),
   ]);
 
   return combineExtractionResults({
@@ -263,6 +289,7 @@ export async function analyzeProcedureDocument(
     expenseResult,
     expensePageMap: expenseSplit.pageMap,
     productResult,
+    customsTaxes,
   });
 }
 

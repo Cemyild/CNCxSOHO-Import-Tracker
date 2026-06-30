@@ -79,6 +79,83 @@ describe("combineExtractionResults", () => {
     expect(out.products).toEqual([]);
     expect(out.documents).toEqual([]);
   });
+
+  it("uses customsTaxes when provided with non-zero values, ignoring expenseResult.taxes", () => {
+    const out = combineExtractionResults({
+      pdfFile,
+      groups: { customs_declaration: [1], expense_tax_service: [2], commercial_invoice: [], packing_list: [], awb: [], other: [] },
+      customs: null,
+      expenseResult: {
+        documentType: "expense_receipt",
+        pageCount: 1,
+        items: [],
+        taxes: { customsTax: 99999, additionalCustomsTax: 0, kkdf: 0, vat: 0, stampTax: 0 },
+      },
+      expensePageMap: [2],
+      productResult: null,
+      customsTaxes: {
+        declarationNumber: "2026-001",
+        declarationDate: "2026-01-10",
+        currency: "TRY",
+        customsTax: 5000,
+        additionalCustomsTax: 1200,
+        kkdf: 800,
+        vat: 9500,
+        stampTax: 150,
+      },
+    });
+    expect(out.taxes.customsTax).toBe(5000);
+    expect(out.taxes.additionalCustomsTax).toBe(1200);
+    expect(out.taxes.kkdf).toBe(800);
+    expect(out.taxes.vat).toBe(9500);
+    expect(out.taxes.stampTax).toBe(150);
+  });
+
+  it("falls back to expenseResult.taxes when customsTaxes is null", () => {
+    const out = combineExtractionResults({
+      pdfFile,
+      groups: { customs_declaration: [1], expense_tax_service: [2], commercial_invoice: [], packing_list: [], awb: [], other: [] },
+      customs: null,
+      expenseResult: {
+        documentType: "expense_receipt",
+        pageCount: 1,
+        items: [],
+        taxes: { customsTax: 15000, additionalCustomsTax: 0, kkdf: 0, vat: 8000, stampTax: 0 },
+      },
+      expensePageMap: [2],
+      productResult: null,
+      customsTaxes: null,
+    });
+    expect(out.taxes.customsTax).toBe(15000);
+    expect(out.taxes.vat).toBe(8000);
+  });
+
+  it("uses invoice currency from productResult.invoiceMetadata when present", () => {
+    const out = combineExtractionResults({
+      pdfFile,
+      groups: { customs_declaration: [], expense_tax_service: [], commercial_invoice: [1], packing_list: [], awb: [], other: [] },
+      customs: null,
+      expenseResult: null,
+      expensePageMap: [],
+      productResult: {
+        products: [],
+        invoiceMetadata: { invoice_no: "INV-1", invoice_date: "2026-01-01", shipper: "X", currency: "EUR" },
+      },
+    });
+    expect(out.header.currency).toBe("EUR");
+  });
+
+  it("falls back to USD when invoiceMetadata has no currency", () => {
+    const out = combineExtractionResults({
+      pdfFile,
+      groups: { customs_declaration: [], expense_tax_service: [], commercial_invoice: [], packing_list: [], awb: [], other: [] },
+      customs: null,
+      expenseResult: null,
+      expensePageMap: [],
+      productResult: null,
+    });
+    expect(out.header.currency).toBe("USD");
+  });
 });
 
 const baseInput: CreateFromDocumentInput = {
