@@ -804,7 +804,21 @@
     "createButton": "Oluştur",
     "creating": "Oluşturuluyor...",
     "tax": { "customsTax": "Gümrük Vergisi", "additionalCustomsTax": "Ek Gümrük", "kkdf": "KKDF", "vat": "KDV", "stampTax": "Damga" },
-    "col": { "category": "Kategori", "amount": "Tutar", "currency": "Para Birimi", "invoiceNumber": "Fatura No", "date": "Tarih", "page": "Sayfa", "style": "Model", "unit": "Adet", "cost": "Birim Fiyat", "totalValue": "Toplam", "trHsCode": "TR HS Kodu" }
+    "col": { "category": "Kategori", "amount": "Tutar", "currency": "Para Birimi", "invoiceNumber": "Fatura No", "date": "Tarih", "page": "Sayfa", "style": "Model", "unit": "Adet", "cost": "Birim Fiyat", "totalValue": "Toplam", "trHsCode": "TR HS Kodu" },
+    "category": {
+      "export_registry_fee": "İhracatçı Birliği Kayıt Ücreti",
+      "insurance": "Sigorta",
+      "awb_fee": "AWB Ücreti",
+      "airport_storage_fee": "Havalimanı Ardiye Ücreti",
+      "bonded_warehouse_storage_fee": "Antrepo Ardiye Ücreti",
+      "transportation": "Nakliye",
+      "international_transportation": "Uluslararası Nakliye",
+      "tareks_fee": "TAREKS Ücreti",
+      "customs_inspection": "Gümrük Muayenesi",
+      "azo_test": "AZO Testi",
+      "other": "Diğer",
+      "service_invoice": "Hizmet Faturası"
+    }
   },
   "invoiceMaker": {
     "typeNewValue": "Yeni değer yazın...",

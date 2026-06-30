@@ -804,7 +804,21 @@
     "createButton": "Create",
     "creating": "Creating...",
     "tax": { "customsTax": "Customs Tax", "additionalCustomsTax": "Add. Customs", "kkdf": "KKDF", "vat": "VAT", "stampTax": "Stamp" },
-    "col": { "category": "Category", "amount": "Amount", "currency": "Currency", "invoiceNumber": "Invoice No", "date": "Date", "page": "Page", "style": "Style", "unit": "Unit", "cost": "Unit Price", "totalValue": "Total", "trHsCode": "TR HS Code" }
+    "col": { "category": "Category", "amount": "Amount", "currency": "Currency", "invoiceNumber": "Invoice No", "date": "Date", "page": "Page", "style": "Style", "unit": "Unit", "cost": "Unit Price", "totalValue": "Total", "trHsCode": "TR HS Code" },
+    "category": {
+      "export_registry_fee": "Export Registry Fee",
+      "insurance": "Insurance",
+      "awb_fee": "AWB Fee",
+      "airport_storage_fee": "Airport Storage Fee",
+      "bonded_warehouse_storage_fee": "Bonded Warehouse Storage",
+      "transportation": "Transportation",
+      "international_transportation": "International Transportation",
+      "tareks_fee": "TAREKS Fee",
+      "customs_inspection": "Customs Inspection",
+      "azo_test": "AZO Test",
+      "other": "Other",
+      "service_invoice": "Service Invoice"
+    }
   },
   "invoiceMaker": {
     "typeNewValue": "Type new value...",

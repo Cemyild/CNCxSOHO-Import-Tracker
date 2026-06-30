@@ -6,7 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AnalyzeDocumentResult } from "./types";
+
+const EXPENSE_CATEGORIES = [
+  "export_registry_fee",
+  "insurance",
+  "awb_fee",
+  "airport_storage_fee",
+  "bonded_warehouse_storage_fee",
+  "transportation",
+  "international_transportation",
+  "tareks_fee",
+  "customs_inspection",
+  "azo_test",
+  "other",
+];
 
 interface Props {
   result: AnalyzeDocumentResult;
@@ -25,6 +40,26 @@ export function DocumentImportReview({ result, getReference, getHeader, onCreate
   const [isSaving, setIsSaving] = useState(false);
 
   const num = (v: string) => (v === "" ? 0 : parseFloat(v) || 0);
+
+  const handleExpenseCategoryChange = (index: number, val: string) => {
+    const e = expenses[index];
+    if (val === "service_invoice") {
+      const newSI = {
+        amount: e.amount,
+        currency: e.currency,
+        invoiceNumber: e.invoiceNumber,
+        date: e.invoiceDate,
+        notes: e.issuer || e.documentNumber || "",
+        originalPage: e.originalPage,
+      };
+      setServiceInvoices([...serviceInvoices, newSI]);
+      setExpenses(expenses.filter((_, j) => j !== index));
+    } else {
+      const c = [...expenses];
+      c[index] = { ...e, category: val };
+      setExpenses(c);
+    }
+  };
 
   const handleCreate = async () => {
     const reference = getReference().trim();
@@ -108,7 +143,26 @@ export function DocumentImportReview({ result, getReference, getHeader, onCreate
             <TableBody>
               {expenses.map((e, i) => (
                 <TableRow key={i}>
-                  <TableCell>{t(`procedureImport.category.${e.category}`, e.category)}</TableCell>
+                  <TableCell>
+                    <Select
+                      value={e.category}
+                      onValueChange={(val) => handleExpenseCategoryChange(i, val)}
+                    >
+                      <SelectTrigger className="w-48">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {EXPENSE_CATEGORIES.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {t(`procedureImport.category.${cat}`, cat)}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="service_invoice">
+                          {t("procedureImport.category.service_invoice", "Service Invoice")}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
                   <TableCell>
                     <Input
                       type="number"
