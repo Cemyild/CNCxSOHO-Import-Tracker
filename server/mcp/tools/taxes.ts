@@ -15,7 +15,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { calculateItemTax, type AtrContext } from "../../tax-calculation-service";
 import { extractFromPdf, extractFromExcel } from "../../document-extraction";
 import { McpToolError } from "../errors";
-import { resolveAgentUserId } from "../audit-attribution";
+import { resolveAgentUserId, internalAuthHeader } from "../audit-attribution";
 import { rawDb } from "../../db";
 import { getFile, createPresignedUploadUrl } from "../../object-storage";
 
@@ -706,7 +706,7 @@ registerTool({
       currencyRateSource = "caller";
     } else {
       try {
-        const r = await fetch(`${BASE}/api/usdtl-rate`);
+        const r = await fetch(`${BASE}/api/usdtl-rate`, { headers: await internalAuthHeader() });
         if (r.ok) {
           const j: any = await r.json();
           if (typeof j?.rate === "number" && j.rate > 0) {
@@ -831,7 +831,7 @@ registerTool({
     };
     const headerResp = await fetch(`${BASE}/api/tax-calculation/calculations`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await internalAuthHeader()) },
       body: JSON.stringify(headerBody),
     });
     if (!headerResp.ok) {
@@ -845,7 +845,7 @@ registerTool({
     // 8b. Batch insert items
     const batchResp = await fetch(`${BASE}/api/tax-calculation/calculations/${calcId}/items/batch`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await internalAuthHeader()) },
       body: JSON.stringify({ items: itemsForBatch }),
     });
     if (!batchResp.ok) {
@@ -858,7 +858,7 @@ registerTool({
     // 8c. Run /calculate (calculateAllItems) — fills per-item tax fields + status
     const calcResp = await fetch(`${BASE}/api/tax-calculation/calculations/${calcId}/calculate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await internalAuthHeader()) },
       body: "{}",
     });
     if (!calcResp.ok) {
@@ -872,7 +872,7 @@ registerTool({
     const agentUserId = await resolveAgentUserId(db as any);
     const createProcResp = await fetch(`${BASE}/api/tax-calculation/calculations/${calcId}/create-procedure`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await internalAuthHeader()) },
       body: JSON.stringify({ userId: agentUserId }),
     });
     if (!createProcResp.ok) {
@@ -888,7 +888,7 @@ registerTool({
       try {
         const updResp = await fetch(`${BASE}/api/procedures/${encodeURIComponent(resolvedReference)}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(await internalAuthHeader()) },
           body: JSON.stringify({ shipper: meta.shipper }),
         });
         shipperSet = updResp.ok;
@@ -936,7 +936,7 @@ registerTool({
       try {
         const taxResp = await fetch(`${BASE}/api/taxes`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(await internalAuthHeader()) },
           body: JSON.stringify(taxBody),
         });
         if (taxResp.ok) {

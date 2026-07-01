@@ -13,6 +13,7 @@ import { asc } from "drizzle-orm";
 import { users as usersTable } from "@shared/schema";
 import { db } from "../db";
 import { McpToolError } from "./errors";
+import { signToken } from "../auth-token";
 
 let __cachedAgentUserId: number | null = null;
 
@@ -27,4 +28,13 @@ export async function resolveAgentUserId(tx: typeof db = db): Promise<number> {
   if (!u) throw new McpToolError("Cannot resolve a created_by user id (users table is empty)");
   __cachedAgentUserId = u.id;
   return __cachedAgentUserId;
+}
+
+// MCP tools call the app's own HTTP routes internally. The server auth gate
+// requires a signed bearer token / session on write requests, so internal
+// fetches must authenticate exactly like the React UI. This returns an
+// Authorization header carrying the MCP agent user's signed token.
+export async function internalAuthHeader(): Promise<Record<string, string>> {
+  const uid = await resolveAgentUserId();
+  return { Authorization: `Bearer ${signToken(uid)}` };
 }

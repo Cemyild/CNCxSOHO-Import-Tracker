@@ -13,6 +13,7 @@ import {
   taxCalculationItems,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { internalAuthHeader } from "../audit-attribution";
 
 const PORT = process.env.PORT || "5000";
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -44,7 +45,9 @@ registerTool({
     const [calc] = await db.select().from(taxCalculations).where(eq(taxCalculations.id, id));
     if (!calc) throw new McpToolError(`tax_calculation_id ${id} not found.`);
 
-    const resp = await fetch(`${BASE}/api/tax-calculation/calculations/${id}/export/excel`);
+    const resp = await fetch(`${BASE}/api/tax-calculation/calculations/${id}/export/excel`, {
+      headers: await internalAuthHeader(),
+    });
     if (!resp.ok) {
       throw new McpToolError(`Excel export failed: HTTP ${resp.status} ${(await resp.text()).slice(0, 200)}`);
     }
@@ -222,6 +225,7 @@ registerTool({
       const defaultsResp = await fetch(
         `${BASE}/api/tax-calculation/calculations/${id}/default-expenses` +
           (includeNavlun ? "?include_international_transportation=true" : ""),
+        { headers: await internalAuthHeader() },
       );
       if (!defaultsResp.ok) {
         throw new McpToolError(
@@ -246,7 +250,7 @@ registerTool({
     // 3. POST to the existing route
     const resp = await fetch(`${BASE}/api/tax-calculation/calculations/${id}/export/adv-taxletter`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await internalAuthHeader()) },
       body: JSON.stringify({
         taxes: taxesTl,
         expenses: expensesList,
