@@ -9,12 +9,9 @@ import {
   extractCustomsDeclaration,
   type CustomsDeclarationData,
 } from "./extractors/customs-declaration";
-import {
-  extractExpenseReceipt,
-  type ExpenseReceiptResult,
-} from "./extractors/expense-receipt";
+import type { ExpenseReceiptResult } from "./extractors/expense-receipt";
 import { extractFromPdf } from "./document-extraction";
-import { extractTaxes, type TaxData } from "./extractors/tax";
+import type { TaxData } from "./extractors/tax";
 import { uploadFile, getFile } from "./object-storage";
 
 export interface ImportHeader {
@@ -243,34 +240,21 @@ export async function analyzeProcedureDocument(
   const groups = groupPagesByType(classifications);
   const pageCount = classifications.length;
 
-  // 3) split per type
+  // 3) split per type (header + products only; expense/tax readers removed)
   const customsSplit = await splitPdfByPages(buffer, groups.customs_declaration);
-  const expenseSplit = await splitPdfByPages(buffer, groups.expense_tax_service);
   const invoiceSplit = await splitPdfByPages(buffer, groups.commercial_invoice);
 
   // 4) route to readers in PARALLEL (any one failing must not kill the others)
-  const [customs, expenseResult, productResult, customsTaxes] = await Promise.all([
+  const [customs, productResult] = await Promise.all([
     customsSplit.pageMap.length
       ? extractCustomsDeclaration(customsSplit.buffer).catch((e) => {
           console.error("[analyze-document] customs extraction failed:", e);
           return null;
         })
       : Promise.resolve(null),
-    expenseSplit.pageMap.length
-      ? extractExpenseReceipt(expenseSplit.buffer).catch((e) => {
-          console.error("[analyze-document] expense extraction failed:", e);
-          return null;
-        })
-      : Promise.resolve(null),
     invoiceSplit.pageMap.length
       ? extractFromPdf(invoiceSplit.buffer).catch((e) => {
           console.error("[analyze-document] product extraction failed:", e);
-          return null;
-        })
-      : Promise.resolve(null),
-    customsSplit.pageMap.length
-      ? extractTaxes(customsSplit.buffer).catch((e) => {
-          console.error("[analyze-document] customs tax extraction failed:", e);
           return null;
         })
       : Promise.resolve(null),
@@ -286,10 +270,10 @@ export async function analyzeProcedureDocument(
     },
     groups,
     customs,
-    expenseResult,
-    expensePageMap: expenseSplit.pageMap,
+    expenseResult: null,
+    expensePageMap: [],
     productResult,
-    customsTaxes,
+    customsTaxes: null,
   });
 }
 
