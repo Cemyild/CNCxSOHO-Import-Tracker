@@ -372,7 +372,10 @@ export async function runQueryProcedures(input: any): Promise<any> {
     // `desc(arrival_date)` Postgres puts NULLs last; the freshest rows then
     // disappear behind older fully-populated ones — that bug cost a Workflow 1
     // test 1-2 minutes when Cowork "couldn't find" CNCALO-74..77.
-    const orderExpr = sql`COALESCE(${dateField}, ${procedures.createdAt}) DESC`;
+    // Cast both to text: date columns are stored as text (schema drift) while
+    // createdAt is a real timestamp, so a bare COALESCE(text, timestamp) throws
+    // "types text and timestamp cannot be matched". Text-cast keeps ISO ordering.
+    const orderExpr = sql`COALESCE(${dateField}::text, ${procedures.createdAt}::text) DESC`;
     const items = await db.select({
       reference: procedures.reference,
       shipper: procedures.shipper,
