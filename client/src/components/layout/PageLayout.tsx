@@ -78,7 +78,7 @@ export function PageLayout({ title, children }: PageLayoutProps) {
   };
 
   return (
-    <div className="relative w-full min-h-screen">
+    <div className="relative w-full h-screen overflow-hidden">
       {/* Background component - fixed position to stay in place when scrolling */}
       <div className="fixed inset-0 -z-10">
         <BackgroundPaths />
