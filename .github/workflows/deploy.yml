@@ -55,18 +55,12 @@ jobs:
             fi
 
             echo "[deploy] === 4. Apply DB DDL from db/manual-ddl/ (idempotent) ==="
-            if command -v psql >/dev/null 2>&1; then
-              DB_URL=$(grep '^DATABASE_URL=' .env | head -1 | cut -d= -f2-)
-              if [ -n "$DB_URL" ]; then
-                for DDL_FILE in db/manual-ddl/*.sql; do
-                  [ -f "$DDL_FILE" ] || continue
-                  psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$DDL_FILE" && echo "[deploy] DDL applied: $DDL_FILE" || echo "[deploy] WARN: DDL apply non-zero exit for $DDL_FILE (may be already applied)"
-                done
-              else
-                echo "[deploy] WARN: DATABASE_URL not found in .env, skipping DDL"
-              fi
+            # VPS has no psql; apply via node + tsx (installed by npm install above)
+            if node --env-file=.env --import tsx scripts/apply-manual-ddl.ts; then
+              echo "[deploy] DDL step OK"
             else
-              echo "[deploy] WARN: psql not installed on VPS - install with: apt install postgresql-client"
+              echo "[deploy] ERROR: DDL apply failed - aborting deploy before app reload"
+              exit 1
             fi
 
             echo "[deploy] === 5. nginx /mcp location (idempotent) ==="
