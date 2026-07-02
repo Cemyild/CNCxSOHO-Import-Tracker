@@ -24,6 +24,7 @@ type TareksProcedure = {
   currency: string | null;
   piece: number | null;
   tareks_status: string | null;
+  tareks_notes: string | null;
   style_nos: string | null;
 };
 
@@ -56,6 +57,45 @@ function formatDate(date: string | null): string {
   const month = String(d.getUTCMonth() + 1).padStart(2, "0");
   const year = d.getUTCFullYear();
   return `${day}.${month}.${year}`;
+}
+
+function NotesCell({
+  initialValue,
+  disabled,
+  placeholder,
+  onSave,
+}: {
+  initialValue: string;
+  disabled: boolean;
+  placeholder: string;
+  onSave: (value: string) => void;
+}) {
+  const [value, setValue] = useState(initialValue);
+
+  const commit = () => {
+    if (value.trim() !== initialValue.trim()) {
+      onSave(value.trim());
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      value={value}
+      disabled={disabled}
+      placeholder={placeholder}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.currentTarget.blur();
+        } else if (e.key === "Escape") {
+          setValue(initialValue);
+        }
+      }}
+      className="w-[220px] rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-gray-700 placeholder:text-gray-300 hover:border-gray-200 focus:border-gray-300 focus:bg-white focus:outline-none disabled:opacity-50 transition-colors"
+    />
+  );
 }
 
 function formatAmount(amount: string | null, currency: string | null): string {
@@ -113,6 +153,39 @@ export function TareksProceduresList() {
     },
   });
 
+  const [savingNotesId, setSavingNotesId] = useState<number | null>(null);
+
+  const notesMutation = useMutation({
+    mutationFn: async ({
+      id,
+      tareks_notes,
+    }: {
+      id: number;
+      tareks_notes: string | null;
+    }) => {
+      const res = await apiRequest("PATCH", `/api/procedures/${id}`, {
+        tareks_notes,
+      });
+      if (!res.ok) throw new Error("Failed to update notes");
+      return res.json();
+    },
+    onMutate: ({ id }) => {
+      setSavingNotesId(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/dashboard/tareks-application"],
+      });
+      toast({ title: t("tareks.notesSaved") });
+    },
+    onError: () => {
+      toast({ title: t("tareks.notesSaveFailed"), variant: "destructive" });
+    },
+    onSettled: () => {
+      setSavingNotesId(null);
+    },
+  });
+
   return (
     <div className="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
       {/* Header */}
@@ -156,13 +229,14 @@ export function TareksProceduresList() {
               <th className="px-4 py-3 text-right font-medium">{t("tareks.col.pieces")}</th>
               <th className="px-4 py-3 text-left font-medium">{t("tareks.col.styleNo")}</th>
               <th className="px-4 py-3 text-left font-medium">{t("tareks.col.status")}</th>
+              <th className="px-4 py-3 text-left font-medium">{t("tareks.col.notes")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 8 }).map((_, j) => (
+                  {Array.from({ length: 9 }).map((_, j) => (
                     <td key={j} className="px-4 py-3">
                       <Skeleton className="h-4 w-full" />
                     </td>
@@ -172,7 +246,7 @@ export function TareksProceduresList() {
             ) : !data || data.procedures.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-4 py-8 text-center text-gray-400 text-sm"
                 >
                   {t("tareks.empty")}
@@ -247,6 +321,20 @@ export function TareksProceduresList() {
                           ))}
                         </SelectContent>
                       </Select>
+                    </td>
+                    <td className="px-4 py-3">
+                      <NotesCell
+                        key={`${proc.id}-${proc.tareks_notes ?? ""}`}
+                        initialValue={proc.tareks_notes ?? ""}
+                        disabled={savingNotesId === proc.id}
+                        placeholder={t("tareks.notesPlaceholder")}
+                        onSave={(value) =>
+                          notesMutation.mutate({
+                            id: proc.id,
+                            tareks_notes: value === "" ? null : value,
+                          })
+                        }
+                      />
                     </td>
                   </tr>
                 );

@@ -54,19 +54,19 @@ jobs:
               echo "[deploy] ERROR: SESSION_SECRET not in .env and no GitHub secret set. App will fail to start. Add it via Settings -> Secrets."
             fi
 
-            echo "[deploy] === 4. Apply DB DDL for agent_audit_log (idempotent) ==="
-            DDL_FILE="db/manual-ddl/000_agent_audit_log_indexes.sql"
-            if [ -f "$DDL_FILE" ]; then
-              if command -v psql >/dev/null 2>&1; then
-                DB_URL=$(grep '^DATABASE_URL=' .env | head -1 | cut -d= -f2-)
-                if [ -n "$DB_URL" ]; then
-                  psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$DDL_FILE" && echo "[deploy] DDL applied" || echo "[deploy] WARN: DDL apply non-zero exit (may be already applied)"
-                else
-                  echo "[deploy] WARN: DATABASE_URL not found in .env, skipping DDL"
-                fi
+            echo "[deploy] === 4. Apply DB DDL from db/manual-ddl/ (idempotent) ==="
+            if command -v psql >/dev/null 2>&1; then
+              DB_URL=$(grep '^DATABASE_URL=' .env | head -1 | cut -d= -f2-)
+              if [ -n "$DB_URL" ]; then
+                for DDL_FILE in db/manual-ddl/*.sql; do
+                  [ -f "$DDL_FILE" ] || continue
+                  psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$DDL_FILE" && echo "[deploy] DDL applied: $DDL_FILE" || echo "[deploy] WARN: DDL apply non-zero exit for $DDL_FILE (may be already applied)"
+                done
               else
-                echo "[deploy] WARN: psql not installed on VPS - install with: apt install postgresql-client"
+                echo "[deploy] WARN: DATABASE_URL not found in .env, skipping DDL"
               fi
+            else
+              echo "[deploy] WARN: psql not installed on VPS - install with: apt install postgresql-client"
             fi
 
             echo "[deploy] === 5. nginx /mcp location (idempotent) ==="

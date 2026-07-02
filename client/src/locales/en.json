@@ -71,6 +71,9 @@
     "empty": "No procedures in Tareks Application status",
     "statusUpdated": "Status updated",
     "statusUpdateFailed": "Failed to update status",
+    "notesSaved": "Note saved",
+    "notesSaveFailed": "Failed to save note",
+    "notesPlaceholder": "Add note...",
     "col": {
       "reference": "Reference",
       "shipper": "Shipper",
@@ -79,7 +82,8 @@
       "amount": "Amount",
       "pieces": "Pieces",
       "styleNo": "Style No",
-      "status": "Status"
+      "status": "Status",
+      "notes": "Notes"
     },
     "status": {
       "waiting_response": "Waiting Response",

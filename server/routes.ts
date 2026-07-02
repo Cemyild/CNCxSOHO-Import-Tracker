@@ -4843,7 +4843,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Tareks application endpoint called");
 
       const query = `
-        SELECT p.id, p.reference, p.shipper, p.invoice_no, p.invoice_date, p.amount, p.currency, p.piece, p.tareks_status, p.created_at,
+        SELECT p.id, p.reference, p.shipper, p.invoice_no, p.invoice_date, p.amount, p.currency, p.piece, p.tareks_status, p.tareks_notes, p.created_at,
           (SELECT string_agg(DISTINCT tci.style, ', ' ORDER BY tci.style)
            FROM tax_calculation_items tci
            JOIN tax_calculations tc ON tci.tax_calculation_id = tc.id
@@ -4872,7 +4872,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/dashboard/tareks-application/export/excel", async (req, res) => {
     try {
       const query = `
-        SELECT p.id, p.reference, p.shipper, p.invoice_no, p.invoice_date, p.amount, p.currency, p.piece, p.tareks_status, p.created_at,
+        SELECT p.id, p.reference, p.shipper, p.invoice_no, p.invoice_date, p.amount, p.currency, p.piece, p.tareks_status, p.tareks_notes, p.created_at,
           (SELECT string_agg(DISTINCT tci.style, ', ' ORDER BY tci.style)
            FROM tax_calculation_items tci
            JOIN tax_calculations tc ON tci.tax_calculation_id = tc.id
@@ -4905,6 +4905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { header: "Pieces", key: "piece", width: 10 },
         { header: "Style No", key: "style_nos", width: 32 },
         { header: "Status", key: "tareks_status", width: 26 },
+        { header: "Notes", key: "tareks_notes", width: 40 },
       ];
 
       // Header styling
@@ -4933,6 +4934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           piece: r.piece ?? null,
           style_nos: r.style_nos ?? "",
           tareks_status: TAREKS_STATUS_LABELS[statusKey] ?? statusKey,
+          tareks_notes: r.tareks_notes ?? "",
         });
         row.getCell("invoice_date").numFmt = "dd.mm.yyyy";
         row.getCell("amount").numFmt = "#,##0.00";

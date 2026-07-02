@@ -71,6 +71,9 @@
     "empty": "Tareks Başvurusu durumunda işlem yok",
     "statusUpdated": "Durum güncellendi",
     "statusUpdateFailed": "Durum güncellenemedi",
+    "notesSaved": "Not kaydedildi",
+    "notesSaveFailed": "Not kaydedilemedi",
+    "notesPlaceholder": "Not ekle...",
     "col": {
       "reference": "Referans",
       "shipper": "Gönderici",
@@ -79,7 +82,8 @@
       "amount": "Tutar",
       "pieces": "Adet",
       "styleNo": "Stil No",
-      "status": "Durum"
+      "status": "Durum",
+      "notes": "Notlar"
     },
     "status": {
       "waiting_response": "Yanıt Bekleniyor",
