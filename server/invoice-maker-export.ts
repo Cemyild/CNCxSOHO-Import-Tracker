@@ -555,11 +555,26 @@ async function embedSignatures(
       `<s t="_localImage"><k n="_rvRel:LocalImageIdentifier" t="i"/><k n="CalcOrigin" t="i"/></s>` +
       `</rvStructures>`,
   );
+  // Verbatim copy of the hand-tuned reference file's rvTypesInfo. A trimmed
+  // "_Self only" variant loads in some Excel builds but deviates from the
+  // known-good file; matching every keyFlag removes the last structural
+  // difference and keeps Excel out of "repaired" mode.
   zip.file(
     "xl/richData/rdRichValueTypes.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<rvTypesInfo xmlns="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata2" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="x" xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
-      `<global><keyFlags><key name="_Self"><flag name="ExcludeFromFile" value="1"/><flag name="ExcludeFromCalcComparison" value="1"/></key></keyFlags></global>` +
+      `<global><keyFlags>` +
+      `<key name="_Self"><flag name="ExcludeFromFile" value="1"/><flag name="ExcludeFromCalcComparison" value="1"/></key>` +
+      `<key name="_DisplayString"><flag name="ExcludeFromCalcComparison" value="1"/></key>` +
+      `<key name="_Flags"><flag name="ExcludeFromCalcComparison" value="1"/></key>` +
+      `<key name="_Format"><flag name="ExcludeFromCalcComparison" value="1"/></key>` +
+      `<key name="_SubLabel"><flag name="ExcludeFromCalcComparison" value="1"/></key>` +
+      `<key name="_Attribution"><flag name="ExcludeFromCalcComparison" value="1"/></key>` +
+      `<key name="_Icon"><flag name="ExcludeFromCalcComparison" value="1"/></key>` +
+      `<key name="_Display"><flag name="ExcludeFromCalcComparison" value="1"/></key>` +
+      `<key name="_CanonicalPropertyNames"><flag name="ExcludeFromCalcComparison" value="1"/></key>` +
+      `<key name="_ClassificationId"><flag name="ExcludeFromCalcComparison" value="1"/></key>` +
+      `</keyFlags></global>` +
       `</rvTypesInfo>`,
   );
   zip.file(
@@ -592,12 +607,23 @@ async function embedSignatures(
   });
   zip.file("xl/worksheets/sheet1.xml", sheet1);
 
-  // workbook-level wiring for the metadata part
+  // workbook-level wiring for the metadata part AND the four rich-value
+  // parts. Excel discovers rich values (the in-cell `t="e" vm="..."` image
+  // cells) only through these workbook relationships; without them it treats
+  // the cells as dangling, opens the file in "repaired" mode, strips the
+  // signatures and disturbs the sheet layout (column widths / row heights /
+  // template geometry) — exactly the "wrong template, wrong cell sizes"
+  // symptom. Targets are relative to xl/ and mirror the hand-tuned reference.
   let wbRels = await zip.file("xl/_rels/workbook.xml.rels")!.async("string");
-  if (!/metadata\.xml/.test(wbRels)) {
+  if (!/richData\/rdrichvalue\.xml/.test(wbRels)) {
     wbRels = wbRels.replace(
       "</Relationships>",
-      `<Relationship Id="rIdInvMkMeta" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata" Target="metadata.xml"/></Relationships>`,
+      `<Relationship Id="rIdInvMkMeta" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata" Target="metadata.xml"/>` +
+        `<Relationship Id="rIdInvMkRv" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue" Target="richData/rdrichvalue.xml"/>` +
+        `<Relationship Id="rIdInvMkRvStruct" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure" Target="richData/rdrichvaluestructure.xml"/>` +
+        `<Relationship Id="rIdInvMkRvTypes" Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueTypes" Target="richData/rdRichValueTypes.xml"/>` +
+        `<Relationship Id="rIdInvMkRvRel" Type="http://schemas.microsoft.com/office/2022/10/relationships/richValueRel" Target="richData/richValueRel.xml"/>` +
+        `</Relationships>`,
     );
     zip.file("xl/_rels/workbook.xml.rels", wbRels);
   }
