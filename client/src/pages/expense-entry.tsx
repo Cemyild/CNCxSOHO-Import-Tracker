@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type DragEvent as ReactDragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -364,6 +364,7 @@ export default function ExpenseEntryPage() {
   const [recognizedItems, setRecognizedItems] = useState<RecognizedItem[]>([]);
   const [recognizedTaxes, setRecognizedTaxes] = useState<RecognizedTaxes | null>(null);
   const [expenseReceiptError, setExpenseReceiptError] = useState<string | null>(null);
+  const [isDraggingReceipt, setIsDraggingReceipt] = useState(false);
   const [uploadedPdfFile, setUploadedPdfFile] = useState<UploadedPdfFile | null>(null);
   const [previewPageNumber, setPreviewPageNumber] = useState<number | null>(null);
   const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
@@ -997,6 +998,26 @@ export default function ExpenseEntryPage() {
     }
   };
   
+  // Handle files dropped onto the expense receipt upload zone (drag & drop)
+  const handleReceiptDrop = (e: ReactDragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingReceipt(false);
+    if (isAnalyzingExpenseReceipt) return;
+
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    const pdfFiles = droppedFiles.filter(
+      (file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    );
+
+    if (pdfFiles.length === 0) {
+      setExpenseReceiptError(t('expenseEntry.dropOnlyPdf'));
+      return;
+    }
+
+    handleExpenseReceiptPdfUpload(pdfFiles);
+  };
+
   // Handle multiple Expense Receipt PDF uploads
   const handleExpenseReceiptPdfUpload = async (files: FileList | File[]) => {
     if (!currentUser) {
@@ -3106,9 +3127,32 @@ export default function ExpenseEntryPage() {
           {recognizedItems.length === 0 ? (
             <div className="py-6">
               <div
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!isAnalyzingExpenseReceipt) setIsDraggingReceipt(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!isAnalyzingExpenseReceipt) setIsDraggingReceipt(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  // Only reset when the cursor actually leaves the drop zone (not a child element)
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setIsDraggingReceipt(false);
+                  }
+                }}
+                onDrop={handleReceiptDrop}
                 className={`
                   border-2 border-dashed rounded-lg p-8 text-center transition-all
-                  ${isAnalyzingExpenseReceipt ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-green-400 hover:bg-gray-50'}
+                  ${isAnalyzingExpenseReceipt
+                    ? 'border-blue-500 bg-blue-50'
+                    : isDraggingReceipt
+                      ? 'border-green-500 bg-green-100 ring-2 ring-green-300'
+                      : 'border-gray-300 hover:border-green-400 hover:bg-gray-50'}
                 `}
               >
                 {isAnalyzingExpenseReceipt ? (
@@ -3119,9 +3163,11 @@ export default function ExpenseEntryPage() {
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-3">
-                    <Upload className="h-10 w-10 text-gray-400" />
+                    <Upload className={`h-10 w-10 ${isDraggingReceipt ? 'text-green-600' : 'text-gray-400'}`} />
                     <p className="text-sm text-gray-600 mb-2">
-                      {t('expenseEntry.uploadReceiptPdfs')}
+                      {isDraggingReceipt
+                        ? t('expenseEntry.dropReceiptHere')
+                        : t('expenseEntry.uploadReceiptPdfs')}
                     </p>
                     <p className="text-xs text-gray-400 mb-2">
                       {t('expenseEntry.uploadReceiptHint')}
