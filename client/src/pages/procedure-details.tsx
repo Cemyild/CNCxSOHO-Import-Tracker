@@ -120,6 +120,7 @@ interface Procedure {
   customs: string;
   import_dec_number: string;
   import_dec_date: string | null;
+  customs_file_no: string | null;
   payment_status: string;
   document_status: string;
   shipment_status: string;
@@ -1081,6 +1082,10 @@ export default function ProcedureDetailsPage() {
                   <div>
                     <span className="text-sm text-muted-foreground">{t("procedurePages.details.declarationDateField")}</span>
                     <p className="font-medium">{formatDateWithFallback(procedure.import_dec_date)}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">{t("procedurePages.details.customsFileNoField")}</span>
+                    <p className="font-medium">{procedure.customs_file_no || t("procedurePages.details.notAvailable")}</p>
                   </div>
                 </div>
               </div>

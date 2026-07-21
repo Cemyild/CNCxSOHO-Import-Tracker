@@ -193,7 +193,7 @@ const USD_TL_CACHE_TTL_MS = 30 * 60 * 1000;
 export async function registerRoutes(app: Express): Promise<Server> {
   // Adobe PDF Services removed - now using jsPDF for PDF generation
 
-  // Register Excel Enrichment Router
+  // Register Excel Enrichment Router (each route is admin-gated internally)
   app.use("/api/enrichment", excelEnrichmentRouter);
 
   // Fetch the official USD/TRY rate (ForexSelling) from TCMB's daily XML feed.

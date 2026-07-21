@@ -844,8 +844,8 @@ const columns: ColumnDef<Procedure>[] = [
               ))}
             </SelectContent>
           </Select>
-          {/* Add button for creating a new procedure - Admin only */}
-          <ExcelDataEnrichment onSuccess={() => refetch()} />
+          {/* Excel enrichment and procedure creation - Admin only */}
+          {isAdmin && <ExcelDataEnrichment onSuccess={() => refetch()} />}
           {isAdmin && (
             <Link href="/add-procedure">
               <Button>
