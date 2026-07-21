@@ -1,6 +1,14 @@
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, CheckCircle2, ArrowRight } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export interface UnusedColumn {
   field: string;
@@ -22,10 +30,24 @@ export interface DetectionSummary {
 
 export function EnrichmentDetectionStep({
   detection,
+  onSheetChange,
+  onHeaderRowChange,
+  busy,
 }: {
   detection: DetectionSummary;
+  onSheetChange: (sheetName: string) => void;
+  onHeaderRowChange: (headerRowIndex: number) => void;
+  busy: boolean;
 }) {
   const { t } = useTranslation();
+
+  const handleHeaderRowInputChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const oneBasedRow = Number(event.target.value);
+    if (!Number.isInteger(oneBasedRow) || oneBasedRow < 1) return;
+    onHeaderRowChange(oneBasedRow - 1);
+  };
 
   return (
     <ScrollArea className="h-full">
@@ -34,15 +56,41 @@ export function EnrichmentDetectionStep({
           <div className="mb-2 font-medium">
             {t("taxCalcComp.enrichment.detectionTitle")}
           </div>
-          <dl className="grid grid-cols-[160px_1fr] gap-y-1">
+          <dl className="grid grid-cols-[160px_1fr] items-center gap-y-2">
             <dt className="text-muted-foreground">
               {t("taxCalcComp.enrichment.detectionSheet")}
             </dt>
-            <dd className="font-mono">{detection.sheetName}</dd>
+            <dd>
+              <Select
+                value={detection.sheetName}
+                onValueChange={onSheetChange}
+                disabled={busy}
+              >
+                <SelectTrigger className="h-8 w-64">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {detection.availableSheets.map((sheet) => (
+                    <SelectItem key={sheet} value={sheet}>
+                      {sheet}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </dd>
             <dt className="text-muted-foreground">
               {t("taxCalcComp.enrichment.detectionHeaderRow")}
             </dt>
-            <dd className="font-mono">{detection.headerRowIndex + 1}</dd>
+            <dd>
+              <Input
+                type="number"
+                min={1}
+                className="h-8 w-24"
+                value={detection.headerRowIndex + 1}
+                onChange={handleHeaderRowInputChange}
+                disabled={busy}
+              />
+            </dd>
             <dt className="text-muted-foreground">
               {t("taxCalcComp.enrichment.detectionDataRows")}
             </dt>

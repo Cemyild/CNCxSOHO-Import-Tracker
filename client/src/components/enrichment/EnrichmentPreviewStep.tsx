@@ -54,6 +54,14 @@ export function EnrichmentPreviewStep({
       defaultValue: method,
     });
 
+  // "amount"-only matches bind a row to a procedure with no invoice number
+  // confirming it — the only path that can bind to an unrelated record — so
+  // it is flagged amber instead of the neutral blue used for the other two.
+  const methodTone = (method: string) =>
+    method === "amount"
+      ? "bg-amber-100 text-amber-800"
+      : "bg-blue-100 text-blue-800";
+
   const unmatchedReason = (row: UnmatchedItem) => {
     if (row.reason === "ambiguous") {
       return t("taxCalcComp.enrichment.unmatchedReason_ambiguous", {
@@ -125,7 +133,9 @@ export function EnrichmentPreviewStep({
                     )}
                   </TableCell>
                   <TableCell>
-                    <span className="inline-flex items-center rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                    <span
+                      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${methodTone(item.matchMethod)}`}
+                    >
                       {methodLabel(item.matchMethod)}
                     </span>
                   </TableCell>

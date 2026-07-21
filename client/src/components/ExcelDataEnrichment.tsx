@@ -50,6 +50,7 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reanalyzing, setReanalyzing] = useState(false);
   const [detection, setDetection] = useState<DetectionSummary | null>(null);
   const [items, setItems] = useState<PreviewItem[]>([]);
   const [unmatched, setUnmatched] = useState<UnmatchedItem[]>([]);
@@ -65,6 +66,7 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
     setItems([]);
     setUnmatched([]);
     setSelectedIds([]);
+    setReanalyzing(false);
   };
 
   /** Turns a server error body into a message the user can act on. */
@@ -72,6 +74,9 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
     const body = parseServerError(error);
     if (body?.code === "no_data") {
       return t("taxCalcComp.enrichment.errorNoData");
+    }
+    if (body?.code === "bad_file") {
+      return t("taxCalcComp.enrichment.errorBadFile");
     }
     if (body?.code === "no_headers") {
       return t("taxCalcComp.enrichment.errorNoHeaders", {
@@ -106,6 +111,45 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
       setLoading(false);
     }
   };
+
+  /**
+   * Re-runs /analyze with a corrected sheet name and/or header row, as chosen
+   * by the user on the detection step. On success this replaces `detection`
+   * with the fresh summary. On failure the previous (last successful)
+   * `detection` is left untouched, so any control bound to it snaps back to
+   * the value that actually parsed.
+   */
+  const reanalyze = async (overrides: {
+    sheetName?: string;
+    headerRowIndex?: number;
+  }) => {
+    if (!file || !detection) return;
+    setReanalyzing(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("sheetName", overrides.sheetName ?? detection.sheetName);
+      form.append(
+        "headerRowIndex",
+        String(overrides.headerRowIndex ?? detection.headerRowIndex),
+      );
+      const response = await apiRequest("POST", "/api/enrichment/analyze", form);
+      const data = await response.json();
+      setDetection(data.detection);
+    } catch (error) {
+      toast({
+        title: t("common.error"),
+        description: describeError(error),
+        variant: "destructive",
+      });
+    } finally {
+      setReanalyzing(false);
+    }
+  };
+
+  const handleSheetChange = (sheetName: string) => reanalyze({ sheetName });
+  const handleHeaderRowChange = (headerRowIndex: number) =>
+    reanalyze({ headerRowIndex });
 
   const handlePreview = async () => {
     if (!file || !detection) return;
@@ -157,16 +201,27 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
         updates,
       });
       const result = await response.json();
-      const succeeded = (result.results ?? []).filter(
-        (r: { status: string }) => r.status === "success",
-      ).length;
+      const results: Array<{ status: string }> = result.results ?? [];
+      const succeeded = results.filter((r) => r.status === "success").length;
+      const other = results.length - succeeded;
 
-      toast({
-        title: t("common.success"),
-        description: t("taxCalcComp.enrichment.enrichedSuccess", {
-          count: succeeded,
-        }),
-      });
+      if (other > 0) {
+        toast({
+          title: t("common.error"),
+          description: t("taxCalcComp.enrichment.enrichedPartial", {
+            success: succeeded,
+            other,
+          }),
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: t("common.success"),
+          description: t("taxCalcComp.enrichment.enrichedSuccess", {
+            count: succeeded,
+          }),
+        });
+      }
 
       setOpen(false);
       reset();
@@ -248,7 +303,12 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
           )}
 
           {step === "detection" && detection && (
-            <EnrichmentDetectionStep detection={detection} />
+            <EnrichmentDetectionStep
+              detection={detection}
+              onSheetChange={handleSheetChange}
+              onHeaderRowChange={handleHeaderRowChange}
+              busy={reanalyzing}
+            />
           )}
 
           {step === "preview" && (
@@ -272,13 +332,15 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
           )}
           {step === "detection" && (
             <div className="flex w-full justify-between">
-              <Button variant="ghost" onClick={reset}>
+              <Button variant="ghost" onClick={reset} disabled={reanalyzing}>
                 {t("taxCalcComp.enrichment.backToUpload")}
               </Button>
-              <Button onClick={handlePreview} disabled={loading}>
-                {loading
-                  ? t("taxCalcComp.enrichment.loadingPreview")
-                  : t("taxCalcComp.enrichment.detectionContinue")}
+              <Button onClick={handlePreview} disabled={loading || reanalyzing}>
+                {reanalyzing
+                  ? t("taxCalcComp.enrichment.detectionReanalyzing")
+                  : loading
+                    ? t("taxCalcComp.enrichment.loadingPreview")
+                    : t("taxCalcComp.enrichment.detectionContinue")}
               </Button>
             </div>
           )}
