@@ -211,7 +211,7 @@ edilmedi; dosya ~100 KB seviyesinde.
 │   ...                                         │
 │                                               │
 │ ⚠ EŞLEŞMEYEN (1 satır)                        │
-│   Excel satır 22 · Dosya No 26-11128          │
+│   Excel satır 23 · Dosya No 26-11128          │
 │   Fatura No "STN1" bulunamadı;                │
 │   120.00 USD tutarıyla da eşleşme yok         │
 │                        [Uygula (16)]          │
