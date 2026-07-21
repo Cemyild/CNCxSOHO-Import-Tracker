@@ -9,7 +9,7 @@ export interface ParseOverrides {
 
 export class EnrichmentParseError extends Error {
   constructor(
-    public code: "no_data" | "no_headers" | "sheet_not_found",
+    public code: "no_data" | "no_headers" | "sheet_not_found" | "bad_file",
     message: string,
     /** For `no_headers`: the headers that were actually seen. */
     public detectedHeaders: string[] = [],
@@ -62,7 +62,15 @@ export function parseWorkbook(
   buffer: Buffer,
   overrides: ParseOverrides = {},
 ): ParsedWorkbook {
-  const workbook = XLSX.read(buffer, { type: "buffer" });
+  let workbook: XLSX.WorkBook;
+  try {
+    workbook = XLSX.read(buffer, { type: "buffer" });
+  } catch {
+    throw new EnrichmentParseError(
+      "bad_file",
+      "The uploaded file could not be read as a spreadsheet",
+    );
+  }
   const availableSheets = workbook.SheetNames;
 
   const populated = availableSheets

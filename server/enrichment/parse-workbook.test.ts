@@ -125,6 +125,23 @@ describe("parseWorkbook — synthetic edge cases", () => {
     expect(parsed.skippedRows.some((r) => r.reason === "empty_row")).toBe(true);
   });
 
+  it("throws bad_file when the upload is not a spreadsheet at all", () => {
+    // Plain text and random bytes are both accepted by XLSX.read as a
+    // single-cell CSV-style sheet, so they don't exercise this path. A
+    // truncated/corrupt zip container (the actual format an .xlsx file is)
+    // does make XLSX.read throw, which is the realistic "bad file" case.
+    const buffer = Buffer.concat([
+      Buffer.from("PK\x03\x04"),
+      Buffer.from("x".repeat(500)),
+    ]);
+    try {
+      parseWorkbook(buffer);
+      throw new Error("expected parseWorkbook to throw");
+    } catch (error) {
+      expect((error as EnrichmentParseError).code).toBe("bad_file");
+    }
+  });
+
   it("lets a sheet override win over the better-scoring sheet", () => {
     const buffer = makeWorkbook({
       Ozet: [

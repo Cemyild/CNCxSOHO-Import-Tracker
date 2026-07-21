@@ -25,9 +25,25 @@ function asNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * `amount` defaults to `0` in the schema, so many procedures — and
+ * occasionally a report row — carry a literal zero. Treating `0` as a usable
+ * matching key would amount-match a row against every zero-amount procedure
+ * in the table, which is a coincidence, not a real key. Everywhere matching
+ * looks at an amount, it must go through this instead of `asNumber` directly.
+ */
+function usableAmount(value: unknown): number | null {
+  const parsed = asNumber(value);
+  return parsed === 0 ? null : parsed;
+}
+
 function sameAmount(a: number | null, b: number | null): boolean {
   if (a === null || b === null) return false;
   return Math.abs(a - b) < AMOUNT_TOLERANCE;
+}
+
+function trimmedInvoiceNo(row: EnrichRow): string | null {
+  return row.values.invoice_no ? String(row.values.invoice_no).trim() : null;
 }
 
 interface RowMatch {
@@ -45,7 +61,7 @@ function unmatchedFrom(
     excelRowNumber: row.excelRowNumber,
     customsFileNo: (row.values.customs_file_no as string | undefined) ?? null,
     reason,
-    invoiceNo: (row.values.invoice_no as string | undefined) ?? null,
+    invoiceNo: trimmedInvoiceNo(row),
     amount: asNumber(row.values.amount),
     candidates: candidates.map((c) => c.reference ?? String(c.id)),
   };
@@ -56,10 +72,8 @@ function matchOne(
   row: EnrichRow,
   procedures: MatchCandidate[],
 ): RowMatch | UnmatchedRow {
-  const invoiceNo = row.values.invoice_no
-    ? String(row.values.invoice_no).trim()
-    : null;
-  const amount = asNumber(row.values.amount);
+  const invoiceNo = trimmedInvoiceNo(row);
+  const amount = usableAmount(row.values.amount);
 
   if (!invoiceNo && amount === null) return unmatchedFrom(row, "no_key");
 
@@ -74,7 +88,7 @@ function matchOne(
 
     if (byInvoice.length > 1) {
       const narrowed = byInvoice.filter((p) =>
-        sameAmount(asNumber(p.amount), amount),
+        sameAmount(usableAmount(p.amount), amount),
       );
       if (narrowed.length === 1) {
         return { row, procedure: narrowed[0], method: "invoice_no+amount" };
@@ -85,7 +99,7 @@ function matchOne(
 
   if (amount !== null) {
     const byAmount = procedures.filter((p) =>
-      sameAmount(asNumber(p.amount), amount),
+      sameAmount(usableAmount(p.amount), amount),
     );
     if (byAmount.length === 1) {
       return { row, procedure: byAmount[0], method: "amount" };
@@ -105,6 +119,27 @@ const DECLARATION_FIELDS: EnrichField[] = [
 function isImportDeclaration(row: EnrichRow): boolean {
   const decNo = row.values.import_dec_number;
   return typeof decNo === "string" && decNo.toUpperCase().includes("IM");
+}
+
+/** Higher is stronger. Ranks how much a matchMethod should be trusted. */
+const METHOD_STRENGTH: Record<MatchMethod, number> = {
+  invoice_no: 2,
+  "invoice_no+amount": 1,
+  amount: 0,
+};
+
+/**
+ * A group's AN and IM rows can match by different methods (e.g. the IM row
+ * carries the invoice number but the AN row only matched on amount). Report
+ * the weakest method present so the UI never shows a confident badge for
+ * data that partly came from a weaker match.
+ */
+function weakestMethod(matches: RowMatch[]): MatchMethod {
+  return matches.reduce(
+    (weakest, m) =>
+      METHOD_STRENGTH[m.method] < METHOD_STRENGTH[weakest] ? m.method : weakest,
+    matches[0].method,
+  );
 }
 
 /**
@@ -142,7 +177,7 @@ function mergeGroup(matches: RowMatch[]): MatchedGroup {
   return {
     procedureId: first.procedure.id,
     reference: first.procedure.reference ?? String(first.procedure.id),
-    matchMethod: first.method,
+    matchMethod: weakestMethod(matches),
     excelRowNumbers: matches.map((m) => m.row.excelRowNumber),
     values,
   };

@@ -2066,6 +2066,7 @@
       "failedToProcess": "Could not process the Excel file.",
       "failedToApply": "Could not apply the updates.",
       "errorNoData": "No data found in the file.",
+      "errorBadFile": "The file could not be read. Make sure it is a valid Excel file (.xlsx / .xls).",
       "errorNoHeaders": "This file is not in the expected report format. Headers found: {{headers}}",
       "errorSheetNotFound": "The selected sheet was not found or contains no data. Sheets with data: {{sheets}}"
     }

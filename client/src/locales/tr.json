@@ -2066,6 +2066,7 @@
       "failedToProcess": "Excel dosyası işlenemedi.",
       "failedToApply": "Güncellemeler uygulanamadı.",
       "errorNoData": "Dosyada veri bulunamadı.",
+      "errorBadFile": "Dosya okunamadı. Geçerli bir Excel dosyası (.xlsx / .xls) olduğundan emin olun.",
       "errorNoHeaders": "Bu dosya beklenen rapor formatında değil. Bulunan başlıklar: {{headers}}",
       "errorSheetNotFound": "Seçilen sayfa dosyada bulunamadı veya içi boş. Veri içeren sayfalar: {{sheets}}"
     }

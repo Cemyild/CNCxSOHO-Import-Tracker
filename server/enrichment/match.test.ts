@@ -90,6 +90,15 @@ describe("matchRows", () => {
     expect(result.unmatched[0].reason).toBe("no_key");
   });
 
+  it("never matches on a zero amount, because amount defaults to 0 in the schema", () => {
+    const zeroAmountProcedures: MatchCandidate[] = [
+      { id: 200, reference: "CNCALO-200", invoice_no: null, amount: "0.00" },
+    ];
+    const result = matchRows([row(5, { amount: 0 })], zeroAmountProcedures);
+    expect(result.matched).toEqual([]);
+    expect(result.unmatched[0].reason).toBe("no_key");
+  });
+
   it("merges the AN and IM rows of one shipment, preferring the IM declaration", () => {
     // Every shipment appears twice in the report: once as the bonded-warehouse
     // entry (AN) and once as the import declaration (IM). The DB stores the IM one.
@@ -120,6 +129,19 @@ describe("matchRows", () => {
     // Non-declaration fields take the first non-empty value from either row.
     expect(group.values.shipper).toBe("ALO HONG KONG LTD");
     expect(group.values.customs).toBe("Erenköy");
+  });
+
+  it("reports the weakest match method when rows in a group matched differently", () => {
+    const result = matchRows(
+      [
+        row(4, { invoice_no: "55559417", import_dec_number: "26341200IM00163105" }),
+        row(8, { amount: 8412.81, customs: "Erenköy" }),
+      ],
+      PROCEDURES,
+    );
+    expect(result.matched).toHaveLength(1);
+    expect(result.matched[0].excelRowNumbers).toEqual([4, 8]);
+    expect(result.matched[0].matchMethod).toBe("amount");
   });
 
   it("keeps the only declaration when no row is an IM one", () => {

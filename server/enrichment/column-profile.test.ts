@@ -4,6 +4,7 @@ import {
   buildColumnProfile,
   countRecognizedHeaders,
   applyProfile,
+  FIELD_CANDIDATES,
 } from "./column-profile";
 import type { RawRow } from "./types";
 
@@ -152,7 +153,7 @@ describe("applyProfile", () => {
     const profile = buildColumnProfile(realHeaders());
     const cells: unknown[] = new Array(80).fill(null);
     cells[10] = "."; // "not declared yet" marker
-    cells[16] = "X"; // the KAP column's filler
+    cells[5] = "X"; // junk in the winning KOLİ column
     cells[12] = 5108.77;
 
     const [row] = applyProfile([{ excelRowNumber: 9, cells }], profile);
@@ -160,5 +161,20 @@ describe("applyProfile", () => {
     expect(row.values.import_dec_date).toBeUndefined();
     expect(row.values.package).toBeUndefined();
     expect(row.values.amount).toBe(5108.77);
+  });
+});
+
+describe("FIELD_CANDIDATES", () => {
+  it("keeps every field's candidate headers disjoint from every other field's", () => {
+    // buildColumnProfile has no cross-field guard, so a header shared between
+    // two fields would let one column be claimed twice.
+    const seen = new Map<string, string>();
+    for (const [field, candidates] of Object.entries(FIELD_CANDIDATES)) {
+      for (const candidate of candidates) {
+        const owner = seen.get(candidate);
+        expect(owner, `"${candidate}" claimed by both ${owner} and ${field}`).toBeUndefined();
+        seen.set(candidate, field);
+      }
+    }
   });
 });

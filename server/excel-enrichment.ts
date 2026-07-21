@@ -142,6 +142,11 @@ router.post("/apply", requireRole("admin"), async (req, res) => {
     const procedureId = Number(update?.procedureId);
     const changes = update?.changes;
     if (!Number.isInteger(procedureId) || !changes || typeof changes !== "object") {
+      const fallbackId = Number.isFinite(procedureId) ? procedureId : -1;
+      console.warn(
+        `[Enrichment] apply: rejected malformed update entry (procedureId=${JSON.stringify(update?.procedureId)})`,
+      );
+      results.push({ id: fallbackId, status: "error" });
       continue;
     }
 
@@ -166,13 +171,17 @@ router.post("/apply", requireRole("admin"), async (req, res) => {
           console.warn(`[Enrichment] apply: rejected unknown field "${rawField}"`);
           continue;
         }
+        if (typeof value !== "string" || value === "") {
+          console.warn(`[Enrichment] apply: rejected non-string value for "${rawField}"`);
+          continue;
+        }
         // Re-check against the current row: someone may have filled this in
         // between preview and apply.
         if (!isFillable(field, (procedure as Record<string, unknown>)[field])) {
           skipped.push(field);
           continue;
         }
-        patch[field] = String(value);
+        patch[field] = value;
         applied.push(field);
       }
 
