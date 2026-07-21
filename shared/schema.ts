@@ -136,6 +136,7 @@ export const procedures = pgTable("procedures", {
   customs: text("customs"),
   import_dec_number: text("import_dec_number"),
   import_dec_date: text("import_dec_date"),
+  customs_file_no: text("customs_file_no"),
   usdtl_rate: decimal("usdtl_rate", { precision: 10, scale: 4 }),
   
   // Status fields
