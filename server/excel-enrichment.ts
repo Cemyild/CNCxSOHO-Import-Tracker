@@ -12,7 +12,6 @@ import { FIELD_KIND, type EnrichField } from "./enrichment/types";
 import {
   detectStructure,
   runEnrichmentPipeline,
-  type DetectionSummary,
 } from "./enrichment/pipeline";
 
 const router = Router();
