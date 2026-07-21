@@ -128,11 +128,22 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
     try {
       const form = new FormData();
       form.append("file", file);
-      form.append("sheetName", overrides.sheetName ?? detection.sheetName);
-      form.append(
-        "headerRowIndex",
-        String(overrides.headerRowIndex ?? detection.headerRowIndex),
-      );
+
+      // When sheet changes, send only sheetName and let the server auto-detect
+      // the header row for the newly selected sheet (different sheets may have
+      // different layouts). When header row changes, keep the sheet pinned and
+      // send both sheetName and headerRowIndex.
+      if (overrides.sheetName !== undefined) {
+        form.append("sheetName", overrides.sheetName);
+        // Note: headerRowIndex is intentionally NOT sent; server will auto-detect
+      } else if (overrides.headerRowIndex !== undefined) {
+        form.append("sheetName", detection.sheetName);
+        form.append("headerRowIndex", String(overrides.headerRowIndex));
+      } else {
+        form.append("sheetName", detection.sheetName);
+        form.append("headerRowIndex", String(detection.headerRowIndex));
+      }
+
       const response = await apiRequest("POST", "/api/enrichment/analyze", form);
       const data = await response.json();
       setDetection(data.detection);
