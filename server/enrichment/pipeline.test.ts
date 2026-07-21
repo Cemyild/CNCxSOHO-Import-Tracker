@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { runEnrichmentPipeline } from "../excel-enrichment";
+import { runEnrichmentPipeline } from "./pipeline";
 import type { MatchCandidate } from "./match";
 
 const FIXTURE = readFileSync(

@@ -5,24 +5,15 @@ import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { procedures } from "@shared/schema";
 import { requireRole } from "./auth-middleware";
-import {
-  EnrichmentParseError,
-  parseWorkbook,
-  type ParseOverrides,
-} from "./enrichment/parse-workbook";
-import {
-  FIELD_CANDIDATES,
-  applyProfile,
-  buildColumnProfile,
-} from "./enrichment/column-profile";
-import { matchRows, type MatchCandidate } from "./enrichment/match";
+import { EnrichmentParseError, type ParseOverrides } from "./enrichment/parse-workbook";
+import type { MatchCandidate } from "./enrichment/match";
 import { computeChanges, isFillable } from "./enrichment/diff";
-import type {
-  EnrichField,
-  MatchedGroup,
-  UnmatchedRow,
-  UnusedColumn,
-} from "./enrichment/types";
+import { FIELD_KIND, type EnrichField } from "./enrichment/types";
+import {
+  detectStructure,
+  runEnrichmentPipeline,
+  type DetectionSummary,
+} from "./enrichment/pipeline";
 
 const router = Router();
 
@@ -36,66 +27,7 @@ const upload = multer({
 });
 
 /** Only these columns may ever be written by this feature. */
-const ENRICH_FIELDS = new Set(Object.keys(FIELD_CANDIDATES) as EnrichField[]);
-
-export interface DetectionSummary {
-  sheetName: string;
-  availableSheets: string[];
-  headerRowIndex: number;
-  dataRowCount: number;
-  skippedRowCount: number;
-  mapped: Array<{ field: EnrichField; colIndex: number; header: string }>;
-  unusedCandidates: UnusedColumn[];
-  unmappedHeaders: string[];
-}
-
-export interface PipelineResult {
-  detection: DetectionSummary;
-  matched: MatchedGroup[];
-  unmatched: UnmatchedRow[];
-}
-
-/** Parse + column-map a workbook. Shared by `detectStructure` (no matching)
- *  and `runEnrichmentPipeline` (parse + map + match). */
-function parseAndProfile(buffer: Buffer, overrides: ParseOverrides) {
-  const parsed = parseWorkbook(buffer, overrides);
-  const profile = buildColumnProfile(parsed.headers);
-  const detection: DetectionSummary = {
-    sheetName: parsed.sheetName,
-    availableSheets: parsed.availableSheets,
-    headerRowIndex: parsed.headerRowIndex,
-    dataRowCount: parsed.dataRows.length,
-    skippedRowCount: parsed.skippedRows.length,
-    mapped: profile.mapped,
-    unusedCandidates: profile.unusedCandidates,
-    unmappedHeaders: profile.unmappedHeaders,
-  };
-  return { parsed, profile, detection };
-}
-
-/** Structure only — what `/analyze` shows the user before any matching. */
-export function detectStructure(
-  buffer: Buffer,
-  overrides: ParseOverrides = {},
-): DetectionSummary {
-  return parseAndProfile(buffer, overrides).detection;
-}
-
-/**
- * The whole read-only side of the feature, with no database or HTTP in it:
- * parse -> map columns -> clean values -> match -> merge. `/preview` runs
- * this against real candidates; the pipeline test runs it against a fixture.
- */
-export function runEnrichmentPipeline(
-  buffer: Buffer,
-  candidates: MatchCandidate[],
-  overrides: ParseOverrides = {},
-): PipelineResult {
-  const { parsed, profile, detection } = parseAndProfile(buffer, overrides);
-  const rows = applyProfile(parsed.dataRows, profile);
-  const { matched, unmatched } = matchRows(rows, candidates);
-  return { detection, matched, unmatched };
-}
+const ENRICH_FIELDS = new Set(Object.keys(FIELD_KIND) as EnrichField[]);
 
 function readOverrides(body: Record<string, unknown>): ParseOverrides {
   const overrides: ParseOverrides = {};
