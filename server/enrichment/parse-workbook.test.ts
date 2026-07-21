@@ -52,7 +52,35 @@ describe("parseWorkbook — real broker report", () => {
       sheetName: "İthalat Raporu",
       headerRowIndex: 1,
     });
+    expect(parsed.sheetName).toBe("İthalat Raporu");
+    expect(parsed.headerRowIndex).toBe(1);
     expect(parsed.dataRows).toHaveLength(24);
+  });
+
+  it("obeys a header row override that auto-detection would have rejected", () => {
+    // Auto-detection picks row index 1. Row 0 is the report title line, which
+    // has no recognizable columns — so if the override is honoured, parsing
+    // must fail on it rather than quietly falling back to row 1.
+    try {
+      parseWorkbook(FIXTURE, { headerRowIndex: 0 });
+      throw new Error("expected parseWorkbook to throw");
+    } catch (error) {
+      expect((error as EnrichmentParseError).code).toBe("no_headers");
+    }
+  });
+
+  it("throws sheet_not_found rather than silently choosing another sheet", () => {
+    try {
+      // "Ithalat" with a dotless I — a plausible typo that matches nothing.
+      parseWorkbook(FIXTURE, { sheetName: "Ithalat Raporu" });
+      throw new Error("expected parseWorkbook to throw");
+    } catch (error) {
+      expect((error as EnrichmentParseError).code).toBe("sheet_not_found");
+      // Sayfa1 is empty, so the only sheet worth offering is the data one.
+      expect((error as EnrichmentParseError).availableSheets).toEqual([
+        "İthalat Raporu",
+      ]);
+    }
   });
 });
 
@@ -95,5 +123,26 @@ describe("parseWorkbook — synthetic edge cases", () => {
     const parsed = parseWorkbook(buffer);
     expect(parsed.dataRows).toHaveLength(2);
     expect(parsed.skippedRows.some((r) => r.reason === "empty_row")).toBe(true);
+  });
+
+  it("lets a sheet override win over the better-scoring sheet", () => {
+    const buffer = makeWorkbook({
+      Ozet: [
+        ["FATURA NO(0100)", "FAT.BEDELİ", "DÖVİZ"],
+        ["53598059", 1255.5, "USD"],
+      ],
+      Detay: [
+        ["FATURA NO(0100)", "FAT.BEDELİ", "DÖVİZ", "GUM.", "BEYAN NO"],
+        ["55559417", 8412.81, "USD", "ERENKÖY GÜMRÜK MÜDÜRLÜĞÜ", "26341200IM00163105"],
+      ],
+    });
+
+    // Detay scores higher (5 recognized columns vs 3), so it wins unaided.
+    expect(parseWorkbook(buffer).sheetName).toBe("Detay");
+
+    // The override must beat that.
+    const parsed = parseWorkbook(buffer, { sheetName: "Ozet" });
+    expect(parsed.sheetName).toBe("Ozet");
+    expect(parsed.dataRows).toHaveLength(1);
   });
 });

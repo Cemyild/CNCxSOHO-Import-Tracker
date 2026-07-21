@@ -9,9 +9,12 @@ export interface ParseOverrides {
 
 export class EnrichmentParseError extends Error {
   constructor(
-    public code: "no_data" | "no_headers",
+    public code: "no_data" | "no_headers" | "sheet_not_found",
     message: string,
+    /** For `no_headers`: the headers that were actually seen. */
     public detectedHeaders: string[] = [],
+    /** For `sheet_not_found`: the sheets that do contain data. */
+    public availableSheets: string[] = [],
   ) {
     super(message);
     this.name = "EnrichmentParseError";
@@ -75,6 +78,15 @@ export function parseWorkbook(
   let chosen = overrides.sheetName
     ? populated.find((sheet) => sheet.name === overrides.sheetName)
     : undefined;
+
+  if (overrides.sheetName && !chosen) {
+    throw new EnrichmentParseError(
+      "sheet_not_found",
+      `Requested sheet "${overrides.sheetName}" does not exist or contains no data`,
+      [],
+      populated.map((sheet) => sheet.name),
+    );
+  }
 
   if (!chosen) {
     chosen = populated.reduce((best, sheet) =>
