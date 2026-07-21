@@ -100,6 +100,7 @@ const procedureFormSchema = z.object({
   arrival_date: z.date().optional().nullable(),
   import_dec_date: z.date().optional().nullable(),
   import_dec_number: z.string().optional(),
+  customs_file_no: z.string().optional(),
   carrier: z.string().optional(),
   customs: z.string().optional(),
   usdtl_rate: z.string().optional()
@@ -144,6 +145,7 @@ export default function AddProcedurePage() {
       arrival_date: null,
       import_dec_date: null,
       import_dec_number: "",
+      customs_file_no: "",
       carrier: "",
       customs: "",
       usdtl_rate: "",
@@ -580,6 +582,21 @@ export default function AddProcedurePage() {
                         <FormLabel>{t("procedurePages.form.importDecNumber")}</FormLabel>
                         <FormControl>
                           <Input placeholder={t("procedurePages.form.importDecNumberPlaceholder")} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Broker File No */}
+                  <FormField
+                    control={form.control}
+                    name="customs_file_no"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("procedurePages.form.customsFileNo")}</FormLabel>
+                        <FormControl>
+                          <Input placeholder={t("procedurePages.form.customsFileNoPlaceholder")} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

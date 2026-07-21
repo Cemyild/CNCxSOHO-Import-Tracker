@@ -94,6 +94,7 @@ const procedureSchema = z.object({
   arrival_date: z.date().nullable(),
   carrier: z.string().optional(),
   import_dec_number: z.string().optional(),
+  customs_file_no: z.string().optional(),
   import_dec_date: z.date().nullable(),
   customs: z.string().optional(),
   usdtl_rate: z.string().default("0"),
@@ -127,6 +128,7 @@ export default function EditProcedurePage() {
       arrival_date: null,
       carrier: "",
       import_dec_number: "",
+      customs_file_no: "",
       import_dec_date: null,
       customs: "",
       usdtl_rate: "0",
@@ -162,6 +164,7 @@ export default function EditProcedurePage() {
         arrival_date: procedure.arrival_date ? new Date(procedure.arrival_date) : null,
         carrier: procedure.carrier || "",
         import_dec_number: procedure.import_dec_number || "",
+        customs_file_no: procedure.customs_file_no || "",
         import_dec_date: procedure.import_dec_date ? new Date(procedure.import_dec_date) : null,
         customs: procedure.customs || "",
         usdtl_rate: procedure.usdtl_rate ? procedure.usdtl_rate.toString() : "0",
@@ -535,6 +538,21 @@ export default function EditProcedurePage() {
                         <FormLabel>{t("procedurePages.form.importDecNumber")}</FormLabel>
                         <FormControl>
                           <Input placeholder={t("procedurePages.form.importDecNumberPlaceholder")} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Broker File No */}
+                  <FormField
+                    control={form.control}
+                    name="customs_file_no"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("procedurePages.form.customsFileNo")}</FormLabel>
+                        <FormControl>
+                          <Input placeholder={t("procedurePages.form.customsFileNoPlaceholder")} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
