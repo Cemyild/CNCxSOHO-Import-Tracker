@@ -1,361 +1,270 @@
-
 import { Router } from "express";
+import type { Response } from "express";
 import multer from "multer";
-import * as XLSX from "xlsx";
+import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { procedures } from "@shared/schema";
-import { eq, or, isNull, sql } from "drizzle-orm";
+import { requireRole } from "./auth-middleware";
+import {
+  EnrichmentParseError,
+  parseWorkbook,
+  type ParseOverrides,
+} from "./enrichment/parse-workbook";
+import {
+  FIELD_CANDIDATES,
+  applyProfile,
+  buildColumnProfile,
+} from "./enrichment/column-profile";
+import { matchRows, type MatchCandidate } from "./enrichment/match";
+import { computeChanges, isFillable } from "./enrichment/diff";
+import type {
+  EnrichField,
+  MatchedGroup,
+  UnmatchedRow,
+  UnusedColumn,
+} from "./enrichment/types";
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
 
-// --- Smart Column Mapping Configuration ---
-// Maps potential Excel headers (lowercase, trimmed) to database columns
-const COLUMN_MAPPING: Record<string, string> = {
-  "faturano": "invoice_no",
-  "faturanumara": "invoice_no",
-  "invno": "invoice_no",
-  "invoiceno": "invoice_no",
-  "faturano0100": "invoice_no", // Found in debug
-  
-  "faturatarihi": "invoice_date",
-  "tarih": "invoice_date",
-  "date": "invoice_date",
-  "invoicedate": "invoice_date",
-  "faturatarih": "invoice_date",
-  
-  "faturatutari": "amount",
-  "tutar": "amount",
-  "amount": "amount",
-  "total": "amount",
-  "dovizkiymeti": "amount",
-  "malbedeli": "amount",
-  
-  "doviz": "currency",
-  "parabirimi": "currency",
-  "currency": "currency",
-  
-  "gumruk": "customs",
-  "gumrukidaire": "customs",
-  "gumrukidaresi": "customs", // User specified
-  "customs": "customs",
-  
-  "beyannamenumarasi": "import_dec_number",
-  "beyannameno": "import_dec_number",
-  "declarationno": "import_dec_number",
-  "tcgbno": "import_dec_number",
-  "beyanno": "import_dec_number", // Found in debug
-  
-  "beyannametarihi": "import_dec_date",
-  "dectarih": "import_dec_date",
-  "declarationdate": "import_dec_date",
-  "tcgbtarihi": "import_dec_date",
-  "beyantarihi": "import_dec_date", // Found in debug
-  
-  "gonderici": "shipper",
-  "firma": "shipper",
-  "shipper": "shipper",
-  "sender": "shipper",
-  "gonderen": "shipper", 
-
-  "kap": "package",
-  "paket": "package",
-  "package": "package",
-  "koli": "package", 
-
-  "kilo": "kg",
-  "kg": "kg",
-  "grossweight": "kg",
-  "brutkg": "kg", 
-  
-  "adet": "piece",
-  "miktar": "piece",
-  "quantity": "piece",
-  "piece": "piece",
-  
-  "konimento": "awb_number",
-  "konismento": "awb_number",
-  "awb": "awb_number",
-  "awbnumber": "awb_number",
-  "konismentoozetbeyan": "awb_number",
-  "ozetbeyan": "awb_number",
-  "tasimasenedino": "awb_number", 
-  
-  "tasiyici": "carrier",
-  "nakliyeci": "carrier",
-  "carrier": "carrier"
-};
-
-// --- Helper Functions ---
-
-const normalizeHeader = (header: string): string => {
-  if (!header) return "";
-  let text = header.toString().toLowerCase();
-  // Turkish char replacement
-  const trMap: Record<string, string> = {
-      'ç': 'c', 'ğ': 'g', 'ı': 'i', 'i': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u',
-      'Ç': 'c', 'Ğ': 'g', 'İ': 'i', 'Ö': 'o', 'Ş': 's', 'Ü': 'u'
-  };
-  text = text.replace(/[çğıöşüÇĞİÖŞÜ]/g, (char) => trMap[char] || char);
-  return text.replace(/[^a-z0-9]/g, "");
-};
-
-// Excel Date Serial to JS Date Helper
-const excelDateToJSDate = (serial: number | string): string | null => {
-   if (!serial) return null;
-   // If it's already a string with dots or dashes, return as is (maybe normalize to YYYY-MM-DD if needed)
-   if (typeof serial === 'string' && (serial.includes('.') || serial.includes('-') || serial.includes('/'))) {
-       return serial;
-   }
-   
-   const num = Number(serial);
-   if (isNaN(num)) return String(serial);
-
-   // Excel serial date to JS Date
-   // 25569 is the offset between Excel epoch (1900-01-01) and JS epoch (1970-01-01)
-   // 86400 * 1000 is milliseconds in a day
-   const utc_days  = Math.floor(num - 25569);
-   const utc_value = utc_days * 86400;                                      
-   const date_info = new Date(utc_value * 1000);
-
-   // Format as YYYY-MM-DD (or ISO)
-   try {
-     return date_info.toISOString().split('T')[0];
-   } catch (e) {
-     return String(serial);
-   }
-}
-
-const mapExcelRowToDbFields = (row: any, headers: string[]) => {
-  const mappedData: Record<string, any> = {};
-  
-  headers.forEach((header, index) => {
-    const normalized = normalizeHeader(header);
-    const dbField = COLUMN_MAPPING[normalized];
-    
-    let value = row[header];
-
-    // Priority 1: Index-based mapping (User override)
-    // User specified: 10 -> Customs, 11 -> Dec No, 12 -> Dec Date
-    // Note: User likely means 0-based indices matching our debug output (10, 11, 12)
-    // Debug output confirmed: [10] "Gümrük İdaresi", [11] "Beyanname No", [12] "Beyanname Tarihi"
-    if (index === 10) {
-        mappedData.customs = value;
-    } 
-    else if (index === 11) {
-        mappedData.import_dec_number = value;
-    }
-    else if (index === 12) {
-        mappedData.import_dec_date = excelDateToJSDate(value);
-    }
-    
-    // Priority 2: Name-based mapping (if not already set by index)
-    if (dbField && (!mappedData[dbField] || mappedData[dbField] === "")) {
-        // Handle Date Fields
-        if (dbField === 'invoice_date' || dbField === 'import_dec_date' || dbField === 'arrival_date') {
-            value = excelDateToJSDate(value);
-        }
-        mappedData[dbField] = value;
-    }
-
-    // Special handling for 'BeyannameFatura' if invoice_no is missing
-    if (normalized === 'beyannamefatura' && !mappedData.invoice_no) {
-       const raw = String(row[header]);
-       // Attempt to extract first part "20886490 07.01.2026" -> "20886490"
-       const parts = raw.split(' ');
-       if (parts.length > 0 && parts[0].length > 5) {
-           mappedData.invoice_no = parts[0].trim();
-       }
-    }
-  });
-
-  return mappedData;
-};
-
-// --- Routes ---
-
-router.post("/preview", upload.single("file"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
-    }
-
-    // 1. Parse Excel as Array of Arrays (header: 1) to guarantee column order
-    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    // This gives us rows as arrays: [ [H1, H2...], [V1, V2...] ]
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-
-    if (!rows || rows.length < 2) {
-      return res.status(400).json({ message: "Excel file is empty or missing headers" });
-    }
-
-    // Row 0 is Headers
-    const headers = rows[0] as string[];
-    console.log("[ExcelEnrichment] Detected Headers:", headers);
-    
-    // Build a map of "NormalizedHeader -> ColumnIndex" for dynamic fields
-    const headerIndexMap: Record<string, number> = {};
-    headers.forEach((h, idx) => {
-        if (h) headerIndexMap[normalizeHeader(h)] = idx;
-    });
-
-    // 2. Fetch Potential Matches from DB
-    const allProcedures = await db.select().from(procedures);
-
-    const matches = [];
-
-    // 3. Perform Matching Logic (Iterate data rows starting at index 1)
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      if (!row || row.length === 0) continue;
-
-      const mappedData: Record<string, any> = {};
-
-      // --- A. Dynamic Header Mapping ---
-      // Iterate through our know mappings and pull from found indices
-      for (const [normHeader, dbField] of Object.entries(COLUMN_MAPPING)) {
-          const colIdx = headerIndexMap[normHeader];
-          if (colIdx !== undefined && row[colIdx] !== undefined) {
-             let val = row[colIdx];
-             if (dbField === 'invoice_date' || dbField === 'import_dec_date' || dbField === 'arrival_date') {
-                 val = excelDateToJSDate(val);
-             }
-             mappedData[dbField] = val;
-          }
-      }
-
-      // Special 'BeyannameFatura' handling if Invoice No is still missing
-      // Using dynamic lookup for 'BeyannameFatura' column
-      if (!mappedData.invoice_no) {
-          const bfIdx = headerIndexMap['beyannamefatura'];
-          if (bfIdx !== undefined && row[bfIdx]) {
-              const raw = String(row[bfIdx]);
-              const parts = raw.split(' ');
-              if (parts.length > 0 && parts[0].length > 5) {
-                mappedData.invoice_no = parts[0].trim();
-              }
-          }
-      }
-
-      // --- Matching Logic Only Below ---
-      
-      // We need at least Invoice No or Amount to match
-      if (!mappedData.invoice_no && !mappedData.amount) {
-        continue; 
-      }
-
-      let matchedProcedure = null;
-      let matchMethod = null;
-
-      // Priority 1: Invoice No
-      if (mappedData.invoice_no) {
-        const cleanInvNo = String(mappedData.invoice_no).trim();
-        matchedProcedure = allProcedures.find(p => p.invoice_no && String(p.invoice_no).trim() === cleanInvNo);
-        if (matchedProcedure) matchMethod = "invoice_no";
-      }
-
-      // Priority 2: Amount
-      if (!matchedProcedure && mappedData.amount) {
-        const targetAmount = parseFloat(String(mappedData.amount));
-        matchedProcedure = allProcedures.find(p => {
-          if (!p.amount) return false;
-          const dbAmount = parseFloat(String(p.amount));
-          return Math.abs(dbAmount - targetAmount) < 0.01;
-        });
-        if (matchedProcedure) matchMethod = "amount";
-      }
-
-      if (matchedProcedure) {
-        const changes = [];
-        
-        for (const [field, newValue] of Object.entries(mappedData)) {
-            const currentValue = (matchedProcedure as any)[field];
-            const isDbEmpty = currentValue === null || currentValue === undefined || currentValue === "";
-            
-            // Loose equality check for strings/numbers to avoid "false updates" (e.g. 100 vs "100")
-            // But here we only update if DB is empty, so collision isn't main worry.
-            
-            if (isDbEmpty && newValue !== null && newValue !== "") {
-              changes.push({
-                field: field,
-                oldValue: currentValue,
-                newValue: String(newValue)
-              });
-            }
-        }
-
-        if (changes.length > 0) {
-          matches.push({
-            procedureId: matchedProcedure.id,
-            reference: matchedProcedure.reference,
-            matchMethod: matchMethod,
-            excelRow: i + 1, // Row number 1-based
-            changes: changes
-          });
-        }
-      }
-    }
-
-    res.json({ matchCount: matches.length, matches });
-
-  } catch (error) {
-    console.error("Excel processing error:", error);
-    res.status(500).json({ message: "Failed to process Excel file", error: String(error) });
-  }
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES },
+  fileFilter: (_req, file, cb) => {
+    cb(null, /\.xlsx?$/i.test(file.originalname));
+  },
 });
 
-router.post("/apply", async (req, res) => {
-  try {
-    const { updates } = req.body; // Expecting array of { procedureId, changes: { field: value, ... } }
+/** Only these columns may ever be written by this feature. */
+const ENRICH_FIELDS = new Set(Object.keys(FIELD_CANDIDATES) as EnrichField[]);
 
-    if (!updates || !Array.isArray(updates)) {
-        return res.status(400).json({ message: "Invalid updates format" });
-    }
+export interface DetectionSummary {
+  sheetName: string;
+  availableSheets: string[];
+  headerRowIndex: number;
+  dataRowCount: number;
+  skippedRowCount: number;
+  mapped: Array<{ field: EnrichField; colIndex: number; header: string }>;
+  unusedCandidates: UnusedColumn[];
+  unmappedHeaders: string[];
+}
 
-    const results = [];
+export interface PipelineResult {
+  detection: DetectionSummary;
+  matched: MatchedGroup[];
+  unmatched: UnmatchedRow[];
+}
 
-    // Process updates in a transaction-like manner (sequential for now)
-    for (const update of updates) {
-        const { procedureId, changes } = update;
-        
-        if (!procedureId || !changes) continue;
+/** Parse + column-map a workbook. Shared by `detectStructure` (no matching)
+ *  and `runEnrichmentPipeline` (parse + map + match). */
+function parseAndProfile(buffer: Buffer, overrides: ParseOverrides) {
+  const parsed = parseWorkbook(buffer, overrides);
+  const profile = buildColumnProfile(parsed.headers);
+  const detection: DetectionSummary = {
+    sheetName: parsed.sheetName,
+    availableSheets: parsed.availableSheets,
+    headerRowIndex: parsed.headerRowIndex,
+    dataRowCount: parsed.dataRows.length,
+    skippedRowCount: parsed.skippedRows.length,
+    mapped: profile.mapped,
+    unusedCandidates: profile.unusedCandidates,
+    unmappedHeaders: profile.unmappedHeaders,
+  };
+  return { parsed, profile, detection };
+}
 
-        // Verify record still exists
-        const [procedure] = await db.select().from(procedures).where(eq(procedures.id, procedureId));
-        
-        if (procedure) {
-            // Apply updates
-            // Filter out fields that are NOT in the schema to avoid safety errors
-            // (Though mapExcelRowToDbFields should have handled this, safety first)
-            
-            const sanitizedUpdates: Record<string, any> = {};
-            // We can check if field exists in 'procedure' object keys, but TS makes it tricky at runtime.
-            // We rely on the Preview endpoint ensuring valid field names from COLUMN_MAPPING.
-            
-            // We only need to set updated fields
-            // Assuming changes is object { field: value }
-            
-            await db.update(procedures)
-                .set({
-                    ...changes,
-                    updatedAt: new Date()
-                })
-                .where(eq(procedures.id, procedureId));
-                
-            results.push({ id: procedureId, status: "success" });
-        } else {
-            results.push({ id: procedureId, status: "not_found" });
-        }
-    }
+/** Structure only — what `/analyze` shows the user before any matching. */
+export function detectStructure(
+  buffer: Buffer,
+  overrides: ParseOverrides = {},
+): DetectionSummary {
+  return parseAndProfile(buffer, overrides).detection;
+}
 
-    res.json({ message: "Updates applied", results });
+/**
+ * The whole read-only side of the feature, with no database or HTTP in it:
+ * parse -> map columns -> clean values -> match -> merge. `/preview` runs
+ * this against real candidates; the pipeline test runs it against a fixture.
+ */
+export function runEnrichmentPipeline(
+  buffer: Buffer,
+  candidates: MatchCandidate[],
+  overrides: ParseOverrides = {},
+): PipelineResult {
+  const { parsed, profile, detection } = parseAndProfile(buffer, overrides);
+  const rows = applyProfile(parsed.dataRows, profile);
+  const { matched, unmatched } = matchRows(rows, candidates);
+  return { detection, matched, unmatched };
+}
 
-  } catch (error) {
-      console.error("Apply updates error:", error);
-      res.status(500).json({ message: "Failed to apply updates", error: String(error) });
+function readOverrides(body: Record<string, unknown>): ParseOverrides {
+  const overrides: ParseOverrides = {};
+  if (typeof body.sheetName === "string" && body.sheetName !== "") {
+    overrides.sheetName = body.sheetName;
   }
+  const headerRowIndex = Number(body.headerRowIndex);
+  if (Number.isInteger(headerRowIndex) && headerRowIndex >= 0) {
+    overrides.headerRowIndex = headerRowIndex;
+  }
+  return overrides;
+}
+
+function handleParseError(error: unknown, res: Response): boolean {
+  if (error instanceof EnrichmentParseError) {
+    res.status(400).json({
+      code: error.code,
+      message: error.message,
+      detectedHeaders: error.detectedHeaders,
+      availableSheets: error.availableSheets,
+    });
+    return true;
+  }
+  return false;
+}
+
+/** Step 1 of the UI: what did we find in this workbook? */
+router.post(
+  "/analyze",
+  requireRole("admin"),
+  upload.single("file"),
+  async (req, res) => {
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    try {
+      const detection = detectStructure(
+        req.file.buffer,
+        readOverrides(req.body ?? {}),
+      );
+      console.log(
+        `[Enrichment] analyze: sheet="${detection.sheetName}" headerRow=${detection.headerRowIndex} rows=${detection.dataRowCount} mapped=${detection.mapped.length}`,
+      );
+      res.json({ detection });
+    } catch (error) {
+      if (handleParseError(error, res)) return;
+      console.error("[Enrichment] analyze failed:", error);
+      res.status(500).json({ message: "Failed to analyze Excel file" });
+    }
+  },
+);
+
+/** Step 2 of the UI: which procedures would change, and what stayed behind? */
+router.post(
+  "/preview",
+  requireRole("admin"),
+  upload.single("file"),
+  async (req, res) => {
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    try {
+      // One read serves both jobs: matching needs id/reference/invoice/amount,
+      // the diff needs every column of the winning rows.
+      const full = await db.select().from(procedures);
+      const candidates: MatchCandidate[] = full.map((p) => ({
+        id: p.id,
+        reference: p.reference,
+        invoice_no: p.invoice_no,
+        amount: p.amount,
+      }));
+
+      const { detection, matched, unmatched } = runEnrichmentPipeline(
+        req.file.buffer,
+        candidates,
+        readOverrides(req.body ?? {}),
+      );
+
+      const byId = new Map(full.map((p) => [p.id, p as Record<string, unknown>]));
+
+      const withChanges = matched
+        .map((group) => {
+          const procedure = byId.get(group.procedureId);
+          if (!procedure) return null;
+          return { ...group, changes: computeChanges(group, procedure) };
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null)
+        .filter((item) => item.changes.length > 0);
+
+      console.log(
+        `[Enrichment] preview: matched=${matched.length} withChanges=${withChanges.length} unmatched=${unmatched.length}`,
+      );
+      res.json({ detection, matched: withChanges, unmatched });
+    } catch (error) {
+      if (handleParseError(error, res)) return;
+      console.error("[Enrichment] preview failed:", error);
+      res.status(500).json({ message: "Failed to process Excel file" });
+    }
+  },
+);
+
+/** Step 3: write the changes the user ticked. */
+router.post("/apply", requireRole("admin"), async (req, res) => {
+  const { updates } = req.body ?? {};
+  if (!Array.isArray(updates)) {
+    return res.status(400).json({ message: "Invalid updates format" });
+  }
+
+  const results: Array<{
+    id: number;
+    status: "success" | "not_found" | "skipped" | "error";
+    applied?: string[];
+    skipped?: string[];
+  }> = [];
+
+  for (const update of updates) {
+    const procedureId = Number(update?.procedureId);
+    const changes = update?.changes;
+    if (!Number.isInteger(procedureId) || !changes || typeof changes !== "object") {
+      continue;
+    }
+
+    try {
+      const [procedure] = await db
+        .select()
+        .from(procedures)
+        .where(eq(procedures.id, procedureId));
+
+      if (!procedure) {
+        results.push({ id: procedureId, status: "not_found" });
+        continue;
+      }
+
+      const applied: string[] = [];
+      const skipped: string[] = [];
+      const patch: Record<string, string> = {};
+
+      for (const [rawField, value] of Object.entries(changes)) {
+        const field = rawField as EnrichField;
+        if (!ENRICH_FIELDS.has(field)) {
+          console.warn(`[Enrichment] apply: rejected unknown field "${rawField}"`);
+          continue;
+        }
+        // Re-check against the current row: someone may have filled this in
+        // between preview and apply.
+        if (!isFillable(field, (procedure as Record<string, unknown>)[field])) {
+          skipped.push(field);
+          continue;
+        }
+        patch[field] = String(value);
+        applied.push(field);
+      }
+
+      if (applied.length === 0) {
+        results.push({ id: procedureId, status: "skipped", applied, skipped });
+        continue;
+      }
+
+      await db
+        .update(procedures)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(eq(procedures.id, procedureId));
+
+      results.push({ id: procedureId, status: "success", applied, skipped });
+    } catch (error) {
+      console.error(`[Enrichment] apply failed for #${procedureId}:`, error);
+      results.push({ id: procedureId, status: "error" });
+    }
+  }
+
+  const succeeded = results.filter((r) => r.status === "success").length;
+  console.log(`[Enrichment] apply: ${succeeded}/${results.length} updated`);
+  res.json({ message: "Updates applied", results });
 });
 
 export default router;
