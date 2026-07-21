@@ -78,7 +78,7 @@ export function EnrichmentPreviewStep({
   };
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between text-sm">
         <span className="font-medium text-muted-foreground">
           {t("taxCalcComp.enrichment.recordsToUpdate", { count: items.length })}
@@ -88,8 +88,12 @@ export function EnrichmentPreviewStep({
         </span>
       </div>
 
-      <div className="relative flex-1 overflow-hidden rounded-md border">
-        <ScrollArea className="h-full">
+      {/* Bounded height, not a flex-fill: DialogContent's own base class is
+          `grid`, which beats the `flex` we pass in (Tailwind emits .grid after
+          .flex), so a flex-1/h-full chain silently resolves to "no scroll,
+          just clipped" and the user cannot review the rows below the fold. */}
+      <div className="rounded-md border">
+        <ScrollArea className="max-h-[40vh]">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>

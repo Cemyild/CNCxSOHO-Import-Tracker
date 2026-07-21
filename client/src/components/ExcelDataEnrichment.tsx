@@ -272,7 +272,10 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
           {t("taxCalcComp.enrichment.triggerButton")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col">
+      {/* No `flex flex-col` here: DialogContent's base class list already sets
+          `grid`, and Tailwind emits .grid after .flex, so the flex would be
+          dead CSS. Each step bounds its own scroll region instead. */}
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>{t("taxCalcComp.enrichment.title")}</DialogTitle>
           <DialogDescription>
@@ -280,7 +283,7 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-hidden p-1">
+        <div className="p-1">
           {step === "upload" && (
             <div className="flex h-64 flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed bg-muted/50">
               <div className="rounded-full border bg-background p-4 shadow-sm">

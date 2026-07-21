@@ -49,8 +49,11 @@ export function EnrichmentDetectionStep({
     onHeaderRowChange(oneBasedRow - 1);
   };
 
+  // Bounded height rather than h-full: see the note in EnrichmentPreviewStep —
+  // the dialog is a grid, so h-full here resolves to the full content height
+  // and the mapped-column list never scrolls.
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="max-h-[50vh]">
       <div className="flex flex-col gap-4 p-1">
         <div className="rounded-md border bg-muted/40 p-3 text-sm">
           <div className="mb-2 font-medium">
