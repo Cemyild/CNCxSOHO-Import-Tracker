@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, CheckCircle2, ArrowRight } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -49,12 +48,11 @@ export function EnrichmentDetectionStep({
     onHeaderRowChange(oneBasedRow - 1);
   };
 
-  // Bounded height rather than h-full: see the note in EnrichmentPreviewStep —
-  // the dialog is a grid, so h-full here resolves to the full content height
-  // and the mapped-column list never scrolls.
+  // Native overflow scroll, not Radix ScrollArea — see the note in
+  // EnrichmentPreviewStep: the dialog is a grid, so a flex/h-full height chain
+  // never applied, and a plain overflow-y-auto box scrolls reliably.
   return (
-    <ScrollArea className="max-h-[50vh]">
-      <div className="flex flex-col gap-4 p-1">
+    <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto p-1">
         <div className="rounded-md border bg-muted/40 p-3 text-sm">
           <div className="mb-2 font-medium">
             {t("taxCalcComp.enrichment.detectionTitle")}
@@ -153,7 +151,6 @@ export function EnrichmentDetectionStep({
             })}
           </p>
         )}
-      </div>
-    </ScrollArea>
+    </div>
   );
 }

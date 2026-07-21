@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { ArrowRight, AlertTriangle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
   TableBody,
@@ -88,12 +87,13 @@ export function EnrichmentPreviewStep({
         </span>
       </div>
 
-      {/* Bounded height, not a flex-fill: DialogContent's own base class is
-          `grid`, which beats the `flex` we pass in (Tailwind emits .grid after
-          .flex), so a flex-1/h-full chain silently resolves to "no scroll,
-          just clipped" and the user cannot review the rows below the fold. */}
-      <div className="rounded-md border">
-        <ScrollArea className="max-h-[40vh]">
+      {/* Native overflow scroll, not Radix ScrollArea: the dialog is a `grid`
+          (its base class beats the `flex` we pass), so a flex-fill height chain
+          never applied — and Radix's ScrollArea wraps children in a
+          `display:table` viewport that does not scroll a `<table>` under a
+          max-height. A plain `overflow-y-auto` box always scrolls: real
+          scrollbar, mouse wheel, and a sticky header that actually sticks. */}
+      <div className="max-h-[55vh] overflow-y-auto rounded-md border">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
@@ -172,7 +172,6 @@ export function EnrichmentPreviewStep({
               ))}
             </TableBody>
           </Table>
-        </ScrollArea>
       </div>
 
       {unmatched.length > 0 && (
@@ -183,7 +182,7 @@ export function EnrichmentPreviewStep({
               count: unmatched.length,
             })}
           </div>
-          <ScrollArea className="max-h-32">
+          <div className="max-h-32 overflow-y-auto">
             <ul className="divide-y divide-amber-200">
               {unmatched.map((row) => (
                 <li key={row.excelRowNumber} className="px-3 py-2 text-xs">
@@ -203,7 +202,7 @@ export function EnrichmentPreviewStep({
                 </li>
               ))}
             </ul>
-          </ScrollArea>
+          </div>
         </div>
       )}
     </div>
