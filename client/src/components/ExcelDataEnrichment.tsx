@@ -1,5 +1,6 @@
-
-import React, { useState, useRef } from 'react';
+import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { FileSpreadsheet, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,86 +11,131 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, Check, AlertCircle, ArrowRight } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Progress } from "@/components/ui/progress";
-import { useTranslation } from "react-i18next";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  EnrichmentDetectionStep,
+  type DetectionSummary,
+} from "@/components/enrichment/EnrichmentDetectionStep";
+import {
+  EnrichmentPreviewStep,
+  type PreviewItem,
+  type UnmatchedItem,
+} from "@/components/enrichment/EnrichmentPreviewStep";
 
-interface EnrichmentPreviewItem {
-  procedureId: number;
-  reference: string;
-  matchMethod: string;
-  changes: {
-    field: string;
-    oldValue: any;
-    newValue: string;
-  }[];
-}
+type Step = "upload" | "detection" | "preview";
 
 interface ExcelDataEnrichmentProps {
   onSuccess?: () => void;
 }
 
+/** apiRequest throws `Error("<status>: <raw body>")`; recover the JSON body. */
+function parseServerError(error: unknown): {
+  code?: string;
+  detectedHeaders?: string[];
+  availableSheets?: string[];
+} | null {
+  const message = error instanceof Error ? error.message : String(error);
+  const jsonStart = message.indexOf("{");
+  if (jsonStart === -1) return null;
+  try {
+    return JSON.parse(message.slice(jsonStart));
+  } catch {
+    return null;
+  }
+}
+
 export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [previewData, setPreviewData] = useState<EnrichmentPreviewItem[]>([]);
+  const [detection, setDetection] = useState<DetectionSummary | null>(null);
+  const [items, setItems] = useState<PreviewItem[]>([]);
+  const [unmatched, setUnmatched] = useState<UnmatchedItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [step, setStep] = useState<'upload' | 'preview'>('upload');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { t } = useTranslation();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+  const reset = () => {
+    setStep("upload");
+    setFile(null);
+    setDetection(null);
+    setItems([]);
+    setUnmatched([]);
+    setSelectedIds([]);
+  };
+
+  /** Turns a server error body into a message the user can act on. */
+  const describeError = (error: unknown): string => {
+    const body = parseServerError(error);
+    if (body?.code === "no_data") {
+      return t("taxCalcComp.enrichment.errorNoData");
+    }
+    if (body?.code === "no_headers") {
+      return t("taxCalcComp.enrichment.errorNoHeaders", {
+        headers: (body.detectedHeaders ?? []).slice(0, 12).join(", "),
+      });
+    }
+    if (body?.code === "sheet_not_found") {
+      return t("taxCalcComp.enrichment.errorSheetNotFound", {
+        sheets: (body.availableSheets ?? []).join(", "),
+      });
+    }
+    return t("taxCalcComp.enrichment.failedToProcess");
+  };
+
+  const handleAnalyze = async () => {
+    if (!file) return;
+    setLoading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await apiRequest("POST", "/api/enrichment/analyze", form);
+      const data = await response.json();
+      setDetection(data.detection);
+      setStep("detection");
+    } catch (error) {
+      toast({
+        title: t("common.error"),
+        description: describeError(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleUpload = async () => {
-    if (!file) return;
-
+  const handlePreview = async () => {
+    if (!file || !detection) return;
     setLoading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const response = await apiRequest('POST', '/api/enrichment/preview', formData);
-
-      if (!response.ok) throw new Error('Preview generation failed');
-
+      const form = new FormData();
+      form.append("file", file);
+      form.append("sheetName", detection.sheetName);
+      form.append("headerRowIndex", String(detection.headerRowIndex));
+      const response = await apiRequest("POST", "/api/enrichment/preview", form);
       const data = await response.json();
-      setPreviewData(data.matches);
-      
-      // Select all by default
-      setSelectedIds(data.matches.map((m: any) => m.procedureId));
-      
-      if (data.matches.length === 0) {
+
+      setItems(data.matched ?? []);
+      setUnmatched(data.unmatched ?? []);
+      setSelectedIds((data.matched ?? []).map((m: PreviewItem) => m.procedureId));
+
+      if ((data.matched ?? []).length === 0) {
         toast({
-          title: t('taxCalcComp.enrichment.noMatchesTitle'),
-          description: t('taxCalcComp.enrichment.noMatchesDesc'),
+          title: t("taxCalcComp.enrichment.noMatchesTitle"),
+          description: t("taxCalcComp.enrichment.noMatchesDesc"),
           variant: "destructive",
         });
-      } else {
-        setStep('preview');
-        toast({
-          title: t('taxCalcComp.enrichment.analysisCompleteTitle'),
-          description: t('taxCalcComp.enrichment.foundMatching', { count: data.matches.length }),
-        });
       }
-
+      setStep("preview");
     } catch (error) {
       toast({
-        title: t('common.error'),
-        description: t('taxCalcComp.enrichment.failedToProcess'),
+        title: t("common.error"),
+        description: describeError(error),
         variant: "destructive",
       });
-      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -97,46 +143,38 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
 
   const handleApply = async () => {
     setLoading(true);
-    
-    // Filter updates based on selection
-    const updatesToApply = previewData
-      .filter(item => selectedIds.includes(item.procedureId))
-      .map(item => {
-        // Convert changes array back to object for the API
-        const changesObj: Record<string, string> = {};
-        item.changes.forEach(change => {
-            changesObj[change.field] = change.newValue;
-        });
-        return {
-            procedureId: item.procedureId,
-            changes: changesObj
-        };
-      });
-
     try {
-      const response = await apiRequest('POST', '/api/enrichment/apply', { updates: updatesToApply });
+      const updates = items
+        .filter((item) => selectedIds.includes(item.procedureId))
+        .map((item) => ({
+          procedureId: item.procedureId,
+          changes: Object.fromEntries(
+            item.changes.map((change) => [change.field, change.newValue]),
+          ),
+        }));
 
-      if (!response.ok) throw new Error('Update failed');
-
+      const response = await apiRequest("POST", "/api/enrichment/apply", {
+        updates,
+      });
       const result = await response.json();
-      
+      const succeeded = (result.results ?? []).filter(
+        (r: { status: string }) => r.status === "success",
+      ).length;
+
       toast({
-        title: t('common.success'),
-        description: t('taxCalcComp.enrichment.enrichedSuccess'),
-        variant: "default", // or "success" if you have that variant
+        title: t("common.success"),
+        description: t("taxCalcComp.enrichment.enrichedSuccess", {
+          count: succeeded,
+        }),
       });
 
       setOpen(false);
-      setStep('upload');
-      setFile(null);
-      setPreviewData([]);
-      
-      if (onSuccess) onSuccess();
-
-    } catch (error) {
+      reset();
+      onSuccess?.();
+    } catch {
       toast({
-        title: t('common.error'),
-        description: t('taxCalcComp.enrichment.failedToApply'),
+        title: t("common.error"),
+        description: t("taxCalcComp.enrichment.failedToApply"),
         variant: "destructive",
       });
     } finally {
@@ -144,148 +182,121 @@ export function ExcelDataEnrichment({ onSuccess }: ExcelDataEnrichmentProps) {
     }
   };
 
-  const toggleSelection = (id: number) => {
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+  const toggleSelection = (id: number) =>
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
-  };
 
-  const toggleAll = () => {
-    if (selectedIds.length === previewData.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(previewData.map(m => m.procedureId));
-    }
-  };
-
-  const reset = () => {
-    setStep('upload');
-    setFile(null);
-    setPreviewData([]);
-  };
+  const toggleAll = () =>
+    setSelectedIds((prev) =>
+      prev.length === items.length ? [] : items.map((item) => item.procedureId),
+    );
 
   return (
-    <Dialog open={open} onOpenChange={(val) => { setOpen(val); if(!val) reset(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        setOpen(value);
+        if (!value) reset();
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="outline" className="gap-2">
           <FileSpreadsheet className="h-4 w-4" />
-          {t('taxCalcComp.enrichment.triggerButton')}
+          {t("taxCalcComp.enrichment.triggerButton")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+      <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col">
         <DialogHeader>
-          <DialogTitle>{t('taxCalcComp.enrichment.title')}</DialogTitle>
+          <DialogTitle>{t("taxCalcComp.enrichment.title")}</DialogTitle>
           <DialogDescription>
-            {t('taxCalcComp.enrichment.description')}
+            {t("taxCalcComp.enrichment.description")}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden p-1">
-          {step === 'upload' ? (
-            <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-lg bg-muted/50 gap-4">
-              <div className="p-4 rounded-full bg-background border shadow-sm">
+        <div className="min-h-0 flex-1 overflow-hidden p-1">
+          {step === "upload" && (
+            <div className="flex h-64 flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed bg-muted/50">
+              <div className="rounded-full border bg-background p-4 shadow-sm">
                 <Upload className="h-8 w-8 text-muted-foreground" />
               </div>
               <div className="text-center">
-                <p className="font-medium">{t('taxCalcComp.enrichment.clickToUpload')}</p>
-                <p className="text-sm text-muted-foreground">{t('taxCalcComp.enrichment.excelFilesHint')}</p>
+                <p className="font-medium">
+                  {t("taxCalcComp.enrichment.clickToUpload")}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {t("taxCalcComp.enrichment.excelFilesHint")}
+                </p>
               </div>
               <input
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
                 accept=".xlsx,.xls"
-                onChange={handleFileChange}
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
               <Button onClick={() => fileInputRef.current?.click()}>
-                {t('taxCalcComp.enrichment.selectFile')}
+                {t("taxCalcComp.enrichment.selectFile")}
               </Button>
               {file && (
-                <div className="flex items-center gap-2 text-sm bg-background px-3 py-1 rounded border">
+                <div className="flex items-center gap-2 rounded border bg-background px-3 py-1 text-sm">
                   <FileSpreadsheet className="h-4 w-4 text-green-600" />
                   {file.name}
                 </div>
               )}
             </div>
-          ) : (
-            <div className="h-full flex flex-col gap-4">
-              <div className="flex items-center justify-between text-sm">
-                <div className="font-medium text-muted-foreground">
-                  {t('taxCalcComp.enrichment.recordsToUpdate', { count: previewData.length })}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                    {t('taxCalcComp.enrichment.selected', { count: selectedIds.length })}
-                </div>
-              </div>
-              
-              <div className="border rounded-md flex-1 overflow-hidden relative">
-                <ScrollArea className="h-full">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-background z-10">
-                      <TableRow>
-                        <TableHead className="w-[50px]">
-                          <Checkbox 
-                            checked={selectedIds.length === previewData.length && previewData.length > 0} 
-                            onCheckedChange={toggleAll}
-                          />
-                        </TableHead>
-                        <TableHead>{t('taxCalcComp.enrichment.reference')}</TableHead>
-                        <TableHead>{t('taxCalcComp.enrichment.matchMethod')}</TableHead>
-                        <TableHead>{t('taxCalcComp.enrichment.changesHeader')}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {previewData.map((item) => (
-                            <TableRow key={item.procedureId} className={selectedIds.includes(item.procedureId) ? "" : "opacity-50"}>
-                                <TableCell>
-                                    <Checkbox 
-                                        checked={selectedIds.includes(item.procedureId)}
-                                        onCheckedChange={() => toggleSelection(item.procedureId)}
-                                    />
-                                </TableCell>
-                                <TableCell className="font-medium">{item.reference}</TableCell>
-                                <TableCell>
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                        item.matchMethod === 'invoice_no' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
-                                    }`}>
-                                        {item.matchMethod}
-                                    </span>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex flex-col gap-1">
-                                        {item.changes.map((change, idx) => (
-                                            <div key={idx} className="text-sm grid grid-cols-[120px_1fr] gap-2 items-center">
-                                                <span className="font-mono text-xs text-muted-foreground">{change.field}:</span>
-                                                <div className="flex items-center gap-1.5 ">
-                                                    <span className="text-red-400 line-through text-xs">{change.oldValue || t('taxCalcComp.enrichment.empty')}</span>
-                                                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                                                    <span className="text-green-600 font-medium">{change.newValue}</span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              </div>
-            </div>
+          )}
+
+          {step === "detection" && detection && (
+            <EnrichmentDetectionStep detection={detection} />
+          )}
+
+          {step === "preview" && (
+            <EnrichmentPreviewStep
+              items={items}
+              unmatched={unmatched}
+              selectedIds={selectedIds}
+              onToggle={toggleSelection}
+              onToggleAll={toggleAll}
+            />
           )}
         </div>
 
         <DialogFooter>
-          {step === 'upload' ? (
-             <Button onClick={handleUpload} disabled={!file || loading}>
-                {loading ? t('taxCalcComp.enrichment.analyzing') : t('taxCalcComp.enrichment.previewChanges')}
-             </Button>
-          ) : (
+          {step === "upload" && (
+            <Button onClick={handleAnalyze} disabled={!file || loading}>
+              {loading
+                ? t("taxCalcComp.enrichment.analyzing")
+                : t("taxCalcComp.enrichment.analyzeFile")}
+            </Button>
+          )}
+          {step === "detection" && (
             <div className="flex w-full justify-between">
-                <Button variant="ghost" onClick={reset}>{t('taxCalcComp.enrichment.backToUpload')}</Button>
-                <Button onClick={handleApply} disabled={selectedIds.length === 0 || loading}>
-                    {loading ? t('taxCalcComp.enrichment.updating') : t('taxCalcComp.enrichment.applyUpdates', { count: selectedIds.length })}
-                </Button>
+              <Button variant="ghost" onClick={reset}>
+                {t("taxCalcComp.enrichment.backToUpload")}
+              </Button>
+              <Button onClick={handlePreview} disabled={loading}>
+                {loading
+                  ? t("taxCalcComp.enrichment.loadingPreview")
+                  : t("taxCalcComp.enrichment.detectionContinue")}
+              </Button>
+            </div>
+          )}
+          {step === "preview" && (
+            <div className="flex w-full justify-between">
+              <Button variant="ghost" onClick={() => setStep("detection")}>
+                {t("taxCalcComp.enrichment.backToDetection")}
+              </Button>
+              <Button
+                onClick={handleApply}
+                disabled={selectedIds.length === 0 || loading}
+              >
+                {loading
+                  ? t("taxCalcComp.enrichment.updating")
+                  : t("taxCalcComp.enrichment.applyUpdates", {
+                      count: selectedIds.length,
+                    })}
+              </Button>
             </div>
           )}
         </DialogFooter>
