@@ -33,6 +33,21 @@ DEFAULT_COUNTRY_CODE_MAPPING = {
 }
 
 import os
+import re
+import tempfile
+
+
+def safe_filename_part(value, fallback='export'):
+    """Make a reference safe to embed in a file name.
+
+    References like "CNCALO-102 / 2" contain path separators, which would
+    otherwise be interpreted as directories and break the save.
+    """
+    cleaned = re.sub(r'[\\/:*?"<>|\r\n\t]+', '-', str(value or ''))
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip(' .-')
+    return cleaned or fallback
+
+
 def export_beyanname_excel(data):
     """
     Export tax calculation data to BEYANNAME Excel template.
@@ -128,7 +143,11 @@ def export_beyanname_excel(data):
     
     # Save output
     calc = data['calculation']
-    output_path = f"/tmp/beyanname_{calc.get('reference', 'export')}_{data.get('timestamp', '')}.xlsx"
+    safe_reference = safe_filename_part(calc.get('reference'))
+    output_path = os.path.join(
+        tempfile.gettempdir(),
+        f"beyanname_{safe_reference}_{data.get('timestamp', '')}.xlsx",
+    )
     wb.save(output_path)
     
     return output_path

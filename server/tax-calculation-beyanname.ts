@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
+import { safeFilenamePart } from './helpers/filename-utils';
 
 const execAsync = promisify(exec);
 const router = Router();
@@ -195,7 +196,7 @@ router.post('/:id/export/beyanname', async (req, res) => {
       
       fs.unlinkSync(outputPath);
       
-      const filename = `BEYANNAME_${calculation.reference}.xlsx`;
+      const filename = `BEYANNAME_${safeFilenamePart(calculation.reference)}.xlsx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(fileBuffer);
@@ -310,7 +311,7 @@ router.get('/:id/export/beyanname', async (req, res) => {
       
       fs.unlinkSync(outputPath);
       
-      const filename = `BEYANNAME_${calculation.reference}.xlsx`;
+      const filename = `BEYANNAME_${safeFilenamePart(calculation.reference)}.xlsx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(fileBuffer);

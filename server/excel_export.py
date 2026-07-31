@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
 import sys
 import json
+import os
+import re
+import tempfile
 import openpyxl
 from copy import copy
 from openpyxl.styles import PatternFill, Border, Side
 from openpyxl.styles.differential import DifferentialStyle
 from openpyxl.formatting.rule import Rule
+
+
+def safe_filename_part(value, fallback='export'):
+    """Make a reference safe to embed in a file name.
+
+    References like "CNCALO-102 / 2" contain path separators, which would
+    otherwise be interpreted as directories and break the save.
+    """
+    cleaned = re.sub(r'[\\/:*?"<>|\r\n\t]+', '-', str(value or ''))
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip(' .-')
+    return cleaned or fallback
 
 def set_cell_value(ws, cell_ref, value):
     from openpyxl.utils import coordinate_to_tuple
@@ -278,7 +292,10 @@ def export_excel(data):
     rule_3 = Rule(type='expression', dxf=dxf, stopIfTrue=False, formula=['TRUE'])
     ws.conditional_formatting.add(fill_range_3, rule_3)
     
-    output_path = f"/tmp/tax_calculation_{calc.get('reference', 'export')}.xlsx"
+    safe_reference = safe_filename_part(calc.get('reference'))
+    output_path = os.path.join(
+        tempfile.gettempdir(), f"tax_calculation_{safe_reference}.xlsx"
+    )
     wb.save(output_path)
     
     return output_path

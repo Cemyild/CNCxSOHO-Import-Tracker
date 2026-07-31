@@ -3,6 +3,7 @@ import { storage } from './storage';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
+import { safeFilenamePart } from './helpers/filename-utils';
 
 const execAsync = promisify(exec);
 const router = Router();
@@ -109,7 +110,7 @@ router.get('/:id/export/excel', async (req, res) => {
       
       fs.unlinkSync(outputPath);
       
-      const filename = `Tax_Calculation_${calculation.reference}.xlsx`;
+      const filename = `Tax_Calculation_${safeFilenamePart(calculation.reference)}.xlsx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(fileBuffer);
