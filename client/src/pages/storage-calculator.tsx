@@ -16,11 +16,11 @@ import { cn } from "@/lib/utils";
 
 // Storage tariff (USD). Daily flat charge is the same across all brackets;
 // only the per-kg rate changes by bracket.
-const FLAT_DAILY_USD = 94;
-const RATE_A_USD_PER_KG = 0.088; // day 1
-const RATE_B_USD_PER_KG = 0.109; // days 2-3
-const RATE_C_USD_PER_KG = 0.161; // days 4-14
-const RATE_D_USD_PER_KG = 0.192; // day 15+
+const FLAT_DAILY_USD = 100;
+const RATE_A_USD_PER_KG = 0.095; // day 1
+const RATE_B_USD_PER_KG = 0.120; // days 2-3
+const RATE_C_USD_PER_KG = 0.170; // days 4-14
+const RATE_D_USD_PER_KG = 0.190; // day 15+
 const RATE_E_USD_PER_KG = 0.110; // one-time handling
 
 type Breakdown = {
@@ -38,8 +38,8 @@ type Breakdown = {
   total: number;
 };
 
-function computeStorageFee(weightKg: number, startAt: Date, now: Date): Breakdown | null {
-  const msElapsed = now.getTime() - startAt.getTime();
+function computeStorageFee(weightKg: number, startAt: Date, endAt: Date): Breakdown | null {
+  const msElapsed = endAt.getTime() - startAt.getTime();
   if (msElapsed <= 0) return null;
 
   const hoursElapsed = msElapsed / (1000 * 60 * 60);
@@ -93,6 +93,94 @@ const ISTANBUL_FMT = new Intl.DateTimeFormat("tr-TR", {
   timeStyle: "short",
 });
 
+function combineDateTime(date: Date, timeStr: string): Date {
+  const [hh, mm] = timeStr.split(":").map((s) => parseInt(s, 10) || 0);
+  const next = new Date(date);
+  next.setHours(hh, mm, 0, 0);
+  return next;
+}
+
+/** Calendar + time picker in a popover. Shared by the start and end fields. */
+function DateTimeField({
+  id,
+  label,
+  value,
+  timeStr,
+  placeholder,
+  timeLabel,
+  clearLabel,
+  onDateSelect,
+  onTimeChange,
+  onClear,
+}: {
+  id: string;
+  label: string;
+  value: Date | undefined;
+  timeStr: string;
+  placeholder: string;
+  timeLabel: string;
+  clearLabel?: string;
+  onDateSelect: (date: Date | undefined) => void;
+  onTimeChange: (value: string) => void;
+  onClear?: () => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn(
+              "w-full justify-start text-left font-normal",
+              !value && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {value ? (
+              format(value, "PPP 'at' HH:mm")
+            ) : (
+              <span>{placeholder}</span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={value}
+            onSelect={onDateSelect}
+            initialFocus
+          />
+          <div className="border-t p-3 flex items-center gap-2">
+            <Label htmlFor={id} className="text-sm">
+              {timeLabel}
+            </Label>
+            <Input
+              id={id}
+              type="time"
+              value={timeStr}
+              onChange={(e) => onTimeChange(e.target.value)}
+              className="w-32"
+            />
+            {onClear && clearLabel && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
+                onClick={onClear}
+                disabled={!value}
+              >
+                {clearLabel}
+              </Button>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 function BreakdownRow({
   label,
   range,
@@ -121,7 +209,10 @@ export default function StorageCalculatorPage() {
   const { t } = useTranslation();
   const [weightKg, setWeightKg] = useState<string>("");
   const [startAt, setStartAt] = useState<Date | undefined>(undefined);
-  const [timeStr, setTimeStr] = useState<string>("00:00");
+  const [startTimeStr, setStartTimeStr] = useState<string>("00:00");
+  // Optional end. When empty the calculator runs live against "now".
+  const [endAt, setEndAt] = useState<Date | undefined>(undefined);
+  const [endTimeStr, setEndTimeStr] = useState<string>("00:00");
   const [now, setNow] = useState<Date>(() => new Date());
 
   // USD/TRY rate: auto-fetched from TCMB if available, otherwise manual.
@@ -152,11 +243,13 @@ export default function StorageCalculatorPage() {
     }
   };
 
-  // Refresh "now" every 30s so the running total stays current.
+  // Refresh "now" every 30s so the running total stays current. Pointless once
+  // an explicit end is picked — the result is frozen then.
   useEffect(() => {
+    if (endAt) return;
     const id = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [endAt]);
 
   // Try to auto-fetch the official USD/TRY rate on mount.
   useEffect(() => {
@@ -172,25 +265,29 @@ export default function StorageCalculatorPage() {
   };
 
   // Combine date + time into a single Date object whenever both are set
-  const handleDateSelect = (date: Date | undefined) => {
-    if (!date) {
-      setStartAt(undefined);
-      return;
-    }
-    const [hh, mm] = timeStr.split(":").map((s) => parseInt(s, 10) || 0);
-    const next = new Date(date);
-    next.setHours(hh, mm, 0, 0);
-    setStartAt(next);
+  const handleStartDateSelect = (date: Date | undefined) => {
+    setStartAt(date ? combineDateTime(date, startTimeStr) : undefined);
   };
 
-  const handleTimeChange = (value: string) => {
-    setTimeStr(value);
-    if (startAt) {
-      const [hh, mm] = value.split(":").map((s) => parseInt(s, 10) || 0);
-      const next = new Date(startAt);
-      next.setHours(hh, mm, 0, 0);
-      setStartAt(next);
-    }
+  const handleStartTimeChange = (value: string) => {
+    setStartTimeStr(value);
+    if (startAt) setStartAt(combineDateTime(startAt, value));
+  };
+
+  const handleEndDateSelect = (date: Date | undefined) => {
+    setEndAt(date ? combineDateTime(date, endTimeStr) : undefined);
+  };
+
+  const handleEndTimeChange = (value: string) => {
+    setEndTimeStr(value);
+    if (endAt) setEndAt(combineDateTime(endAt, value));
+  };
+
+  // Clearing the end returns the page to live mode; resync "now" right away so
+  // the total doesn't sit on a stale timestamp until the next 30s tick.
+  const handleEndClear = () => {
+    setEndAt(undefined);
+    setNow(new Date());
   };
 
   const weightNum = parseFloat(weightKg);
@@ -200,10 +297,12 @@ export default function StorageCalculatorPage() {
   const rateNum = parseFloat(rateInput);
   const rateValid = !isNaN(rateNum) && rateNum > 0;
 
+  const effectiveEnd = endAt ?? now;
+
   const breakdown = useMemo(() => {
     if (!canCalculate || !startAt) return null;
-    return computeStorageFee(weightNum, startAt, now);
-  }, [canCalculate, weightNum, startAt, now]);
+    return computeStorageFee(weightNum, startAt, effectiveEnd);
+  }, [canCalculate, weightNum, startAt, effectiveEnd]);
 
   const totalTry = breakdown && rateValid ? breakdown.total * rateNum : null;
 
@@ -238,47 +337,30 @@ export default function StorageCalculatorPage() {
           </div>
 
           {/* Starting Date / Time */}
-          <div className="space-y-2">
-            <Label>{t('storageCalc.startingDateTime')}</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !startAt && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {startAt ? (
-                    format(startAt, "PPP 'at' HH:mm")
-                  ) : (
-                    <span>{t('storageCalc.pickDateTime')}</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={startAt}
-                  onSelect={handleDateSelect}
-                  initialFocus
-                />
-                <div className="border-t p-3 flex items-center gap-2">
-                  <Label htmlFor="time" className="text-sm">
-                    {t('storageCalc.time')}
-                  </Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={timeStr}
-                    onChange={(e) => handleTimeChange(e.target.value)}
-                    className="w-32"
-                  />
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
+          <DateTimeField
+            id="start-time"
+            label={t('storageCalc.startingDateTime')}
+            value={startAt}
+            timeStr={startTimeStr}
+            placeholder={t('storageCalc.pickDateTime')}
+            timeLabel={t('storageCalc.time')}
+            onDateSelect={handleStartDateSelect}
+            onTimeChange={handleStartTimeChange}
+          />
+
+          {/* Ending Date / Time — optional, empty means "now" */}
+          <DateTimeField
+            id="end-time"
+            label={t('storageCalc.endingDateTime')}
+            value={endAt}
+            timeStr={endTimeStr}
+            placeholder={t('storageCalc.pickEndDateTime')}
+            timeLabel={t('storageCalc.time')}
+            clearLabel={t('storageCalc.clear')}
+            onDateSelect={handleEndDateSelect}
+            onTimeChange={handleEndTimeChange}
+            onClear={handleEndClear}
+          />
 
           {/* USD/TRY Rate */}
           <div className="space-y-2">
@@ -332,7 +414,9 @@ export default function StorageCalculatorPage() {
           <div className="flex items-baseline justify-between">
             <div className="text-sm text-muted-foreground">{t('storageCalc.result')}</div>
             <div className="text-xs text-muted-foreground">
-              {t('storageCalc.nowIstanbul', { time: ISTANBUL_FMT.format(now) })}
+              {endAt
+                ? t('storageCalc.endIstanbul', { time: ISTANBUL_FMT.format(endAt) })
+                : t('storageCalc.nowIstanbul', { time: ISTANBUL_FMT.format(now) })}
             </div>
           </div>
 
@@ -342,7 +426,9 @@ export default function StorageCalculatorPage() {
             </div>
           ) : !breakdown ? (
             <div className="text-sm text-amber-600 dark:text-amber-400">
-              {t('storageCalc.startNotPassed')}
+              {endAt
+                ? t('storageCalc.endBeforeStart')
+                : t('storageCalc.startNotPassed')}
             </div>
           ) : (
             <>
@@ -357,6 +443,12 @@ export default function StorageCalculatorPage() {
                   {t('storageCalc.start')}{" "}
                   <span className="font-medium text-foreground">
                     {format(startAt!, "PPP HH:mm")}
+                  </span>
+                </div>
+                <div>
+                  {t('storageCalc.end')}{" "}
+                  <span className="font-medium text-foreground">
+                    {endAt ? format(endAt, "PPP HH:mm") : t('storageCalc.liveNow')}
                   </span>
                 </div>
                 <div>
