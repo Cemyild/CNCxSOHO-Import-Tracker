@@ -56,6 +56,23 @@ remainingBalance = totalExpenses - totalPayments
 | 3 | Yer ve kapsam | **Ayrı "Mahsuplaşma" sayfası**, toplu otomatik + elle aktarım. |
 | 4 | Kapalı prosedürler | **Tamamen dahil** (hem fazlası kullanılır hem borcu kapatılır), listede turuncu "kapalı" rozetiyle işaretlenir. |
 | 5 | Kayıt yöntemi | **Çift kayıt**: kaynağa eksi, hedefe artı satır. Eski kayıtlara dokunulmaz. |
+| 6 | Gideri girilmemiş prosedürler | **Listeye hiç girmez.** (2026-08-14'te uygulama sırasında ortaya çıktı, bkz. aşağıda.) |
+
+### Karar 6'nın gerekçesi
+
+Uygulama sırasında canlı veride şu durum çıktı: `CNCALO-98` (11.411.500 TL),
+`CNCALO-103` (5.151.000 TL) ve `CNCALO-100` (2.334.500 TL) prosedürlerine avans
+ödemesi dağıtılmış ama gider, hizmet faturası ve vergi tarafı **hiç girilmemiş**
+(üçünde de toplam gider 0). Bakiye formülü bunları 18.897.000 TL'lik "fazla ödeme"
+olarak gösteriyordu — toplam fazlanın %94'ü.
+
+Bu para fazla değil, o işin masrafları için bekliyor. Mahsuplaşsaydı, giderler
+girildiği anda prosedür aynı tutarda borçlu çıkardı.
+
+**Kural:** gider + hizmet faturası + vergi toplamı `0` olan bir prosedür fazla ödeme
+adayı sayılmaz. Sessizce elenmez: `getOffsetCandidates` bu prosedürlerin sayısını ve
+tutarını `uncosted` alanında döndürür, ekranda dipnot olarak görünür. Gider girildiği
+anda prosedür kendiliğinden listeye döner.
 
 ## Kayıt mekaniği
 

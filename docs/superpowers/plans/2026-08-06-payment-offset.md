@@ -658,7 +658,7 @@ git commit -m "feat(offsets): plan which incoming payments a transfer draws from
 - Produces:
   - `interface OffsetCandidate { reference: string; shipper: string | null; paymentStatus: string | null; balance: number }`
   - `interface CandidateFilter { shipper?: string; includeClosed?: boolean }`
-  - `interface CandidateResult { overpayments: OffsetCandidate[]; debts: OffsetCandidate[]; totalOverpayment: number; totalDebt: number }`
+  - `interface CandidateResult { overpayments: OffsetCandidate[]; debts: OffsetCandidate[]; totalOverpayment: number; totalDebt: number; uncosted: { count: number; amount: number } }`
   - `getOffsetCandidates(filter?: CandidateFilter): Promise<CandidateResult>`
   - `PROCEDURE_BALANCE_SQL: string` (tek prosedür sorgularında da kullanılır)
 
@@ -2503,8 +2503,8 @@ Sayfa açılışında üçüncü kartın dolması için efekt ekle:
 `http://localhost:5000/offsets` → "Tümünü otomatik eşleştir".
 
 Expected:
-- Özet: `11 borç tamamen kapanacak`, `1.236.935,07 ₺ aktarılacak`, `20 işlem`, kalan fazla `17.148,22 ₺`, kapanmayacak borç `4`
-- Gruplar hedef prosedüre göre; `CNCALO-94` grubunda 2 kaynak satırı (`CNCALO-96` ve `CNCALO-74`) ve başlıkta "kapanır · 2 kaynaktan"
+- Özet rakamları, aynı anda çalıştırılan `POST /api/offsets/preview` çıktısıyla birebir aynı (canlı veri hareketli olduğu için sabit sayı beklenmez — bkz. Task 13 Step 3)
+- Gruplar hedef prosedüre göre; birden fazla kaynaktan beslenen bir hedefin başlığında "kapanır · N kaynaktan" yazar (2026-08-14 verisinde `CNCALO-67 FOOTWEAR` 3 kaynaktan besleniyor)
 - Bir satırın işaretini kaldır → o grup "kısmi" olur, özetteki tutar ve işlem sayısı anında düşer
 - **"Vazgeç" ile kapat** — bu adımda uygulama yapılmaz
 
@@ -2826,12 +2826,15 @@ curl -s -X POST "http://localhost:5000/api/offsets/preview" -H "Content-Type: ap
   | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const p=JSON.parse(s);console.log('closed:',p.closedDebts.length,'used:',p.usedAmount,'moves:',p.moves.length,'left:',p.remainingOverpayment,'unmatched:',p.unmatchedDebts.length)})"
 ```
 
-Expected (tasarım belgesindeki ölçüm):
-```
-closed: 11 used: 1236935.07 moves: 20 left: 17148.22 unmatched: 4
-```
+**Sabit bir sayı beklenmez.** Canlı veri hareketli: 2026-08-14 sabahı ölçüm 11 kapanan borç / 1.236.935,07 TL iken, aynı gün öğlen 7 kapanan borç / 615.438,77 TL'ye döndü (aradaki gece 11 yeni dağıtım yapılmıştı). Kabul ölçütü şu üç şartın **aynı anda** sağlanmasıdır:
 
-Tutmuyorsa: canlı veri değişmiş olabilir (yeni ödeme/gider girilmiş). Farkı `getOffsetCandidates` çıktısıyla karşılaştırıp açıkla; **sayıları tutturmak için algoritmayı değiştirme**. Fark açıklanamıyorsa yayına alma.
+1. **Ekran = motor.** Sayfadaki özet, aynı dakikada çalıştırılan `preview` çıktısıyla birebir aynı olmalı.
+2. **Hiçbir borç yarım kalmamalı.** `unmatchedDebts` içindeki her prosedür için, toplam fazlanın o borcu kapatmaya gerçekten yetmediği doğrulanır.
+3. **Para korunmalı.** `usedAmount + remainingOverpayment`, `totalOverpayment`'a eşit olmalı.
+
+Ayrıca `uncosted.count > 0` ise, hariç tutulan prosedürlerin gider tarafının gerçekten boş olduğu tek tek doğrulanır (yanlışlıkla elenen olmasın).
+
+Şartlardan biri sağlanmıyorsa **sayıları tutturmak için algoritmayı değiştirme** — farkı araştır, açıklayamıyorsan yayına alma.
 
 - [ ] **Step 4: Yetki kontrolü**
 
@@ -2886,6 +2889,7 @@ Expected: Canlı ortamdan JSON döner. Dönmüyorsa deploy günlüklerinde DDL a
 | i18n TR/EN | 8 |
 | Test planı | 2, 3, 5, 6, 13 |
 | Eski ekran doğrulaması | 12 (Step 4) |
-| Kabul ölçütü (11/1.236.935,07) | 13 (Step 3) |
+| Kabul ölçütü (ekran=motor, borç yarım kalmaz, para korunur) | 13 (Step 3) |
+| Gideri girilmemiş prosedürlerin elenmesi (spec kararı 6) | 4 |
 
 **Bilinen boşluk:** `TEST_DATABASE_URL` yoksa entegrasyon testleri atlanır. Bu durumda Task 11 Step 2-3 ve Task 13 Step 3 aynı değişmezleri elle doğrular. Neon'da bir test dalı açılabilirse tercih edilen yol odur.
