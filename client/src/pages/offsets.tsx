@@ -7,6 +7,10 @@ import { formatCurrency } from '@/lib/formatters';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import {
+  OffsetPreviewModal,
+  type OffsetPlan,
+} from '@/components/offset-preview-modal';
 
 export interface OffsetCandidate {
   reference: string;
@@ -61,6 +65,7 @@ export default function OffsetsPage() {
   const [selectedSource, setSelectedSource] = React.useState<string | null>(null);
   const [selectedTarget, setSelectedTarget] = React.useState<string | null>(null);
   const [manualAmount, setManualAmount] = React.useState<string>('');
+  const [previewOpen, setPreviewOpen] = React.useState(false);
 
   const { data } = useQuery<CandidateResult>({
     queryKey: ['/api/offsets/candidates', shipper, showClosed],
@@ -68,6 +73,19 @@ export default function OffsetsPage() {
       const response = await apiRequest(
         'GET',
         `/api/offsets/candidates${filterQuery(shipper, showClosed)}`,
+      );
+      return await response.json();
+    },
+  });
+
+  // Kept fresh alongside the candidate lists so the "closed in one click"
+  // card is always in step with what the lists show.
+  const { data: plan } = useQuery<OffsetPlan>({
+    queryKey: ['/api/offsets/preview', shipper, showClosed],
+    queryFn: async () => {
+      const response = await apiRequest(
+        'GET',
+        `/api/offsets/preview${filterQuery(shipper, showClosed)}`,
       );
       return await response.json();
     },
@@ -205,6 +223,22 @@ export default function OffsetsPage() {
             value={formatCurrency(data?.totalDebt ?? 0)}
             hint={t('offsets.summary.debtCount', { n: data?.debts.length ?? 0 })}
           />
+          <SummaryCard
+            label={t('offsets.summary.closable')}
+            value={formatCurrency(plan?.usedAmount ?? 0)}
+            hint={t('offsets.summary.debtCount', {
+              n: plan?.closedDebts.length ?? 0,
+            })}
+          />
+        </div>
+
+        <div>
+          <Button
+            onClick={() => setPreviewOpen(true)}
+            disabled={(plan?.moves.length ?? 0) === 0}
+          >
+            ⚡ {t('offsets.actions.autoMatch')}
+          </Button>
         </div>
 
         {(data?.uncosted.count ?? 0) > 0 && (
@@ -289,6 +323,19 @@ export default function OffsetsPage() {
             </p>
           )}
         </div>
+
+        <OffsetPreviewModal
+          isOpen={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          plan={plan ?? null}
+          onApplied={() => {
+            setSelectedSource(null);
+            setSelectedTarget(null);
+            queryClient.invalidateQueries({ queryKey: ['/api/offsets/candidates'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/offsets/preview'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/offsets/history'] });
+          }}
+        />
       </div>
     </PageLayout>
   );
