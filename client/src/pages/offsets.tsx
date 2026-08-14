@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearch } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { PageLayout } from '@/components/layout/PageLayout';
@@ -79,6 +80,13 @@ export default function OffsetsPage() {
   const [selectedTarget, setSelectedTarget] = React.useState<string | null>(null);
   const [manualAmount, setManualAmount] = React.useState<string>('');
   const [previewOpen, setPreviewOpen] = React.useState(false);
+
+  // Arriving from a procedure's "offset this overpayment" link.
+  const searchString = useSearch();
+  React.useEffect(() => {
+    const preselected = new URLSearchParams(searchString).get('source');
+    if (preselected) setSelectedSource(preselected);
+  }, [searchString]);
 
   const { data } = useQuery<CandidateResult>({
     queryKey: ['/api/offsets/candidates', shipper, showClosed],

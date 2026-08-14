@@ -7982,14 +7982,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         console.log(`[Procedure PDF] Total incoming payment value: ${totalIncomingPaymentValue}`);
         
-        // Distributed payments
-        const distributedPaymentData = paymentDistributions.map(dist => [
-          dist.paymentType === 'advance' ? 'Advance Payment' : 'Balance Payment',
-          formatPaymentDate(dist.distributionDate),
-          `TL ${parseFloat(dist.distributedAmount || '0').toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-          '-',
-          'Distributed',
-        ]);
+        // Distributed payments. Offset rows come in pairs (minus on the source,
+        // plus on the target); labelling them as ordinary advance/balance
+        // payments would read as a negative payment on the statement.
+        const distributedPaymentData = paymentDistributions.map(dist => {
+          const amount = parseFloat(dist.distributedAmount || '0');
+          const isOffset = dist.offsetId !== null && dist.offsetId !== undefined;
+          const label = isOffset
+            ? (amount < 0 ? 'Offset Out' : 'Offset In')
+            : (dist.paymentType === 'advance' ? 'Advance Payment' : 'Balance Payment');
+
+          return [
+            label,
+            formatPaymentDate(dist.distributionDate),
+            `TL ${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+            '-',
+            isOffset ? 'Offset' : 'Distributed',
+          ];
+        });
         
         const allPaymentData = [...traditionalPaymentData, ...distributedPaymentData];
         
