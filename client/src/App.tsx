@@ -16,6 +16,7 @@ import AddProcedurePage from "@/pages/add-procedure";
 import EditProcedurePage from "@/pages/edit-procedure";
 import PaymentsPage from "@/pages/payments";
 import IncomingPaymentsPage from "@/pages/incoming-payments";
+import OffsetsPage from "@/pages/offsets";
 import ReportsPage from "@/pages/reports";
 import CustomReportPage from "@/pages/customreport";
 import AnalyticsPage from "@/pages/analytics";
@@ -107,6 +108,13 @@ function Router() {
         {() => (
           <ProtectedRoute>
             <IncomingPaymentsPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/offsets">
+        {() => (
+          <ProtectedRoute>
+            <OffsetsPage />
           </ProtectedRoute>
         )}
       </Route>

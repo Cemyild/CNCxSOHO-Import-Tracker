@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import {
   Archive,
+  ArrowLeftRight,
   BarChart2,
   Calculator,
   Calendar,
@@ -24,6 +25,7 @@ export const defaultNavItems: NavItem[] = [
   { titleKey: "nav.procedures", url: "/procedures", icon: Inbox },
   { titleKey: "nav.expenses", url: "/expenses", icon: Calendar },
   { titleKey: "nav.payments", url: "/payments", icon: Search },
+  { titleKey: "nav.offsets", url: "/offsets", icon: ArrowLeftRight },
   { titleKey: "nav.taxCalculation", url: "/tax-calculation", icon: Calculator },
   { titleKey: "nav.storageCalculator", url: "/storage-calculator", icon: Warehouse },
   { titleKey: "nav.reports", url: "/reports", icon: BarChart2 },

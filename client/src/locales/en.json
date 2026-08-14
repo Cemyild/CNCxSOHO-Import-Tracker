@@ -4,6 +4,7 @@
     "procedures": "Procedures",
     "expenses": "Expenses",
     "payments": "Payments",
+    "offsets": "Offsetting",
     "taxCalculation": "Tax Calculation",
     "storageCalculator": "Storage Calculator",
     "reports": "Reports",
@@ -169,6 +170,73 @@
       "final_balance_letter_sent": "Final Balance Letter Sent",
       "balance_received": "Balance Received",
       "closed": "Closed"
+    }
+  },
+  "offsets": {
+    "title": "Offsetting",
+    "tabs": { "match": "Matching", "history": "History" },
+    "summary": {
+      "totalOverpayment": "Total Overpaid",
+      "totalDebt": "Total Owed",
+      "closable": "Closed In One Click",
+      "procedureCount": "{{n}} procedures",
+      "debtCount": "{{n}} debts",
+      "uncosted": "{{n}} procedures ({{amount}}) are not listed — their costs are not entered yet"
+    },
+    "filters": {
+      "shipper": "Shipper",
+      "allShippers": "All",
+      "showClosed": "Show closed"
+    },
+    "lists": {
+      "overpayments": "Overpaid ({{n}})",
+      "debts": "Owing ({{n}})",
+      "emptyOverpayments": "No procedure has an overpayment",
+      "emptyDebts": "No procedure owes anything",
+      "closedBadge": "closed"
+    },
+    "actions": {
+      "autoMatch": "Match everything automatically",
+      "transferSelected": "Transfer selected",
+      "cancel": "Cancel",
+      "apply": "Apply {{n}} transfers",
+      "reverse": "Undo",
+      "reverseBatch": "Undo the whole batch",
+      "fromProcedure": "Offset this overpayment"
+    },
+    "preview": {
+      "title": "Automatic Matching Preview",
+      "description": "Nothing is written until you approve it.",
+      "closedDebts": "{{n}} debts close completely",
+      "usedAmount": "{{amount}} will be transferred",
+      "moveCount": "{{n}} operations",
+      "remaining": "Overpayment left: {{amount}}",
+      "unmatched": "Debts left open: {{n}}",
+      "willClose": "closes",
+      "partial": "partial",
+      "sourceCount": "from {{n}} sources",
+      "empty": "No transfer could be matched."
+    },
+    "manual": {
+      "title": "Manual Transfer",
+      "from": "Source procedure",
+      "to": "Target procedure",
+      "amount": "Amount to transfer",
+      "selectBoth": "Pick an overpayment on the left and a debt on the right"
+    },
+    "history": {
+      "empty": "No offsetting has been done yet",
+      "auto": "Automatic matching",
+      "manual": "Manual transfer",
+      "reversed": "undone",
+      "batchSummary": "{{n}} transfers · {{amount}}"
+    },
+    "toast": {
+      "applySuccess": "{{n}} transfers done, {{amount}} reallocated",
+      "applyError": "Transfer failed",
+      "reverseSuccess": "Transfer undone",
+      "reverseError": "Undo failed",
+      "loadError": "Could not load the offsetting lists"
     }
   },
   "payments": {

@@ -51,6 +51,7 @@ import taxCalculationExcelRoute from "./tax-calculation-excel";
 import taxCalculationBeyannameRoute from "./tax-calculation-beyanname";
 import invoiceMakerRoute from "./invoice-maker";
 import excelEnrichmentRouter from "./excel-enrichment";
+import offsetsRoutes from "./offsets-routes";
 // Import Claude AI utilities
 import claude from "./claude";
 import { extractCustomsDeclaration } from "./extractors/customs-declaration";
@@ -5297,6 +5298,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Use Custom Report routes
   app.use("/api/custom-report", customReportRoutes);
 
+  // Cross-procedure payment offsetting
+  app.use("/api/offsets", offsetsRoutes);
+
   app.get("/api/tax-calculation/products", async (req, res) => {
     try {
       const products = await storage.getAllProducts();
@@ -7978,14 +7982,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         console.log(`[Procedure PDF] Total incoming payment value: ${totalIncomingPaymentValue}`);
         
-        // Distributed payments
-        const distributedPaymentData = paymentDistributions.map(dist => [
-          dist.paymentType === 'advance' ? 'Advance Payment' : 'Balance Payment',
-          formatPaymentDate(dist.distributionDate),
-          `TL ${parseFloat(dist.distributedAmount || '0').toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-          '-',
-          'Distributed',
-        ]);
+        // Distributed payments. Offset rows come in pairs (minus on the source,
+        // plus on the target); labelling them as ordinary advance/balance
+        // payments would read as a negative payment on the statement.
+        const distributedPaymentData = paymentDistributions.map(dist => {
+          const amount = parseFloat(dist.distributedAmount || '0');
+          const isOffset = dist.offsetId !== null && dist.offsetId !== undefined;
+          const label = isOffset
+            ? (amount < 0 ? 'Offset Out' : 'Offset In')
+            : (dist.paymentType === 'advance' ? 'Advance Payment' : 'Balance Payment');
+
+          return [
+            label,
+            formatPaymentDate(dist.distributionDate),
+            `TL ${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+            '-',
+            isOffset ? 'Offset' : 'Distributed',
+          ];
+        });
         
         const allPaymentData = [...traditionalPaymentData, ...distributedPaymentData];
         

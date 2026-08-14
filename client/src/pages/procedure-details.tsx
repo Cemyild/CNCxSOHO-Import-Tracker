@@ -1872,6 +1872,14 @@ export default function ProcedureDetailsPage() {
                         ? t("procedurePages.details.additionalPaymentRequired")
                         : t("procedurePages.details.clientOverpaid")}
                     </p>
+                    {remainingBalance < 0 && reference && (
+                      <Link
+                        href={`/offsets?source=${encodeURIComponent(reference)}`}
+                        className="mt-2 inline-block text-sm underline"
+                      >
+                        {t("offsets.actions.fromProcedure")} →
+                      </Link>
+                    )}
                   </div>
                 </div>
               </div>
