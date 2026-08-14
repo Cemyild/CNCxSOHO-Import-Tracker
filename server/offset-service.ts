@@ -361,3 +361,158 @@ export async function applyOffsets(
 
   return { batchId, offsetIds, applied: moves.length };
 }
+
+export interface OffsetHistoryEntry {
+  id: number;
+  batchId: string;
+  fromReference: string;
+  toReference: string;
+  amount: number;
+  offsetDate: Date;
+  mode: string;
+  createdBy: number | null;
+  createdByName: string | null;
+  reversedAt: Date | null;
+}
+
+export async function getOffsetHistory(): Promise<OffsetHistoryEntry[]> {
+  const { rows } = await rawDb.query(`
+    SELECT o.id, o.batch_id, o.from_reference, o.to_reference, o.amount,
+           o.offset_date, o.mode, o.created_by, u.username AS created_by_name,
+           o.reversed_at
+    FROM payment_offsets o
+    LEFT JOIN users u ON u.id = o.created_by
+    ORDER BY o.offset_date DESC, o.id DESC
+  `);
+
+  return rows.map((r: any) => ({
+    id: Number(r.id),
+    batchId: r.batch_id as string,
+    fromReference: r.from_reference as string,
+    toReference: r.to_reference as string,
+    amount: round2(Number(r.amount)),
+    offsetDate: new Date(r.offset_date),
+    mode: r.mode as string,
+    createdBy: r.created_by === null ? null : Number(r.created_by),
+    createdByName: (r.created_by_name ?? null) as string | null,
+    reversedAt: r.reversed_at === null ? null : new Date(r.reversed_at),
+  }));
+}
+
+/**
+ * Delete both halves of one transfer and mark its ledger row reversed.
+ * Returns the incoming payments that need refreshing — the caller does that
+ * once at the end, so reversing a batch touches each payment a single time.
+ */
+async function reverseOffsetInTx(
+  tx: any,
+  offsetId: number,
+  userId: number,
+): Promise<Set<number>> {
+  const [offset] = await tx
+    .select()
+    .from(paymentOffsets)
+    .where(eq(paymentOffsets.id, offsetId));
+
+  if (!offset) {
+    throw new OffsetValidationError(`Offset ${offsetId} not found`);
+  }
+  if (offset.reversedAt) {
+    throw new OffsetValidationError(`Offset ${offsetId} is already reversed`);
+  }
+
+  const linked = await tx
+    .select()
+    .from(paymentDistributions)
+    .where(eq(paymentDistributions.offsetId, offsetId));
+
+  // The money must still be sitting on the target. If it has since been
+  // offset onwards, undoing this one would push the target's distribution
+  // total below zero — refuse and let the later transfer be undone first.
+  const incomingOnTarget = new Map<number, number>();
+  for (const row of linked) {
+    const amount = Number(row.distributedAmount);
+    if (amount > 0 && row.procedureReference === offset.toReference) {
+      incomingOnTarget.set(
+        row.incomingPaymentId,
+        round2((incomingOnTarget.get(row.incomingPaymentId) ?? 0) + amount),
+      );
+    }
+  }
+
+  if (incomingOnTarget.size > 0) {
+    const available = new Map(
+      (await readSourceBuckets(tx, offset.toReference)).map((b) => [
+        b.incomingPaymentId,
+        b.available,
+      ]),
+    );
+
+    for (const [incomingPaymentId, amount] of incomingOnTarget) {
+      const left = available.get(incomingPaymentId) ?? 0;
+      if (left + CENT_EPSILON < amount) {
+        throw new OffsetValidationError(
+          `${offset.toReference} no longer holds the ${amount.toFixed(2)} from this transfer — undo the later offset first`,
+        );
+      }
+    }
+  }
+
+  await tx
+    .delete(paymentDistributions)
+    .where(eq(paymentDistributions.offsetId, offsetId));
+
+  await tx
+    .update(paymentOffsets)
+    .set({ reversedAt: new Date(), reversedBy: userId })
+    .where(eq(paymentOffsets.id, offsetId));
+
+  return new Set<number>(linked.map((d: any) => Number(d.incomingPaymentId)));
+}
+
+export async function reverseOffset(
+  offsetId: number,
+  userId: number,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const touched = await reverseOffsetInTx(tx, offsetId, userId);
+    for (const paymentId of touched) {
+      await refreshIncomingPayment(tx as any, paymentId);
+    }
+  });
+}
+
+/** Undo every open transfer of a batch, all inside one transaction. */
+export async function reverseBatch(
+  batchId: string,
+  userId: number,
+): Promise<{ reversed: number }> {
+  return await db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(paymentOffsets)
+      .where(eq(paymentOffsets.batchId, batchId));
+
+    const open = rows.filter((o) => !o.reversedAt);
+    if (open.length === 0) {
+      throw new OffsetValidationError(
+        `Batch ${batchId} has nothing left to reverse`,
+      );
+    }
+
+    const touched = new Set<number>();
+    // Newest first: a later transfer inside the batch may depend on an
+    // earlier one, and undoing it first keeps every balance non-negative.
+    for (const offset of [...open].sort((a, b) => b.id - a.id)) {
+      for (const paymentId of await reverseOffsetInTx(tx, offset.id, userId)) {
+        touched.add(paymentId);
+      }
+    }
+
+    for (const paymentId of touched) {
+      await refreshIncomingPayment(tx as any, paymentId);
+    }
+
+    return { reversed: open.length };
+  });
+}

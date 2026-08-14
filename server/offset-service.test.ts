@@ -165,3 +165,130 @@ describe.skipIf(!hasTestDb)("applyOffsets", () => {
     expect(await countRows()).toBe(before);
   });
 });
+
+describe.skipIf(!hasTestDb)("reverseOffset", () => {
+  it("restores both balances exactly", async () => {
+    const { getOffsetCandidates, applyOffsets, reverseOffset } =
+      await import("./offset-service");
+
+    const before = await getOffsetCandidates();
+    const source = before.overpayments[0];
+    const target = before.debts[0];
+
+    const { offsetIds } = await applyOffsets(
+      [{
+        fromReference: source.reference,
+        toReference: target.reference,
+        amount: Math.min(Math.abs(source.balance), target.balance),
+      }],
+      1,
+      "manual",
+    );
+
+    await reverseOffset(offsetIds[0], 1);
+
+    const after = await getOffsetCandidates();
+    expect(
+      after.overpayments.find((c) => c.reference === source.reference)?.balance,
+    ).toBeCloseTo(source.balance, 2);
+    expect(
+      after.debts.find((c) => c.reference === target.reference)?.balance,
+    ).toBeCloseTo(target.balance, 2);
+  });
+
+  it("leaves no distribution rows behind", async () => {
+    const { getOffsetCandidates, applyOffsets, reverseOffset } =
+      await import("./offset-service");
+    const { rawDb } = await import("./db");
+    const countRows = async () =>
+      Number((await rawDb.query("SELECT COUNT(*) AS c FROM payment_distributions")).rows[0].c);
+
+    const before = await countRows();
+    const candidates = await getOffsetCandidates();
+    const { offsetIds } = await applyOffsets(
+      [{
+        fromReference: candidates.overpayments[0].reference,
+        toReference: candidates.debts[0].reference,
+        amount: 1,
+      }],
+      1,
+      "manual",
+    );
+
+    expect(await countRows()).toBeGreaterThan(before);
+    await reverseOffset(offsetIds[0], 1);
+    expect(await countRows()).toBe(before);
+  });
+
+  it("refuses to reverse the same offset twice", async () => {
+    const { getOffsetCandidates, applyOffsets, reverseOffset, OffsetValidationError } =
+      await import("./offset-service");
+
+    const candidates = await getOffsetCandidates();
+    const { offsetIds } = await applyOffsets(
+      [{
+        fromReference: candidates.overpayments[0].reference,
+        toReference: candidates.debts[0].reference,
+        amount: 1,
+      }],
+      1,
+      "manual",
+    );
+
+    await reverseOffset(offsetIds[0], 1);
+    await expect(reverseOffset(offsetIds[0], 1)).rejects.toBeInstanceOf(
+      OffsetValidationError,
+    );
+  });
+
+  it("refuses when the money has since moved on", async () => {
+    const { getOffsetCandidates, applyOffsets, reverseOffset, OffsetValidationError } =
+      await import("./offset-service");
+
+    const candidates = await getOffsetCandidates();
+    const a = candidates.overpayments[0].reference;
+    const b = candidates.debts[0].reference;
+    const c = candidates.debts[1].reference;
+
+    // A → B, then B → C. Undoing A → B first would leave B negative.
+    const first = await applyOffsets(
+      [{ fromReference: a, toReference: b, amount: 50 }],
+      1,
+      "manual",
+    );
+    const afterFirst = await getOffsetCandidates();
+    const bBalance = afterFirst.overpayments.find((x) => x.reference === b);
+
+    if (!bBalance) return; // B did not end up overpaid, chain not reproducible
+
+    await applyOffsets([{ fromReference: b, toReference: c, amount: 50 }], 1, "manual");
+
+    await expect(reverseOffset(first.offsetIds[0], 1)).rejects.toBeInstanceOf(
+      OffsetValidationError,
+    );
+  });
+
+  it("reverses a whole batch at once", async () => {
+    const { getOffsetCandidates, applyOffsets, reverseBatch, getOffsetHistory } =
+      await import("./offset-service");
+
+    const candidates = await getOffsetCandidates();
+    const source = candidates.overpayments[0];
+    const { batchId } = await applyOffsets(
+      [
+        { fromReference: source.reference, toReference: candidates.debts[0].reference, amount: 1 },
+        { fromReference: source.reference, toReference: candidates.debts[1].reference, amount: 1 },
+      ],
+      1,
+      "auto",
+    );
+
+    const { reversed } = await reverseBatch(batchId, 1);
+    expect(reversed).toBe(2);
+
+    const history = await getOffsetHistory();
+    expect(
+      history.filter((h) => h.batchId === batchId).every((h) => h.reversedAt !== null),
+    ).toBe(true);
+  });
+});
