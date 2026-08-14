@@ -416,6 +416,27 @@ export const incomingPayments = pgTable("incoming_payments", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Payment Offsets: ledger of transfers between procedures. The money itself
+// lives as a pair of rows in paymentDistributions (minus on the source, plus
+// on the target, both against the same incoming payment); offsetId links them
+// back to this record.
+export const paymentOffsets = pgTable("payment_offsets", {
+  id: serial("id").primaryKey(),
+
+  batchId: text("batch_id").notNull(),
+  fromReference: text("from_reference").notNull(),
+  toReference: text("to_reference").notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  offsetDate: timestamp("offset_date").notNull().defaultNow(),
+  mode: text("mode").notNull(), // 'auto' | 'manual'
+  notes: text("notes"),
+
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  reversedAt: timestamp("reversed_at"),
+  reversedBy: integer("reversed_by").references(() => users.id),
+});
+
 // Payment Distributions table to link payments to procedures
 export const paymentDistributions = pgTable("payment_distributions", {
   id: serial("id").primaryKey(),
@@ -428,7 +449,10 @@ export const paymentDistributions = pgTable("payment_distributions", {
   distributedAmount: decimal("distributed_amount", { precision: 15, scale: 2 }).notNull(),
   distributionDate: timestamp("distribution_date").notNull().defaultNow(),
   paymentType: paymentTypeEnum("payment_type").notNull(), // Whether this is an 'advance' or 'balance' payment for the procedure
-  
+
+  // Set when this row is one half of an offset transfer (see paymentOffsets)
+  offsetId: integer("offset_id").references(() => paymentOffsets.id),
+
   // Metadata
   createdBy: integer("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
@@ -533,6 +557,12 @@ export const insertIncomingPaymentSchema = createInsertSchema(incomingPayments).
   distributionStatus: true
 });
 export const insertPaymentDistributionSchema = createInsertSchema(paymentDistributions);
+export const insertPaymentOffsetSchema = createInsertSchema(paymentOffsets).omit({
+  id: true,
+  createdAt: true,
+  reversedAt: true,
+  reversedBy: true
+});
 export const insertProductSchema = createInsertSchema(products);
 export const insertHsCodeSchema = createInsertSchema(hsCodes);
 export const insertTaxCalculationSchema = createInsertSchema(taxCalculations);
@@ -599,6 +629,9 @@ export type IncomingPayment = typeof incomingPayments.$inferSelect;
 
 export type InsertPaymentDistribution = z.infer<typeof insertPaymentDistributionSchema>;
 export type PaymentDistribution = typeof paymentDistributions.$inferSelect;
+
+export type InsertPaymentOffset = z.infer<typeof insertPaymentOffsetSchema>;
+export type PaymentOffset = typeof paymentOffsets.$inferSelect;
 
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof products.$inferSelect;
