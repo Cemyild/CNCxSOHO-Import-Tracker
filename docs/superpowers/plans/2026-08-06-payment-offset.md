@@ -1205,7 +1205,7 @@ Expected: `TEST_DATABASE_URL` yoksa 5 test **skipped**, hata yok. Varsa 5 test P
 - [ ] **Step 4: Motor testlerinin hâlâ geçtiğini doğrula**
 
 Run: `npx vitest run`
-Expected: `offset-engine.test.ts` 18 PASS; `offset-service.test.ts` skipped ya da PASS.
+Expected: Depoda bu iş öncesinde de 8 test dosyası / 90 test vardı; hepsi geçmeye devam etmeli. Buna ek olarak `offset-engine.test.ts` 18 PASS ve `offset-service.test.ts` skipped ya da PASS.
 
 - [ ] **Step 5: Commit**
 
