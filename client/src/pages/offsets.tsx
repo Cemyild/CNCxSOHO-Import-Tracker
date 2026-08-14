@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { PageLayout } from '@/components/layout/PageLayout';
-import { formatCurrency } from '@/lib/formatters';
+import { formatCurrency, formatDateTime } from '@/lib/formatters';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import {
   OffsetPreviewModal,
@@ -26,6 +27,18 @@ export interface CandidateResult {
   totalOverpayment: number;
   totalDebt: number;
   uncosted: { count: number; amount: number };
+}
+
+export interface OffsetHistoryEntry {
+  id: number;
+  batchId: string;
+  fromReference: string;
+  toReference: string;
+  amount: number;
+  offsetDate: string;
+  mode: 'auto' | 'manual';
+  createdByName: string | null;
+  reversedAt: string | null;
 }
 
 /** Query string shared by the candidates and preview endpoints. */
@@ -108,6 +121,61 @@ export default function OffsetsPage() {
     ).sort();
   }, [data]);
 
+  const { data: history } = useQuery<{ offsets: OffsetHistoryEntry[] }>({
+    queryKey: ['/api/offsets/history'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/offsets/history');
+      return await response.json();
+    },
+  });
+
+  const refreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/offsets/candidates'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/offsets/preview'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/offsets/history'] });
+  };
+
+  const undoToast = {
+    onSuccess: () => {
+      toast({ title: t('offsets.toast.reverseSuccess') });
+      refreshAll();
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: t('offsets.toast.reverseError'),
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive' as const,
+      });
+    },
+  };
+
+  const reverseOne = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await apiRequest('POST', `/api/offsets/${id}/reverse`);
+      return await response.json();
+    },
+    ...undoToast,
+  });
+
+  const reverseWholeBatch = useMutation({
+    mutationFn: async (batchId: string) => {
+      const response = await apiRequest(
+        'POST',
+        `/api/offsets/batch/${batchId}/reverse`,
+      );
+      return await response.json();
+    },
+    ...undoToast,
+  });
+
+  const batches = React.useMemo(() => {
+    const grouped = new Map<string, OffsetHistoryEntry[]>();
+    for (const entry of history?.offsets ?? []) {
+      grouped.set(entry.batchId, [...(grouped.get(entry.batchId) ?? []), entry]);
+    }
+    return Array.from(grouped.entries());
+  }, [history]);
+
   const applyManual = useMutation({
     mutationFn: async () => {
       const response = await apiRequest('POST', '/api/offsets/apply', {
@@ -185,7 +253,13 @@ export default function OffsetsPage() {
 
   return (
     <PageLayout title={t('nav.offsets')}>
-      <div className="space-y-4">
+      <Tabs defaultValue="match" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="match">{t('offsets.tabs.match')}</TabsTrigger>
+          <TabsTrigger value="history">{t('offsets.tabs.history')}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="match" className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <select
             className="h-9 rounded-md border bg-background px-2 text-sm"
@@ -336,7 +410,75 @@ export default function OffsetsPage() {
             queryClient.invalidateQueries({ queryKey: ['/api/offsets/history'] });
           }}
         />
-      </div>
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-4">
+          {batches.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              {t('offsets.history.empty')}
+            </p>
+          )}
+          {batches.map(([batchId, entries]) => {
+            const total = entries.reduce((s, e) => s + e.amount, 0);
+            const open = entries.filter((e) => e.reversedAt === null);
+            return (
+              <div key={batchId} className="rounded-md border">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/40 px-3 py-2 text-sm">
+                  <span>
+                    {formatDateTime(entries[0].offsetDate)} ·{' '}
+                    {entries[0].createdByName ?? '—'} ·{' '}
+                    {entries[0].mode === 'auto'
+                      ? t('offsets.history.auto')
+                      : t('offsets.history.manual')}{' '}
+                    ·{' '}
+                    {t('offsets.history.batchSummary', {
+                      n: entries.length,
+                      amount: formatCurrency(total),
+                    })}
+                  </span>
+                  {open.length > 1 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => reverseWholeBatch.mutate(batchId)}
+                      disabled={reverseWholeBatch.isPending}
+                    >
+                      {t('offsets.actions.reverseBatch')}
+                    </Button>
+                  )}
+                </div>
+                {entries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className={`flex items-center justify-between gap-3 px-3 py-2 text-sm ${
+                      entry.reversedAt ? 'text-muted-foreground line-through' : ''
+                    }`}
+                  >
+                    <span className="flex-1">
+                      {entry.fromReference} → {entry.toReference}
+                    </span>
+                    <span className="font-mono">{formatCurrency(entry.amount)}</span>
+                    {entry.reversedAt ? (
+                      <span className="text-xs no-underline">
+                        {t('offsets.history.reversed')}
+                      </span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => reverseOne.mutate(entry.id)}
+                        disabled={reverseOne.isPending}
+                      >
+                        {t('offsets.actions.reverse')}
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </TabsContent>
+      </Tabs>
     </PageLayout>
   );
 }
