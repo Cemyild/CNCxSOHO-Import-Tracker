@@ -1594,7 +1594,7 @@ Terminal 2:
 ```bash
 curl -s "http://localhost:5000/api/offsets/candidates" | head -c 400
 echo
-curl -s -X POST "http://localhost:5000/api/offsets/preview" -H "Content-Type: application/json" -d '{}' | head -c 400
+curl -s "http://localhost:5000/api/offsets/preview" | head -c 400
 echo
 curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://localhost:5000/api/offsets/apply" -H "Content-Type: application/json" -d '{"moves":[]}'
 ```
@@ -2210,7 +2210,7 @@ git commit -m "feat(offsets): candidate lists, shipper filter and manual transfe
 - Modify: `client/src/pages/offsets.tsx`
 
 **Interfaces:**
-- Consumes: `POST /api/offsets/preview`, `POST /api/offsets/apply`
+- Consumes: `GET /api/offsets/preview`, `POST /api/offsets/apply`
 - Produces: `OffsetPreviewModal` bileşeni; props `{ isOpen, onClose, plan, onApplied }`
 
 - [ ] **Step 1: Önizleme penceresini yaz**
@@ -2432,10 +2432,7 @@ import { OffsetPreviewModal, type OffsetPlan } from '@/components/offset-preview
 
   const loadPreview = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('POST', '/api/offsets/preview', {
-        shipper: shipper || undefined,
-        includeClosed: showClosed,
-      });
+      const response = await apiRequest('GET', `/api/offsets/preview${filterQuery(shipper, showClosed)}`);
       return (await response.json()) as OffsetPlan;
     },
     onSuccess: (plan) => {
@@ -2488,10 +2485,7 @@ Sayfa açılışında üçüncü kartın dolması için efekt ekle:
 
 ```tsx
   React.useEffect(() => {
-    apiRequest('POST', '/api/offsets/preview', {
-      shipper: shipper || undefined,
-      includeClosed: showClosed,
-    })
+    apiRequest('GET', `/api/offsets/preview${filterQuery(shipper, showClosed)}`)
       .then((r) => r.json())
       .then((plan: OffsetPlan) => setPreviewPlan(plan))
       .catch(() => undefined);
@@ -2503,7 +2497,7 @@ Sayfa açılışında üçüncü kartın dolması için efekt ekle:
 `http://localhost:5000/offsets` → "Tümünü otomatik eşleştir".
 
 Expected:
-- Özet rakamları, aynı anda çalıştırılan `POST /api/offsets/preview` çıktısıyla birebir aynı (canlı veri hareketli olduğu için sabit sayı beklenmez — bkz. Task 13 Step 3)
+- Özet rakamları, aynı anda çalıştırılan `GET /api/offsets/preview` çıktısıyla birebir aynı (canlı veri hareketli olduğu için sabit sayı beklenmez — bkz. Task 13 Step 3)
 - Gruplar hedef prosedüre göre; birden fazla kaynaktan beslenen bir hedefin başlığında "kapanır · N kaynaktan" yazar (2026-08-14 verisinde `CNCALO-67 FOOTWEAR` 3 kaynaktan besleniyor)
 - Bir satırın işaretini kaldır → o grup "kısmi" olur, özetteki tutar ve işlem sayısı anında düşer
 - **"Vazgeç" ile kapat** — bu adımda uygulama yapılmaz
@@ -2822,7 +2816,7 @@ Expected: çıktı boş. (Depo genelindeki tsc çıktısı `pdf-data-transformer
 Sunucu çalışırken:
 
 ```bash
-curl -s -X POST "http://localhost:5000/api/offsets/preview" -H "Content-Type: application/json" -d '{}' \
+curl -s "http://localhost:5000/api/offsets/preview" \
   | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const p=JSON.parse(s);console.log('closed:',p.closedDebts.length,'used:',p.usedAmount,'moves:',p.moves.length,'left:',p.remainingOverpayment,'unmatched:',p.unmatchedDebts.length)})"
 ```
 
