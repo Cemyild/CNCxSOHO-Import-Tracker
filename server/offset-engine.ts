@@ -90,3 +90,71 @@ export function matchOffsets(
 
   return { moves, closedDebts, unmatchedDebts, usedAmount, remainingOverpayment };
 }
+
+/** One incoming payment's net usable amount inside a single procedure. */
+export interface SourceBucket {
+  incomingPaymentId: number;
+  paymentType: "advance" | "balance";
+  /** Net positive amount still attributable to this payment on this procedure. */
+  available: number;
+  lastDate: Date;
+  lastId: number;
+}
+
+export interface ConsumptionSlice {
+  incomingPaymentId: number;
+  paymentType: "advance" | "balance";
+  amount: number;
+}
+
+export class InsufficientSourceError extends Error {
+  constructor(requested: number, available: number) {
+    super(
+      `Offset of ${requested.toFixed(2)} exceeds the available ${available.toFixed(2)}`,
+    );
+    this.name = "InsufficientSourceError";
+  }
+}
+
+/**
+ * Decide which incoming payments a transfer is drawn from, newest money first
+ * (LIFO). A transfer that does not fit in one bucket is split across several —
+ * each slice becomes its own pair of distribution rows.
+ */
+export function planSourceConsumption(
+  buckets: SourceBucket[],
+  amount: number,
+): ConsumptionSlice[] {
+  const total = buckets.reduce((sum, b) => sum + b.available, 0);
+  if (total + CENT_EPSILON < amount) {
+    throw new InsufficientSourceError(amount, total);
+  }
+
+  const ordered = [...buckets].sort(
+    (a, b) => b.lastDate.getTime() - a.lastDate.getTime() || b.lastId - a.lastId,
+  );
+
+  const slices: ConsumptionSlice[] = [];
+  let left = amount;
+
+  for (const b of ordered) {
+    if (left <= CENT_EPSILON) break;
+    if (b.available <= CENT_EPSILON) continue;
+
+    const take = round2(Math.min(b.available, left));
+    left = round2(left - take);
+    slices.push({
+      incomingPaymentId: b.incomingPaymentId,
+      paymentType: b.paymentType,
+      amount: take,
+    });
+  }
+
+  // Absorb sub-kurus shortfall into the last slice so the pair sums exactly.
+  if (left > 0 && slices.length > 0) {
+    const last = slices[slices.length - 1];
+    last.amount = round2(last.amount + left);
+  }
+
+  return slices;
+}

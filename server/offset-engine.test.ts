@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { matchOffsets, round2, OFFSET_TOLERANCE } from "./offset-engine";
+import {
+  matchOffsets,
+  round2,
+  OFFSET_TOLERANCE,
+  planSourceConsumption,
+  InsufficientSourceError,
+  type SourceBucket,
+} from "./offset-engine";
 
 describe("matchOffsets", () => {
   it("closes every debt when the overpayment covers all of them", () => {
@@ -126,5 +133,88 @@ describe("round2", () => {
     expect(round2(1.005)).toBe(1.01);
     expect(round2(66896.974)).toBe(66896.97);
     expect(round2(0.1 + 0.2)).toBe(0.3);
+  });
+});
+
+const bucket = (
+  id: number,
+  available: number,
+  isoDate: string,
+  paymentType: "advance" | "balance" = "balance",
+): SourceBucket => ({
+  incomingPaymentId: id,
+  paymentType,
+  available,
+  lastDate: new Date(isoDate),
+  lastId: id,
+});
+
+describe("planSourceConsumption", () => {
+  it("takes everything from the newest bucket when it is big enough", () => {
+    const slices = planSourceConsumption(
+      [bucket(1, 500, "2026-01-10"), bucket(2, 800, "2026-05-20")],
+      300,
+    );
+
+    expect(slices).toEqual([
+      { incomingPaymentId: 2, paymentType: "balance", amount: 300 },
+    ]);
+  });
+
+  it("walks backwards through buckets when one is not enough", () => {
+    const slices = planSourceConsumption(
+      [bucket(1, 500, "2026-01-10"), bucket(2, 200, "2026-05-20")],
+      600,
+    );
+
+    expect(slices).toEqual([
+      { incomingPaymentId: 2, paymentType: "balance", amount: 200 },
+      { incomingPaymentId: 1, paymentType: "balance", amount: 400 },
+    ]);
+  });
+
+  it("keeps each bucket's payment type", () => {
+    const slices = planSourceConsumption(
+      [bucket(1, 100, "2026-01-10", "advance"), bucket(2, 50, "2026-05-20", "balance")],
+      120,
+    );
+
+    expect(slices).toEqual([
+      { incomingPaymentId: 2, paymentType: "balance", amount: 50 },
+      { incomingPaymentId: 1, paymentType: "advance", amount: 70 },
+    ]);
+  });
+
+  it("breaks ties on id, newest first", () => {
+    const slices = planSourceConsumption(
+      [bucket(7, 10, "2026-03-01"), bucket(9, 10, "2026-03-01")],
+      15,
+    );
+
+    expect(slices.map((s) => s.incomingPaymentId)).toEqual([9, 7]);
+  });
+
+  it("throws when the buckets cannot cover the amount", () => {
+    expect(() =>
+      planSourceConsumption([bucket(1, 100, "2026-01-10")], 150),
+    ).toThrow(InsufficientSourceError);
+  });
+
+  it("tolerates kurus shortfall inside the epsilon", () => {
+    const slices = planSourceConsumption([bucket(1, 99.999, "2026-01-10")], 100);
+
+    expect(slices).toHaveLength(1);
+    expect(slices[0].amount).toBe(100);
+  });
+
+  it("skips exhausted buckets", () => {
+    const slices = planSourceConsumption(
+      [bucket(1, 0, "2026-06-01"), bucket(2, 75, "2026-05-01")],
+      75,
+    );
+
+    expect(slices).toEqual([
+      { incomingPaymentId: 2, paymentType: "balance", amount: 75 },
+    ]);
   });
 });
