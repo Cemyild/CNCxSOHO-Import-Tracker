@@ -4,6 +4,7 @@
     "procedures": "İşlemler",
     "expenses": "Giderler",
     "payments": "Ödemeler",
+    "offsets": "Mahsuplaşma",
     "taxCalculation": "Vergi Hesaplama",
     "storageCalculator": "Ardiye Hesaplama",
     "reports": "Raporlar",
@@ -169,6 +170,73 @@
       "final_balance_letter_sent": "Bakiye Mektubu Gönderildi",
       "balance_received": "Bakiye Alındı",
       "closed": "Kapatıldı"
+    }
+  },
+  "offsets": {
+    "title": "Mahsuplaşma",
+    "tabs": { "match": "Eşleştirme", "history": "Geçmiş" },
+    "summary": {
+      "totalOverpayment": "Toplam Fazla",
+      "totalDebt": "Toplam Borç",
+      "closable": "Tek Tuşla Kapanacak",
+      "procedureCount": "{{n}} prosedür",
+      "debtCount": "{{n}} borç",
+      "uncosted": "{{n}} prosedür ({{amount}}) listede yok — gideri henüz girilmemiş"
+    },
+    "filters": {
+      "shipper": "Gönderici",
+      "allShippers": "Tümü",
+      "showClosed": "Kapalıları göster"
+    },
+    "lists": {
+      "overpayments": "Fazla Ödeme ({{n}})",
+      "debts": "Borçlu ({{n}})",
+      "emptyOverpayments": "Fazla ödemesi olan prosedür yok",
+      "emptyDebts": "Borçlu prosedür yok",
+      "closedBadge": "kapalı"
+    },
+    "actions": {
+      "autoMatch": "Tümünü otomatik eşleştir",
+      "transferSelected": "Seçilenleri aktar",
+      "cancel": "Vazgeç",
+      "apply": "{{n}} aktarımı uygula",
+      "reverse": "Geri al",
+      "reverseBatch": "Tüm partiyi geri al",
+      "fromProcedure": "Bu fazlayı mahsuplaştır"
+    },
+    "preview": {
+      "title": "Otomatik Eşleştirme Önizlemesi",
+      "description": "Hiçbir kayıt siz onaylamadan yazılmaz.",
+      "closedDebts": "{{n}} borç tamamen kapanacak",
+      "usedAmount": "{{amount}} aktarılacak",
+      "moveCount": "{{n}} işlem",
+      "remaining": "Kalan fazla: {{amount}}",
+      "unmatched": "Kapanmayacak borç: {{n}}",
+      "willClose": "kapanır",
+      "partial": "kısmi",
+      "sourceCount": "{{n}} kaynaktan",
+      "empty": "Eşleştirilebilecek bir aktarım bulunamadı."
+    },
+    "manual": {
+      "title": "Elle Aktarım",
+      "from": "Kaynak prosedür",
+      "to": "Hedef prosedür",
+      "amount": "Aktarılacak tutar",
+      "selectBoth": "Soldan bir fazla ödeme, sağdan bir borç seçin"
+    },
+    "history": {
+      "empty": "Henüz mahsuplaşma yapılmamış",
+      "auto": "Otomatik eşleştirme",
+      "manual": "Elle aktarım",
+      "reversed": "geri alındı",
+      "batchSummary": "{{n}} aktarım · {{amount}}"
+    },
+    "toast": {
+      "applySuccess": "{{n}} aktarım yapıldı, {{amount}} yerine ulaştı",
+      "applyError": "Aktarım yapılamadı",
+      "reverseSuccess": "Aktarım geri alındı",
+      "reverseError": "Geri alma başarısız",
+      "loadError": "Mahsuplaşma listesi yüklenemedi"
     }
   },
   "payments": {
