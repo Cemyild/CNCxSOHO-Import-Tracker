@@ -15,6 +15,7 @@ interface CalculationSummaryProps {
   totalVat: number;
   totalTaxUSD: number;
   totalTaxTL: number;
+  currencyRate?: number;
 }
 
 export function CalculationSummary({
@@ -26,8 +27,18 @@ export function CalculationSummary({
   totalVat,
   totalTaxUSD,
   totalTaxTL,
+  currencyRate,
 }: CalculationSummaryProps) {
   const { t } = useTranslation();
+  const hasRate = typeof currencyRate === "number" && isFinite(currencyRate) && currencyRate > 0;
+
+  const TryValue = ({ usd, testId }: { usd: number; testId: string }) =>
+    hasRate ? (
+      <div className="text-sm font-medium text-muted-foreground mt-1" data-testid={testId}>
+        ₺{formatCurrency(usd * (currencyRate as number))}
+      </div>
+    ) : null;
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <Card>
@@ -69,6 +80,7 @@ export function CalculationSummary({
           <div className="text-2xl font-bold text-orange-600" data-testid="text-total-customs-tax">
             ${formatCurrency(totalCustomsTax)}
           </div>
+          <TryValue usd={totalCustomsTax} testId="text-total-customs-tax-tl" />
         </CardContent>
       </Card>
       
@@ -83,6 +95,7 @@ export function CalculationSummary({
           <div className="text-2xl font-bold text-red-600" data-testid="text-total-additional-tax">
             ${formatCurrency(totalAdditionalTax)}
           </div>
+          <TryValue usd={totalAdditionalTax} testId="text-total-additional-tax-tl" />
         </CardContent>
       </Card>
       
@@ -97,6 +110,7 @@ export function CalculationSummary({
           <div className="text-2xl font-bold text-purple-600" data-testid="text-total-kkdf">
             ${formatCurrency(totalKkdf)}
           </div>
+          <TryValue usd={totalKkdf} testId="text-total-kkdf-tl" />
         </CardContent>
       </Card>
       
@@ -111,6 +125,7 @@ export function CalculationSummary({
           <div className="text-2xl font-bold text-green-600" data-testid="text-total-vat">
             ${formatCurrency(totalVat)}
           </div>
+          <TryValue usd={totalVat} testId="text-total-vat-tl" />
         </CardContent>
       </Card>
       
@@ -125,6 +140,7 @@ export function CalculationSummary({
           <div className="text-2xl font-bold text-blue-600" data-testid="text-total-tax-usd">
             ${formatCurrency(totalTaxUSD)}
           </div>
+          <TryValue usd={totalTaxUSD} testId="text-total-tax-usd-tl" />
         </CardContent>
       </Card>
       

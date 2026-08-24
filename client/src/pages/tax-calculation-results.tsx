@@ -369,6 +369,14 @@ export default function TaxCalculationResultsPage() {
     sum + parseFloat(item.total_tax_tl || "0"), 0
   );
 
+  const parsedCurrencyRate = parseFloat(calculation?.currency_rate || "0");
+  const currencyRate =
+    isFinite(parsedCurrencyRate) && parsedCurrencyRate > 0
+      ? parsedCurrencyRate
+      : totalTaxUSD > 0
+        ? totalTaxTL / totalTaxUSD
+        : 0;
+
   const calculatedTaxData = {
     customsTax: totalCustomsTax,
     additionalTax: totalAdditionalTax,
@@ -473,6 +481,7 @@ export default function TaxCalculationResultsPage() {
           totalVat={totalVat}
           totalTaxUSD={totalTaxUSD}
           totalTaxTL={totalTaxTL}
+          currencyRate={currencyRate}
         />
 
         <Card>
