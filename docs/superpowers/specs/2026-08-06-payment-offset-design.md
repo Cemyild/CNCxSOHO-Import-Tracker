@@ -57,6 +57,26 @@ remainingBalance = totalExpenses - totalPayments
 | 4 | Kapalı prosedürler | **Tamamen dahil** (hem fazlası kullanılır hem borcu kapatılır), listede turuncu "kapalı" rozetiyle işaretlenir. |
 | 5 | Kayıt yöntemi | **Çift kayıt**: kaynağa eksi, hedefe artı satır. Eski kayıtlara dokunulmaz. |
 | 6 | Gideri girilmemiş prosedürler | **Listeye hiç girmez.** (2026-08-14'te uygulama sırasında ortaya çıktı, bkz. aşağıda.) |
+| 7 | Elle aktarımda üst sınır | **Yalnızca kaynak sınırlıdır.** Hedefin borcundan fazlası aktarılabilir; hedef fazla ödemeye geçer. (2026-08-14, kullanıcı talebi.) |
+
+### Karar 7'nin gerekçesi
+
+İlk sürümde elle aktarım, hedefin borcuyla sınırlıydı. Gerçek kullanımda bunun
+yetmediği görüldü: `CNCALO-101`'deki 125.826,55 TL fazlanın tamamı, borcu
+49.674,59 TL olan `CNCALO-101 / 2`'ye aktarılmak istendi — kalan 76.151,96 TL o
+prosedürde fazla ödeme olarak beklesin diye. Bu, aynı işin devam eden
+parçalarında paranın ileri taşınmasının normal bir yolu.
+
+Sunucu tarafı bunu zaten kabul ediyordu (`applyOffsets` yalnızca kaynağın
+fazlasını kontrol eder); kısıt sadece arayüzdeydi ve kaldırıldı. Kaynak sınırı
+korunur: bir prosedür sahip olmadığı parayı veremez.
+
+**Otomatik eşleştirme bundan etkilenmez** — orada bir borcu aşan aktarım
+üretilmez, hedefler tam kapatılır.
+
+Arayüz, borcu aşan bir tutar girildiğinde hedefte ne kadar fazla ödeme
+oluşacağını yazar; kaynağın fazlasını aşan tutarda ise kırmızı uyarı verir ve
+buton pasif kalır.
 
 ### Karar 6'nın gerekçesi
 

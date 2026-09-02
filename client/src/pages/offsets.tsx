@@ -221,13 +221,21 @@ export default function OffsetsPage() {
   });
 
   const amount = parseFloat(manualAmount);
+  // Only the source is capped: a procedure cannot hand over more than it
+  // actually has spare. Sending more than the target owes is allowed on
+  // purpose — the target simply ends up overpaid, which is a normal way to
+  // park money on a procedure that will need it.
   const manualValid =
     source !== null &&
     target !== null &&
     Number.isFinite(amount) &&
     amount > 0 &&
-    amount <= Math.abs(source.balance) + 0.005 &&
-    amount <= target.balance + 0.005;
+    amount <= Math.abs(source.balance) + 0.005;
+
+  const overshoot =
+    source && target && Number.isFinite(amount) && amount > target.balance + 0.005
+      ? amount - target.balance
+      : 0;
 
   const renderRow = (
     candidate: OffsetCandidate,
@@ -398,6 +406,23 @@ export default function OffsetsPage() {
               >
                 {source.reference} → {target.reference}
               </Button>
+              <div className="w-full text-sm">
+                {amount > Math.abs(source.balance) + 0.005 ? (
+                  <p className="text-destructive">
+                    {t('offsets.manual.exceedsSource', {
+                      ref: source.reference,
+                      amount: formatCurrency(Math.abs(source.balance)),
+                    })}
+                  </p>
+                ) : overshoot > 0 ? (
+                  <p className="text-muted-foreground">
+                    {t('offsets.manual.willOverpay', {
+                      ref: target.reference,
+                      amount: formatCurrency(overshoot),
+                    })}
+                  </p>
+                ) : null}
+              </div>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">

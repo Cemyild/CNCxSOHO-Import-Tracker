@@ -222,7 +222,9 @@
       "from": "Kaynak prosedür",
       "to": "Hedef prosedür",
       "amount": "Aktarılacak tutar",
-      "selectBoth": "Soldan bir fazla ödeme, sağdan bir borç seçin"
+      "selectBoth": "Soldan bir fazla ödeme, sağdan bir borç seçin",
+      "willOverpay": "Borçtan fazlasını aktarıyorsunuz: {{ref}} prosedüründe {{amount}} fazla ödeme oluşacak",
+      "exceedsSource": "{{ref}} prosedüründe yalnızca {{amount}} fazla ödeme var"
     },
     "history": {
       "empty": "Henüz mahsuplaşma yapılmamış",

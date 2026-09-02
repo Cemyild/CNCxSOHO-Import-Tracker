@@ -222,7 +222,9 @@
       "from": "Source procedure",
       "to": "Target procedure",
       "amount": "Amount to transfer",
-      "selectBoth": "Pick an overpayment on the left and a debt on the right"
+      "selectBoth": "Pick an overpayment on the left and a debt on the right",
+      "willOverpay": "You are sending more than is owed: {{ref}} will end up with an overpayment of {{amount}}",
+      "exceedsSource": "{{ref}} only has {{amount}} spare"
     },
     "history": {
       "empty": "No offsetting has been done yet",
