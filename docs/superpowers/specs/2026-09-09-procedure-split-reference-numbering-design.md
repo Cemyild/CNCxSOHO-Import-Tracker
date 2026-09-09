@@ -175,17 +175,29 @@ Değişiklikler:
 - **`create-procedure` endpoint'i:** gövdede `sourceProcedureId` varsa split modu:
 
   ```
-  transaction:
-    kaynağı oku → planSplit(kaynakRef, kardeşler)
-    plan.sourceRename varsa → renameProcedureReference(from, to, tx)
-    yeni procedure'ı plan.newReference ile oluştur
-    bu hesaplamanın tax_calculations.reference'ını plan.newReference yap
-    yeni invoice_line_items satırlarını plan.newReference ile ekle
+  kaynağı oku → planSplit(kaynakRef, kardeşler)
+  yeni procedure'ı plan.newReference ile oluştur
+  bu hesaplamanın tax_calculations.reference'ını plan.newReference yap
+  yeni invoice_line_items satırlarını plan.newReference ile ekle
+  plan.sourceRename varsa → renameProcedureReference(from, to)   ← en son
   ```
 
-  Son iki satır yeni kayıtları ilgilendirir — mevcut satırların toplu
+  Üçüncü ve dördüncü satır yeni kayıtları ilgilendirir — mevcut satırların toplu
   güncellenmesi değil. Endpoint bugün line item'ları `calculation.reference` ile
   ekliyor; split modunda bunun yerine `plan.newReference` kullanılır.
+
+  **Sıra bilinçli:** kaynağın yeniden adlandırılması en sona bırakılır ve kendi
+  transaction'ında çalışır. Endpoint bugün de atomik değil (procedure, hesaplama
+  ve line item'lar ayrı yazımlar); bunu tek transaction'a çevirmek bu işin
+  kapsamını aşar. Bu sırayla en kötü senaryolar şunlar:
+
+  - Yeni procedure oluşamazsa → kaynak hiç dokunulmamış olur, bugünkü davranış.
+  - Rename patlarsa → yeni procedure `/ N` adıyla var, kaynak eski adında kalır;
+    yani tam olarak bugünkü durum. Kilit açık olduğu için düzenleme sayfasından
+    elle düzeltilebilir.
+
+  Kaynağın yarım yamalak yeniden adlandırıldığı bir ara durum oluşmaz, çünkü
+  `renameProcedureReference`'ın kendisi transaction'lı.
 
   `sourceProcedureId` yoksa endpoint bugünkü davranışını aynen sürdürür — MCP
   aracı (`server/mcp/tools/taxes.ts:873`) bu endpoint'i split olmadan çağırdığı
@@ -228,10 +240,19 @@ edilmiş kod yolundan geçer. `db/manual-ddl/` altına elle SQL koymaya gerek yo
   gerçek verisi (`CNCALO-108`, `CNCALO-108 /2`) → `/ 1` ve `/ 3`.
 - Çıktı formatı her zaman ` / ` boşluklu.
 
-**`procedure-reference-rename.test.ts`:** transaction davranışı sahte `tx` ile
-doğrulanır — hangi tabloların hangi sırayla güncellendiği, cascade'li üç tablonun
-elle güncellenmediği, çakışan `newRef`'in reddedildiği, bir adım patladığında
-hiçbir yazmanın kalıcı olmadığı.
+**`procedure-reference-rename.test.ts`:** Drizzle zincirini taklit etmek yerine
+karar mantığı saf fonksiyonlara ayrılır ve onlar test edilir:
+
+- `MANUAL_REFERENCE_TABLES` listesi tam olarak FK'sız altı tabloyu içerir;
+  cascade'li `taxes` / `import_expenses` / `import_service_invoices` listede
+  **yoktur** (yoksa iki kez güncellenmeye çalışılırdı).
+- `planTaxCalculationAlignment(linked, from, to)`: tek bağlı hesaplama farklı
+  formattaysa hizalanır; birden fazla bağlıysa yalnızca tam eşleşen güncellenir;
+  hedef referansı zaten taşıyan hesaplama listeden düşer.
+- `assertRenameInputs`: boş/yalnızca boşluktan oluşan referansları reddeder.
+
+Transaction'ın kendisi (geri alma davranışı) veritabanı garantisidir; taklit
+edilmez.
 
 Canlı veritabanına yazan otomatik test yazılmayacak.
 
