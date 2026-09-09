@@ -26,6 +26,16 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -172,6 +182,13 @@ export default function EditProcedurePage() {
     }
   }, [procedure, form]);
 
+  // A reference change rewrites every row linked to it, so it waits for a
+  // confirmation that reports how many rows that is.
+  const [pendingRename, setPendingRename] = useState<{
+    data: ProcedureFormData;
+    total: number;
+  } | null>(null);
+
   const updateMutation = useMutation({
     mutationFn: async (data: ProcedureFormData) => {
       // Safely convert dates to YYYY-MM-DD strings to avoid timezone conversion
@@ -222,8 +239,22 @@ export default function EditProcedurePage() {
     },
   });
 
-  const onSubmit = (data: ProcedureFormData) => {
-    updateMutation.mutate(data);
+  const onSubmit = async (data: ProcedureFormData) => {
+    const nextReference = data.reference.trim();
+    if (nextReference === procedureReference) {
+      updateMutation.mutate(data);
+      return;
+    }
+
+    let total = 0;
+    try {
+      const res = await apiRequest("GET", `/api/procedures/${procedure!.id}/reference-impact`);
+      const impact = await res.json();
+      total = impact?.total ?? 0;
+    } catch (e) {
+      console.error("Failed to load reference impact:", e);
+    }
+    setPendingRename({ data, total });
   };
 
   if (!procedureReference) {
@@ -291,9 +322,9 @@ export default function EditProcedurePage() {
                       <FormItem>
                         <FormLabel className="required">{t("procedurePages.form.reference")}</FormLabel>
                         <FormControl>
-                          <Input placeholder={t("procedurePages.form.referencePlaceholder")} {...field} disabled />
+                          <Input placeholder={t("procedurePages.form.referencePlaceholder")} {...field} />
                         </FormControl>
-                        <FormDescription>{t("procedurePages.edit.referenceLocked")}</FormDescription>
+                        <FormDescription>{t("procedurePages.edit.referenceRenameHint")}</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -659,6 +690,32 @@ export default function EditProcedurePage() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={pendingRename !== null} onOpenChange={(open) => !open && setPendingRename(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("procedurePages.edit.renameConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("procedurePages.edit.renameConfirmBody", {
+                from: procedureReference,
+                to: pendingRename?.data.reference.trim() ?? "",
+                count: pendingRename?.total ?? 0,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingRename) updateMutation.mutate(pendingRename.data);
+                setPendingRename(null);
+              }}
+            >
+              {t("procedurePages.edit.renameConfirmAction")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageLayout>
   );
 }

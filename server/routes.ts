@@ -1136,6 +1136,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const procedureId = existingProcedures[0].id;
 
+      // A changed reference must go through the rename service — a plain
+      // UPDATE would cascade to three tables and orphan the other six.
+      const requestedReference = String(processedData.reference ?? "").trim();
+      if (requestedReference && requestedReference !== reference) {
+        try {
+          const renamed = await renameProcedureReference(reference, requestedReference);
+          console.log(
+            "[PUT /api/procedures/:reference] Renamed:",
+            renamed.from,
+            "→",
+            renamed.to,
+            renamed.updated,
+          );
+        } catch (renameError) {
+          console.error("[PUT /api/procedures/:reference] Rename failed:", renameError);
+          return res.status(409).json({
+            message: "Failed to rename procedure reference",
+            error: renameError instanceof Error ? renameError.message : String(renameError),
+          });
+        }
+      }
+      // The rename service already wrote the reference; never let the plain
+      // update write it a second time.
+      delete processedData.reference;
+
       // Update the procedure using its ID
       const procedure = await storage.updateProcedure(
         procedureId,
