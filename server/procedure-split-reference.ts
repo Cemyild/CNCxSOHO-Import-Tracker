@@ -5,7 +5,13 @@
  * source and the new procedure get a " / N" suffix so the two parts of the same
  * shipment are recognisable: CNCALO-108 becomes CNCALO-108 / 1 and the new one
  * becomes CNCALO-108 / 2.
+ *
+ * Everything above loadSplitPlan is pure; loadSplitPlan is the single
+ * database-backed entry point routes call.
  */
+import { eq, sql } from "drizzle-orm";
+import { db } from "./db";
+import { procedures } from "@shared/schema";
 
 export interface ParsedReference {
   /** The reference without its " / N" suffix. */
@@ -84,4 +90,30 @@ export function planSplit(sourceRef: string, siblings: string[]): SplitPlan {
     sourceRename: part === null ? { from: source, to: formatSplitReference(root, 1) } : null,
     newReference: formatSplitReference(root, highest + 1),
   };
+}
+
+/**
+ * Load a procedure and work out what a split from it would be numbered.
+ *
+ * The LIKE only narrows candidates; planSplit does the real sibling filtering,
+ * so a prefix collision such as CNCALO-1080 cannot leak in.
+ */
+export async function loadSplitPlan(
+  procedureId: number,
+): Promise<{ source: typeof procedures.$inferSelect; plan: SplitPlan }> {
+  const [source] = await db.select().from(procedures).where(eq(procedures.id, procedureId));
+  if (!source) throw new Error(`Procedure not found: ${procedureId}`);
+  if (!source.reference) throw new Error(`Procedure ${procedureId} has no reference`);
+
+  const { root } = parseReference(source.reference);
+  const candidates = await db
+    .select({ reference: procedures.reference })
+    .from(procedures)
+    .where(sql`${procedures.reference} LIKE ${`${likeEscape(root)}%`} ESCAPE '\\'`);
+
+  const siblings = candidates
+    .map((row) => row.reference)
+    .filter((reference): reference is string => Boolean(reference));
+
+  return { source, plan: planSplit(source.reference, siblings) };
 }

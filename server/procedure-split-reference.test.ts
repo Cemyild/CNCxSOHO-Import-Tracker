@@ -1,4 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+/**
+ * Only the pure helpers are under test. loadSplitPlan lives in the same module
+ * and imports ./db, which refuses to load without DATABASE_URL — stub it.
+ */
+vi.mock("./db", () => ({ db: {}, pool: {}, rawDb: {} }));
+
 import {
   parseReference,
   formatSplitReference,
@@ -87,5 +94,12 @@ describe("likeEscape", () => {
   it("escapes SQL LIKE wildcards", () => {
     expect(likeEscape("A_B%C")).toBe("A\\_B\\%C");
     expect(likeEscape("CNCALO-108")).toBe("CNCALO-108");
+  });
+});
+
+describe("loadSplitPlan export", () => {
+  it("is exported so routes can plan a split from a procedure id", async () => {
+    const mod = await import("./procedure-split-reference");
+    expect(typeof mod.loadSplitPlan).toBe("function");
   });
 });

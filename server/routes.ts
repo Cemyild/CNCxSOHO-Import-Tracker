@@ -69,6 +69,8 @@ import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { registerBulkDownloadRoutes } from "./bulk-download";
 import { analyzeProcedureDocument, createProcedureFromDocument } from "./procedure-document-import";
+import { loadSplitPlan } from "./procedure-split-reference";
+import { renameProcedureReference, countReferenceUsage } from "./procedure-reference-rename";
 
 // Configure multer for memory storage (for cloud uploads)
 // This stores files in memory instead of on disk so we can upload to object storage
@@ -895,6 +897,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res
         .status(500)
         .json({ message: "Failed to fetch procedure", error: String(error) });
+    }
+  });
+
+  // What would a split from this procedure be numbered? Read-only preview.
+  app.get("/api/procedures/:id/split-reference-preview", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid procedure id" });
+
+      const { source, plan } = await loadSplitPlan(id);
+      res.json({
+        sourceCurrent: source.reference,
+        sourceAfter: plan.sourceRename?.to ?? source.reference,
+        nextReference: plan.newReference,
+      });
+    } catch (error) {
+      console.error("[Split preview] failed:", error);
+      res.status(404).json({
+        message: "Failed to preview split reference",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  // How many rows would a rename of this procedure's reference rewrite?
+  app.get("/api/procedures/:id/reference-impact", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid procedure id" });
+
+      const procedure = await storage.getProcedure(id);
+      if (!procedure?.reference) {
+        return res.status(404).json({ message: "Procedure not found" });
+      }
+
+      const counts = await countReferenceUsage(procedure.reference);
+      const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
+      res.json({ reference: procedure.reference, counts, total });
+    } catch (error) {
+      console.error("[Reference impact] failed:", error);
+      res.status(500).json({
+        message: "Failed to count reference usage",
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   });
 
@@ -6502,8 +6548,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // amount/piece (recomputed from this calculation's totals).
         const inherited = req.body.inheritedProcedure ?? null;
 
+        // Split mode: the client passes the source procedure so the two parts
+        // of the shipment get " / N" references. Absent for a plain
+        // create-procedure call (the MCP tool uses that path) — keep the old
+        // behaviour untouched there.
+        const sourceProcedureId = Number(req.body.sourceProcedureId) || null;
+        let splitPlan: Awaited<ReturnType<typeof loadSplitPlan>>["plan"] | null = null;
+        if (sourceProcedureId) {
+          try {
+            ({ plan: splitPlan } = await loadSplitPlan(sourceProcedureId));
+            console.log('[Create Procedure] Split plan:', splitPlan);
+          } catch (e) {
+            console.error('[Create Procedure] Split planning failed, using calculation reference:', e);
+          }
+        }
+        const targetReference = splitPlan?.newReference ?? calculation.reference;
+
         const procedureData = {
-          reference: calculation.reference,
+          reference: targetReference,
           amount: calculation.total_value,
           currency: inherited?.currency || 'USD',
           piece: calculation.total_quantity,
@@ -6533,8 +6595,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const procedure = await storage.createProcedure(procedureData);
         console.log('[Create Procedure] ✅ Procedure created with ID:', procedure.id);
 
-        // Update the tax calculation with the procedure_id
-        await storage.updateTaxCalculation(id, { procedure_id: procedure.id });
+        // Update the tax calculation with the procedure_id (and, in split mode,
+        // the numbered reference the procedure was created with)
+        await storage.updateTaxCalculation(id, {
+          procedure_id: procedure.id,
+          ...(targetReference !== calculation.reference ? { reference: targetReference } : {}),
+        });
         console.log('[Create Procedure] ✅ Tax calculation updated with procedure_id:', procedure.id);
 
         // Create invoice line items from tax calculation items
@@ -6542,7 +6608,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log('[Create Procedure] Preparing line items data...');
           const lineItemsData = taxItems.map((item, index) => {
             const lineItem = {
-              procedureReference: calculation.reference,
+              procedureReference: targetReference,
               styleNo: item.style,
               description: item.category,
               quantity: item.unit_count,
@@ -6581,10 +6647,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log('[Create Procedure] ⚠️ No tax items found, skipping line items creation');
         }
 
+        // Rename the source LAST: if anything above failed we have not touched
+        // it, and if this fails we are merely back to today's behaviour (a
+        // numbered new procedure next to an unnumbered source), fixable from
+        // the edit page.
+        let sourceRenamed: string | null = null;
+        if (splitPlan?.sourceRename) {
+          try {
+            const result = await renameProcedureReference(
+              splitPlan.sourceRename.from,
+              splitPlan.sourceRename.to,
+            );
+            sourceRenamed = result.to;
+            console.log('[Create Procedure] ✅ Source renamed:', result.from, '→', result.to, result.updated);
+          } catch (e) {
+            console.error('[Create Procedure] ⚠️ Source rename failed:', e);
+          }
+        }
+
         console.log('[Create Procedure] ========================================');
-        res.json({ 
+        res.json({
           procedure,
-          lineItemsCreated: taxItems.length
+          lineItemsCreated: taxItems.length,
+          sourceRenamed
         });
       } catch (error) {
         console.error('[Create Procedure] ❌ FATAL ERROR:', error);
