@@ -753,6 +753,23 @@ export default function TaxCalculationEditPage() {
       }
     }
 
+    // Ask the server what this split will be numbered. If the source has no
+    // linked procedure, or the call fails, fall back to the old "-SPLIT" label
+    // so the flow never breaks — the server decides the real reference anyway
+    // when the procedure is created.
+    let splitReference = invoiceData.reference ? `${invoiceData.reference}-SPLIT` : "";
+    if (sourceProcedureId) {
+      try {
+        const previewRes = await fetch(`/api/procedures/${sourceProcedureId}/split-reference-preview`);
+        if (previewRes.ok) {
+          const preview = await previewRes.json();
+          if (preview?.nextReference) splitReference = preview.nextReference;
+        }
+      } catch (e) {
+        console.error('[Split] Failed to preview split reference:', e);
+      }
+    }
+
     const removedItemsData = pendingRemovedItems.map(item => ({
       style: item.style,
       color: item.color,
@@ -768,7 +785,7 @@ export default function TaxCalculationEditPage() {
     }));
     
     const newCalcData = {
-      reference: invoiceData.reference ? `${invoiceData.reference}-SPLIT` : "",
+      reference: splitReference,
       invoice_no: invoiceData.invoice_no || "",
       invoice_date: invoiceData.invoice_date || null,
       transport_cost: "0",
@@ -779,6 +796,7 @@ export default function TaxCalculationEditPage() {
       is_atr: invoiceData.is_atr || false,
       removedItems: removedItemsData,
       inheritedProcedure,
+      sourceProcedureId: sourceProcedureId ?? null,
     };
 
     sessionStorage.setItem('newCalculationFromRemoved', JSON.stringify(newCalcData));

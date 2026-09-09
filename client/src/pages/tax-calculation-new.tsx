@@ -81,6 +81,7 @@ export default function TaxCalculationNewPage() {
   // Source procedure's shipping info to inherit when this is a "split" calculation.
   // Held in a ref so the mutation's onSuccess reads the latest value.
   const inheritedProcedureRef = useRef<Record<string, any> | null>(null);
+  const sourceProcedureIdRef = useRef<number | null>(null);
   
   const [invoiceData, setInvoiceData] = useState<Partial<InsertTaxCalculation>>({
     reference: "",
@@ -119,6 +120,7 @@ export default function TaxCalculationNewPage() {
           });
 
           inheritedProcedureRef.current = parsed.inheritedProcedure ?? null;
+          sourceProcedureIdRef.current = parsed.sourceProcedureId ?? null;
 
           if (parsed.removedItems && Array.isArray(parsed.removedItems)) {
             const loadedProducts: ProductItem[] = parsed.removedItems.map((item: any, index: number) => ({
@@ -264,7 +266,7 @@ export default function TaxCalculationNewPage() {
           const procRes = await apiRequest(
             "POST",
             `/api/tax-calculation/calculations/${calculation.id}/create-procedure`,
-            { inheritedProcedure },
+            { inheritedProcedure, sourceProcedureId: sourceProcedureIdRef.current },
           );
           if (procRes.ok) {
             queryClient.invalidateQueries({ queryKey: ["/api/procedures"] });
