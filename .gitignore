@@ -17,3 +17,5 @@ storage_backup.zip
 
 # diagnostic / cleanup script backups
 scripts/*-backup-*.json
+# SDD workspace (subagent-driven development scratch)
+.superpowers/
