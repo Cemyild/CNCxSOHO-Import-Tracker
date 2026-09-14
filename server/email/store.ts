@@ -423,3 +423,47 @@ export async function resetForReprocess(id: number): Promise<void> {
     .set({ aiStatus: "pending", aiAttempts: 0, aiError: null, updatedAt: new Date() })
     .where(eq(emails.id, id));
 }
+
+// ---------------------------------------------------------------------------
+// Ekler — prosedüre kaydetme (Task 13)
+// ---------------------------------------------------------------------------
+
+export async function getAttachmentContext(attachmentId: number) {
+  const [row] = await db
+    .select({ attachment: emailAttachments, gmailMessageId: emails.gmailMessageId })
+    .from(emailAttachments)
+    .innerJoin(emails, eq(emailAttachments.emailId, emails.id))
+    .where(eq(emailAttachments.id, attachmentId))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function markAttachmentSaved(
+  attachmentId: number,
+  data: { storagePath: string; procedureDocumentId: number },
+): Promise<void> {
+  await db
+    .update(emailAttachments)
+    .set({
+      storagePath: data.storagePath,
+      procedureDocumentId: data.procedureDocumentId,
+      status: "saved",
+    })
+    .where(eq(emailAttachments.id, attachmentId));
+}
+
+export async function dismissAttachment(attachmentId: number): Promise<void> {
+  await db
+    .update(emailAttachments)
+    .set({ status: "dismissed" })
+    .where(eq(emailAttachments.id, attachmentId));
+}
+
+export async function getProcedureReference(procedureId: number): Promise<string | null> {
+  const [row] = await db
+    .select({ reference: procedures.reference })
+    .from(procedures)
+    .where(eq(procedures.id, procedureId))
+    .limit(1);
+  return row?.reference ?? null;
+}

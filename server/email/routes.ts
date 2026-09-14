@@ -8,6 +8,12 @@ import { readMessageFilter, parseId } from "./query-params";
 import { createAuthUrl, exchangeCode, revokeAccess } from "./gmail-client";
 import { signState, verifyState, InvalidStateError } from "./oauth-state";
 import { runSync, isSyncRunning } from "./sync-service";
+import {
+  saveAttachmentToProcedure,
+  createAttachmentDeps,
+  AttachmentTooLargeError,
+  AttachmentNotFoundError,
+} from "./attachment-service";
 
 const router = Router();
 
@@ -234,6 +240,59 @@ router.post("/sync", requireRole("admin"), async (_req, res) => {
       return res.status(409).json({ message: "Senkron zaten çalışıyor", ...result });
     }
     return res.json(result);
+  } catch (error) {
+    return fail(res, error);
+  }
+});
+
+// --- Ekler -------------------------------------------------------------------
+
+router.post("/attachments/:id/save", requireRole("admin"), async (req, res) => {
+  try {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ message: "Geçersiz kayıt numarası" });
+
+    const procedureId = Number(req.body?.procedureId);
+    const documentType = String(req.body?.documentType ?? "").trim();
+    if (!Number.isInteger(procedureId) || procedureId <= 0) {
+      return res.status(400).json({ message: "Prosedür seçin" });
+    }
+    if (documentType === "") {
+      return res.status(400).json({ message: "Belge türü seçin" });
+    }
+
+    const result = await saveAttachmentToProcedure(
+      { attachmentId: id, procedureId, documentType, userId: userId(req) },
+      createAttachmentDeps(),
+    );
+    return res.json(result);
+  } catch (error) {
+    if (error instanceof AttachmentTooLargeError) {
+      return res.status(413).json({ message: error.message });
+    }
+    if (error instanceof AttachmentNotFoundError) {
+      return res.status(404).json({ message: error.message });
+    }
+    return fail(res, error);
+  }
+});
+
+router.post("/attachments/:id/dismiss", requireRole("admin"), async (req, res) => {
+  try {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ message: "Geçersiz kayıt numarası" });
+    await store.dismissAttachment(id);
+    return res.json({ ok: true });
+  } catch (error) {
+    return fail(res, error);
+  }
+});
+
+// Belge türleri listesi: `storage.getAllDocumentTypes()` var ama okuma uç noktası
+// yok; ek kaydetme ekranı için burada açıyoruz.
+router.get("/document-types", requireRole("admin"), async (_req, res) => {
+  try {
+    return res.json(await storage.getAllDocumentTypes());
   } catch (error) {
     return fail(res, error);
   }
