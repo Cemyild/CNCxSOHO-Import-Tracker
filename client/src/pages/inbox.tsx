@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { EmailList } from "@/components/inbox/EmailList";
+import { EmailDetail } from "@/components/inbox/EmailDetail";
 import { InboxFilters, EMPTY_FILTERS, type InboxFilterState } from "@/components/inbox/InboxFilters";
 import type { AccountStatus, MessageListResponse } from "@/components/inbox/types";
 
@@ -69,6 +70,18 @@ export default function InboxPage() {
     },
   });
 
+  const markRead = useMutation({
+    mutationFn: async (id: number) =>
+      apiRequest("PATCH", `/api/email/messages/${id}`, { status: "read" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/email/messages"] }),
+  });
+
+  const handleSelect = (id: number) => {
+    setSelectedId(id);
+    const item = messages.data?.items.find((m) => m.id === id);
+    if (item?.status === "new") markRead.mutate(id);
+  };
+
   if (authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -126,14 +139,13 @@ export default function InboxPage() {
               <EmailList
                 items={messages.data?.items ?? []}
                 selectedId={selectedId}
-                onSelect={setSelectedId}
+                onSelect={handleSelect}
               />
             )}
           </Card>
 
-          {/* Detay paneli Task 15'te eklenecek */}
-          <Card className="p-4">
-            <p className="text-sm text-muted-foreground">{selectedId ?? ""}</p>
+          <Card className="max-h-[70vh] overflow-y-auto">
+            <EmailDetail emailId={selectedId} />
           </Card>
         </div>
       </div>
