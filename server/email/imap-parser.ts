@@ -1,0 +1,126 @@
+/**
+ * IMAP tarafındaki saf çözümleme. Gmail API'si bize hazır JSON veriyordu;
+ * IMAP'te ise önce mesajın yapısını (BODYSTRUCTURE) alıp hangi parçanın gövde,
+ * hangilerinin ek olduğunu kendimiz kararlaştırıyoruz. Ekler bu aşamada
+ * İNDİRİLMEZ — yalnızca parça numarası ve üst verisi tutulur; indirme, admin
+ * "prosedüre kaydet" dediğinde olur.
+ */
+
+import { htmlToText, MAX_BODY_CHARS, type ParsedAttachment, type ParsedMessage } from "./message-parser";
+
+export const DEFAULT_CHARSET = "utf-8";
+export const SNIPPET_CHARS = 200;
+
+export interface ImapStructureNode {
+  /** IMAP parça numarası ("1", "1.2", ...). Yoksa parça ayrıca çekilemez. */
+  part?: string;
+  type: string;
+  parameters?: Record<string, string>;
+  disposition?: string;
+  dispositionParameters?: Record<string, string>;
+  size?: number;
+  childNodes?: ImapStructureNode[];
+}
+
+export interface ImapStructureResult {
+  textPart: string | null;
+  textType: "text/plain" | "text/html" | null;
+  textCharset: string;
+  attachments: ParsedAttachment[];
+}
+
+export interface ImapEnvelope {
+  from?: Array<{ name?: string; address?: string }>;
+  to?: Array<{ name?: string; address?: string }>;
+  subject?: string;
+  date?: Date;
+}
+
+/** Dosya adı taşıyan her parça ektir; adı iki yerden gelebilir. */
+function filenameOf(node: ImapStructureNode): string {
+  return node.dispositionParameters?.filename ?? node.parameters?.name ?? "";
+}
+
+export function analyzeBodyStructure(root: ImapStructureNode): ImapStructureResult {
+  const attachments: ParsedAttachment[] = [];
+  let plain: ImapStructureNode | null = null;
+  let html: ImapStructureNode | null = null;
+
+  const walk = (node: ImapStructureNode | undefined): void => {
+    if (!node) return;
+
+    const filename = filenameOf(node);
+    if (filename !== "") {
+      // Dosya adı olan parça asla gövde sayılmaz. Parça numarası yoksa sonradan
+      // indirilemeyeceği için listelenmez de.
+      if (node.part) {
+        attachments.push({
+          gmailAttachmentId: node.part,
+          filename,
+          mimeType: node.type ?? "application/octet-stream",
+          sizeBytes: node.size ?? 0,
+        });
+      }
+    } else if (node.type === "text/plain") {
+      plain ??= node;
+    } else if (node.type === "text/html") {
+      html ??= node;
+    }
+
+    for (const child of node.childNodes ?? []) walk(child);
+  };
+
+  walk(root);
+
+  const chosen = plain ?? html;
+  if (!chosen) {
+    return { textPart: null, textType: null, textCharset: DEFAULT_CHARSET, attachments };
+  }
+
+  return {
+    // Çok parçalı olmayan mailde kök düğümün parça numarası olmaz; gövde "1"dir.
+    textPart: chosen.part ?? "1",
+    textType: chosen.type as "text/plain" | "text/html",
+    textCharset: (chosen.parameters?.charset ?? DEFAULT_CHARSET).toLowerCase(),
+    attachments,
+  };
+}
+
+/** Gövde baytlarını maildeki karakter kümesine göre metne çevirir. */
+export function decodeTextPart(buffer: Buffer, charset: string): string {
+  try {
+    return new TextDecoder(charset).decode(buffer);
+  } catch {
+    return buffer.toString("utf8");
+  }
+}
+
+export function buildParsedMessage(input: {
+  uid: string;
+  envelope: ImapEnvelope;
+  structure: ImapStructureNode;
+  textContent: string;
+  textType?: "text/plain" | "text/html" | null;
+}): ParsedMessage {
+  const analysis = analyzeBodyStructure(input.structure);
+  const type = input.textType ?? analysis.textType;
+  const decoded = type === "text/html" ? htmlToText(input.textContent) : input.textContent;
+  const bodyText = decoded.slice(0, MAX_BODY_CHARS);
+
+  const from = input.envelope.from?.[0];
+  const to = input.envelope.to?.[0];
+
+  return {
+    // IMAP'te konuşma kimliği yok; UID hem mesaj hem konu kimliği olarak kullanılır.
+    gmailMessageId: input.uid,
+    gmailThreadId: input.uid,
+    fromAddress: (from?.address ?? "").toLowerCase(),
+    fromName: from?.name ?? "",
+    toAddress: (to?.address ?? "").toLowerCase(),
+    subject: input.envelope.subject ?? "",
+    sentAt: input.envelope.date ?? new Date(),
+    snippet: bodyText.slice(0, SNIPPET_CHARS),
+    bodyText,
+    attachments: analysis.attachments,
+  };
+}

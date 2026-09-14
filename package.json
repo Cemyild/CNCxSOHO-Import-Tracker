@@ -73,6 +73,7 @@
     "framer-motion": "^11.18.2",
     "googleapis": "^180.0.0",
     "i18next": "^23.16.8",
+    "imapflow": "^2.0.3",
     "input-otp": "^1.2.4",
     "jspdf": "^3.0.4",
     "jspdf-autotable": "^5.0.2",
