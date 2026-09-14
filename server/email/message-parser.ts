@@ -30,14 +30,14 @@ function header(payload: any, name: string): string {
 }
 
 export function parseFromHeader(value: string): { name: string; address: string } {
-  const withBrackets = value.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  const withBrackets = value.match(/^\s*(.*?)\s*<([^>]+)>/);
   if (withBrackets) {
     return {
       name: withBrackets[1].replace(/^"|"$/g, "").trim(),
       address: withBrackets[2].trim().toLowerCase(),
     };
   }
-  return { name: "", address: value.trim().toLowerCase() };
+  return { name: "", address: value.split(",")[0].trim().toLowerCase() };
 }
 
 export function htmlToText(html: string): string {
@@ -68,14 +68,20 @@ function walk(
 ): void {
   if (!part) return;
 
+  const filename = typeof part.filename === "string" ? part.filename : "";
   const attachmentId = part.body?.attachmentId;
-  if (attachmentId) {
-    acc.attachments.push({
-      gmailAttachmentId: attachmentId,
-      filename: part.filename ?? "",
-      mimeType: part.mimeType ?? "application/octet-stream",
-      sizeBytes: part.body?.size ?? 0,
-    });
+
+  if (filename !== "" || attachmentId) {
+    // Never body. Listed only when fetchable: Gmail inlines very small
+    // attachments with no attachmentId, and those we cannot fetch later.
+    if (attachmentId) {
+      acc.attachments.push({
+        gmailAttachmentId: attachmentId,
+        filename,
+        mimeType: part.mimeType ?? "application/octet-stream",
+        sizeBytes: part.body?.size ?? 0,
+      });
+    }
   } else if (part.mimeType === "text/plain") {
     acc.plain.push(decode(part.body?.data));
   } else if (part.mimeType === "text/html") {

@@ -104,6 +104,40 @@ describe("parseGmailMessage", () => {
     expect(parsed.fromAddress).toBe("");
     expect(parsed.bodyText).toBe("");
   });
+
+  it("ek olarak gelen düz metin dosyasını gövdeye karıştırmaz", () => {
+    const parsed = parseGmailMessage(
+      message({
+        mimeType: "multipart/mixed",
+        parts: [
+          { mimeType: "text/plain", body: { data: b64("asıl mail metni") } },
+          {
+            mimeType: "text/plain",
+            filename: "not.txt",
+            body: { attachmentId: "att-9", size: 12 },
+          },
+        ],
+      }),
+    );
+    expect(parsed.bodyText).toBe("asıl mail metni");
+    expect(parsed.attachments).toEqual([
+      { gmailAttachmentId: "att-9", filename: "not.txt", mimeType: "text/plain", sizeBytes: 12 },
+    ]);
+  });
+
+  it("indirilemeyen satır içi eki gövdeye yazmaz", () => {
+    const parsed = parseGmailMessage(
+      message({
+        mimeType: "multipart/mixed",
+        parts: [
+          { mimeType: "text/plain", body: { data: b64("gövde") } },
+          { mimeType: "text/plain", filename: "kucuk.txt", body: { data: b64("EK DOSYA") } },
+        ],
+      }),
+    );
+    expect(parsed.bodyText).toBe("gövde");
+    expect(parsed.attachments).toEqual([]);
+  });
 });
 
 describe("parseFromHeader", () => {
@@ -114,6 +148,12 @@ describe("parseFromHeader", () => {
   });
   it("yalnızca adres varsa adı boş bırakır", () => {
     expect(parseFromHeader("ops@issglobal.com")).toEqual({ name: "", address: "ops@issglobal.com" });
+  });
+  it("birden fazla alıcıda ilk adresi alır", () => {
+    expect(parseFromHeader("A <a@x.com>, B <b@y.com>")).toEqual({ name: "A", address: "a@x.com" });
+  });
+  it("köşeli parantezsiz çoklu adreste ilkini alır", () => {
+    expect(parseFromHeader("a@x.com, b@y.com")).toEqual({ name: "", address: "a@x.com" });
   });
 });
 
