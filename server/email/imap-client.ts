@@ -21,6 +21,10 @@ export const IMAP_PORT = 993;
 export const MAX_SENDERS_PER_QUERY = 25;
 /** Tek turda işlenecek en fazla mail; ilk dolumda gelen kuyruğu sınırlar. */
 export const MAX_UIDS_PER_RUN = 500;
+export const CONNECTION_TIMEOUT_MS = 15000;
+export const GREETING_TIMEOUT_MS = 10000;
+/** Tek bir IMAP komutunun sessiz kalabileceği süre. */
+export const SOCKET_TIMEOUT_MS = 60000;
 
 export interface ImapCredentials {
   emailAddress: string;
@@ -57,8 +61,11 @@ export function capUids(uids: number[]): string[] {
 /** IMAP hatalarını kullanıcının anlayacağı Türkçe mesaja çevirir. */
 export function describeImapError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
+  // imapflow yanlış şifrede yalnızca "Command failed" diyor; gerçek sebep
+  // hata nesnesindeki bayrakta.
+  const authFlag = (error as { authenticationFailed?: boolean } | null)?.authenticationFailed === true;
 
-  if (/invalid credentials|authenticationfailed|application-specific password|auth/i.test(raw)) {
+  if (authFlag || /invalid credentials|authenticationfailed|application-specific password|auth/i.test(raw)) {
     return (
       "Giriş başarısız. Mail adresini ve uygulama şifresini kontrol edin — " +
       "buraya normal Google şifreniz değil, uygulama şifresi girilmeli."
@@ -73,16 +80,28 @@ export function describeImapError(error: unknown): string {
   return raw;
 }
 
-function newConnection(creds: ImapCredentials): ImapFlow {
-  return new ImapFlow({
+/**
+ * Bağlantı ayarları. Zaman aşımı sınırları şart: sınırsız bırakıldığında
+ * bağlantı denemesi hiç cevap dönmeden asılı kalabiliyor ve hem "Bağlan"
+ * isteğini hem de senkron turunu kilitliyor.
+ */
+export function imapOptions(creds: ImapCredentials) {
+  return {
     host: IMAP_HOST,
     port: IMAP_PORT,
     secure: true,
     auth: { user: creds.emailAddress, pass: creds.appPassword },
     // imapflow varsayılan olarak her IMAP komutunu loglar; mail konuları ve
     // kimlik bilgileri sunucu günlüğüne düşmesin diye kapalı.
-    logger: false,
-  });
+    logger: false as const,
+    connectionTimeout: CONNECTION_TIMEOUT_MS,
+    greetingTimeout: GREETING_TIMEOUT_MS,
+    socketTimeout: SOCKET_TIMEOUT_MS,
+  };
+}
+
+function newConnection(creds: ImapCredentials): ImapFlow {
+  return new ImapFlow(imapOptions(creds));
 }
 
 async function readStream(stream: NodeJS.ReadableStream): Promise<Buffer> {

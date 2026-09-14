@@ -3,6 +3,7 @@ import {
   buildSearchQuery,
   capUids,
   describeImapError,
+  imapOptions,
   MAX_SENDERS_PER_QUERY,
   MAX_UIDS_PER_RUN,
 } from "./imap-client";
@@ -59,10 +60,41 @@ describe("capUids", () => {
   });
 });
 
+describe("imapOptions", () => {
+  it("zaman aşımı sınırları tanımlar", () => {
+    const options = imapOptions({ emailAddress: "a@b.com", appPassword: "x" });
+    // Sınır yokken bağlantı denemesi sonsuza kadar asılı kalıyor; bu da
+    // "Bağlan" isteğini ve senkron turunu kilitler.
+    expect(options.connectionTimeout).toBeGreaterThan(0);
+    expect(options.greetingTimeout).toBeGreaterThan(0);
+    expect(options.socketTimeout).toBeGreaterThan(0);
+  });
+
+  it("kimlik bilgilerini ve sunucuyu doğru yerleştirir", () => {
+    const options = imapOptions({ emailAddress: "a@b.com", appPassword: "gizli" });
+    expect(options.host).toBe("imap.gmail.com");
+    expect(options.port).toBe(993);
+    expect(options.secure).toBe(true);
+    expect(options.auth).toEqual({ user: "a@b.com", pass: "gizli" });
+  });
+
+  it("protokol günlüğünü kapalı tutar", () => {
+    // Açık olsa mail konuları ve kimlik bilgileri sunucu günlüğüne düşer.
+    expect(imapOptions({ emailAddress: "a@b.com", appPassword: "x" }).logger).toBe(false);
+  });
+});
+
 describe("describeImapError", () => {
   it("kimlik doğrulama hatasını anlaşılır mesaja çevirir", () => {
     const message = describeImapError(new Error("Invalid credentials (Failure)"));
     expect(message).toMatch(/uygulama şifresi/i);
+  });
+
+  it("Gmail'in anlamsız 'Command failed' kimlik hatasını da çevirir", () => {
+    // imapflow yanlış şifrede mesaj olarak yalnızca "Command failed" veriyor;
+    // hangi hata olduğu nesnedeki authenticationFailed alanında.
+    const error = Object.assign(new Error("Command failed"), { authenticationFailed: true });
+    expect(describeImapError(error)).toMatch(/uygulama şifresi/i);
   });
 
   it("IMAP kapalıysa bunu söyler", () => {
