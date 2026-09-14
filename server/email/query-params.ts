@@ -31,7 +31,10 @@ export function readMessageFilter(query: Record<string, unknown>): MessageFilter
   const offsetRaw = Number(query.offset);
 
   const filter: MessageFilter = {
-    limit: Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, MAX_LIMIT) : DEFAULT_LIMIT,
+    limit:
+      Number.isFinite(limitRaw) && limitRaw > 0
+        ? Math.floor(Math.min(limitRaw, MAX_LIMIT))
+        : DEFAULT_LIMIT,
     offset: Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 0,
   };
 
@@ -49,4 +52,15 @@ export function readMessageFilter(query: Record<string, unknown>): MessageFilter
   if (q) filter.q = q;
 
   return filter;
+}
+
+/** Yol parametresinden pozitif tam sayı okur; geçersizse null. */
+export function parseId(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/** ILIKE kalıbındaki joker karakterleri kaçırır. */
+export function escapeLikePattern(value: string): string {
+  return value.replace(/([\\%_])/g, "\\$1");
 }

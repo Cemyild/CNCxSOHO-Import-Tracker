@@ -4,7 +4,7 @@ import { requireRole } from "../auth-middleware";
 import { storage } from "../storage";
 import { roleSatisfies } from "../auth-roles";
 import * as store from "./store";
-import { readMessageFilter } from "./query-params";
+import { readMessageFilter, parseId } from "./query-params";
 import { createAuthUrl, exchangeCode, revokeAccess } from "./gmail-client";
 import { signState, verifyState, InvalidStateError } from "./oauth-state";
 import { runSync, isSyncRunning } from "./sync-service";
@@ -16,9 +16,9 @@ function userId(req: Request): number {
 }
 
 function fail(res: Response, error: unknown, fallback = "İşlem başarısız") {
-  const message = error instanceof Error ? error.message : fallback;
-  console.error("[email-inbox] API hatası:", message);
-  return res.status(500).json({ message });
+  const detail = error instanceof Error ? error.message : String(error);
+  console.error("[email-inbox] API hatası:", detail);
+  return res.status(500).json({ message: fallback });
 }
 
 // --- Bağlantı durumu ---------------------------------------------------------
@@ -127,10 +127,12 @@ router.post("/senders", requireRole("admin"), async (req, res) => {
 
 router.patch("/senders/:id", requireRole("admin"), async (req, res) => {
   try {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ message: "Geçersiz kayıt numarası" });
     const patch: { label?: string; active?: boolean } = {};
     if (typeof req.body?.label === "string") patch.label = req.body.label;
     if (typeof req.body?.active === "boolean") patch.active = req.body.active;
-    await store.updateSender(Number(req.params.id), patch);
+    await store.updateSender(id, patch);
     return res.json({ ok: true });
   } catch (error) {
     return fail(res, error);
@@ -139,7 +141,9 @@ router.patch("/senders/:id", requireRole("admin"), async (req, res) => {
 
 router.delete("/senders/:id", requireRole("admin"), async (req, res) => {
   try {
-    await store.removeSender(Number(req.params.id));
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ message: "Geçersiz kayıt numarası" });
+    await store.removeSender(id);
     return res.json({ ok: true });
   } catch (error) {
     return fail(res, error);
@@ -158,7 +162,9 @@ router.get("/messages", requireRole("admin"), async (req, res) => {
 
 router.get("/messages/:id", requireRole("admin"), async (req, res) => {
   try {
-    const message = await store.getMessage(Number(req.params.id));
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ message: "Geçersiz kayıt numarası" });
+    const message = await store.getMessage(id);
     if (!message) return res.status(404).json({ message: "Mail bulunamadı" });
     return res.json(message);
   } catch (error) {
@@ -168,6 +174,9 @@ router.get("/messages/:id", requireRole("admin"), async (req, res) => {
 
 router.patch("/messages/:id", requireRole("admin"), async (req, res) => {
   try {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ message: "Geçersiz kayıt numarası" });
+
     const patch: Parameters<typeof store.updateMessage>[1] = {};
 
     if (req.body?.status !== undefined) {
@@ -181,17 +190,20 @@ router.patch("/messages/:id", requireRole("admin"), async (req, res) => {
       if (value !== null && !Number.isInteger(value)) {
         return res.status(400).json({ message: "Geçersiz prosedür" });
       }
+      if (value !== null && !(await store.procedureExists(value))) {
+        return res.status(400).json({ message: "İşlem bulunamadı" });
+      }
       patch.procedureId = value;
     }
     if (Array.isArray(req.body?.actionItems)) {
-      patch.actionItems = req.body.actionItems.map((item: any) => ({
-        id: String(item?.id ?? ""),
-        text: String(item?.text ?? ""),
+      patch.actionItems = req.body.actionItems.slice(0, 100).map((item: any) => ({
+        id: String(item?.id ?? "").slice(0, 100),
+        text: String(item?.text ?? "").slice(0, 500),
         done: Boolean(item?.done),
       }));
     }
 
-    await store.updateMessage(Number(req.params.id), patch);
+    await store.updateMessage(id, patch);
     return res.json({ ok: true });
   } catch (error) {
     return fail(res, error);
@@ -200,8 +212,13 @@ router.patch("/messages/:id", requireRole("admin"), async (req, res) => {
 
 router.post("/messages/:id/reprocess", requireRole("admin"), async (req, res) => {
   try {
-    await store.resetForReprocess(Number(req.params.id));
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ message: "Geçersiz kayıt numarası" });
+    await store.resetForReprocess(id);
     const result = await runSync();
+    if (result.skipped === "already-running") {
+      return res.status(409).json({ message: "Senkron zaten çalışıyor", ...result });
+    }
     return res.json(result);
   } catch (error) {
     return fail(res, error);

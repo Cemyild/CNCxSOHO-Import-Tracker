@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readMessageFilter, DEFAULT_LIMIT, MAX_LIMIT } from "./query-params";
+import { readMessageFilter, DEFAULT_LIMIT, MAX_LIMIT, parseId, escapeLikePattern } from "./query-params";
 
 describe("readMessageFilter", () => {
   it("boş sorguda varsayılanları verir", () => {
@@ -34,5 +34,32 @@ describe("readMessageFilter", () => {
   it("arama metnini kırpar ve boşsa yok sayar", () => {
     expect(readMessageFilter({ q: "  konşimento  " }).q).toBe("konşimento");
     expect(readMessageFilter({ q: "   " }).q).toBeUndefined();
+  });
+
+  it("ondalıklı limiti aşağı yuvarlar", () => {
+    expect(readMessageFilter({ limit: "50.7" }).limit).toBe(50);
+  });
+});
+
+describe("parseId", () => {
+  it("pozitif tam sayıyı okur", () => expect(parseId("12")).toBe(12));
+  it("sayı olmayanı reddeder", () => expect(parseId("abc")).toBeNull());
+  it("sıfır ve negatifi reddeder", () => {
+    expect(parseId("0")).toBeNull();
+    expect(parseId("-3")).toBeNull();
+  });
+  it("ondalıklıyı reddeder", () => expect(parseId("1.5")).toBeNull());
+  it("boş değeri reddeder", () => expect(parseId(undefined)).toBeNull());
+});
+
+describe("escapeLikePattern", () => {
+  it("joker karakterleri kaçırır", () => {
+    expect(escapeLikePattern("%_x")).toBe("\\%\\_x");
+  });
+  it("ters bölü işaretini kaçırır", () => {
+    expect(escapeLikePattern("a\\b")).toBe("a\\\\b");
+  });
+  it("sıradan metni değiştirmez", () => {
+    expect(escapeLikePattern("CNCALO-112")).toBe("CNCALO-112");
   });
 });

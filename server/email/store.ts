@@ -13,7 +13,7 @@ import {
 import { encryptToken, decryptToken } from "./token-crypto";
 import type { ParsedAttachment, ParsedMessage } from "./message-parser";
 import type { ExtractedRefs } from "./reference-extractor";
-import type { MessageFilter } from "./query-params";
+import { escapeLikePattern, type MessageFilter } from "./query-params";
 
 // ---------------------------------------------------------------------------
 // Sender pattern doğrulama (saf fonksiyonlar — DB'siz test edilir)
@@ -316,10 +316,15 @@ function filterConditions(filter: MessageFilter) {
   if (filter.urgency) conditions.push(eq(emails.urgency, filter.urgency));
   if (filter.matched === "yes") conditions.push(sql`${emails.procedureId} IS NOT NULL`);
   if (filter.matched === "no") conditions.push(sql`${emails.procedureId} IS NULL`);
-  if (filter.sender) conditions.push(sql`${emails.fromAddress} ILIKE ${`%${filter.sender}%`}`);
-  if (filter.q) {
+  if (filter.sender) {
     conditions.push(
-      sql`(${emails.subject} ILIKE ${`%${filter.q}%`} OR ${emails.summary} ILIKE ${`%${filter.q}%`} OR ${emails.bodyText} ILIKE ${`%${filter.q}%`})`,
+      sql`${emails.fromAddress} ILIKE ${`%${escapeLikePattern(filter.sender)}%`} ESCAPE '\\'`,
+    );
+  }
+  if (filter.q) {
+    const pattern = `%${escapeLikePattern(filter.q)}%`;
+    conditions.push(
+      sql`(${emails.subject} ILIKE ${pattern} ESCAPE '\\' OR ${emails.summary} ILIKE ${pattern} ESCAPE '\\' OR ${emails.bodyText} ILIKE ${pattern} ESCAPE '\\')`,
     );
   }
   return conditions;
@@ -360,6 +365,15 @@ export async function listMessages(
     .where(where);
 
   return { items, total: Number(value) };
+}
+
+export async function procedureExists(id: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: procedures.id })
+    .from(procedures)
+    .where(eq(procedures.id, id))
+    .limit(1);
+  return !!row;
 }
 
 export async function getMessage(id: number) {
