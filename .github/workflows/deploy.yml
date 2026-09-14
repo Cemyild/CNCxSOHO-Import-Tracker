@@ -16,12 +16,15 @@ jobs:
           MCP_BEARER_TOKEN: ${{ secrets.MCP_BEARER_TOKEN }}
           MCP_AGENT_ID: ${{ secrets.MCP_AGENT_ID }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          EMAIL_TOKEN_ENC_KEY: ${{ secrets.EMAIL_TOKEN_ENC_KEY }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          envs: MCP_BEARER_TOKEN,MCP_AGENT_ID,SESSION_SECRET
+          envs: MCP_BEARER_TOKEN,MCP_AGENT_ID,SESSION_SECRET,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,EMAIL_TOKEN_ENC_KEY
           script: |
             set -e
             cd /root/CNCxSOHO-Import-Tracker
@@ -52,6 +55,18 @@ jobs:
               echo "[deploy] SESSION_SECRET added to .env"
             else
               echo "[deploy] ERROR: SESSION_SECRET not in .env and no GitHub secret set. App will fail to start. Add it via Settings -> Secrets."
+            fi
+
+            echo "[deploy] === 3c. Gmail entegrasyonu (idempotent) ==="
+            if grep -q '^GOOGLE_CLIENT_ID=' .env; then
+              echo "[deploy] Gmail env vars already in .env, leaving as-is"
+            elif [ -n "$GOOGLE_CLIENT_ID" ] && [ -n "$GOOGLE_CLIENT_SECRET" ] && [ -n "$EMAIL_TOKEN_ENC_KEY" ]; then
+              printf "\n# Gmail inbox - auto-injected by deploy workflow\nGOOGLE_CLIENT_ID=%s\nGOOGLE_CLIENT_SECRET=%s\nEMAIL_TOKEN_ENC_KEY=%s\nGOOGLE_OAUTH_REDIRECT_URI=%s\n" \
+                "$GOOGLE_CLIENT_ID" "$GOOGLE_CLIENT_SECRET" "$EMAIL_TOKEN_ENC_KEY" \
+                "https://cncsohoimportmanager.com/api/email/google/callback" >> .env
+              echo "[deploy] Gmail env vars added to .env"
+            else
+              echo "[deploy] WARNING: Gmail secrets not set in GitHub. Mail takibi devre dışı kalır."
             fi
 
             echo "[deploy] === 4. Apply DB DDL from db/manual-ddl/ (idempotent) ==="

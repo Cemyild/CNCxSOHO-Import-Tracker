@@ -37,8 +37,9 @@ her yazma işlemi admin onayıyla.
 - Maildeki faturadan otomatik gider/servis faturası kaydı oluşturma
 - Birden fazla kullanıcının mail kutusu (tek hesap, admin'in kendi kutusu)
 - Gmail push/webhook (watch API) — sabit aralıklı çekme yeterli
-- `nav` menü dizilerindeki mevcut tekrarın (her sayfa kendi `items` dizisini
-  tanımlıyor) refaktörü
+- Menü zaten `client/src/lib/nav-items.ts` içinde tek yerden geliyor; sayfaların
+  kendi `items` dizileri artık kullanılmıyor. Bu ölü dizilerin temizliği bu
+  sürümün kapsamı dışında.
 
 ---
 
