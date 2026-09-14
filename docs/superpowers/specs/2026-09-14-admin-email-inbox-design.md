@@ -24,12 +24,30 @@ her yazma işlemi admin onayıyla.
 | Konu | Karar |
 |---|---|
 | Mail sağlayıcı | Google Workspace → Gmail API |
-| Bağlantı yöntemi | Kullanıcı OAuth (tek seferlik izin), `gmail.readonly` |
+| Bağlantı yöntemi | ~~Kullanıcı OAuth, `gmail.readonly`~~ → **IMAP + uygulama şifresi** (aşağıdaki ek karara bakın) |
 | Tarama kapsamı | Yalnızca admin'in tanımladığı gönderen adres/alan adları |
 | Sıklık | 15 dakikada bir + manuel "Şimdi kontrol et" |
 | İlk dolum | Son 7 gün |
 | Yetenek | Özet + yapılacaklar + prosedür eşleştirme + **onaylı** ek kaydetme |
 | Model | `claude-sonnet-4-6` (projede kullanılan varsayılan) |
+
+## Ek karar (2026-09-14, uygulama sırasında)
+
+Google Cloud Console'a erişim şirketin Workspace yöneticisi tarafından
+kapatılmış; OAuth istemcisi oluşturulamadı. Bağlantı yöntemi **IMAP + uygulama
+şifresi** olarak değiştirildi. Sonuçları:
+
+- Uygulama şifresi mail kutusunun tamamına erişim verir. Uygulama yalnızca
+  okuyacak şekilde yazıldı, ama `gmail.readonly` kapsamının verdiği teknik
+  garanti artık yok — "yapamaz" değil "yapmıyor".
+- İptal iki adımlı: uygulamadan bağlantıyı kesmek bizdeki kopyayı siler, asıl
+  erişimi kesen adım şifreyi Google hesabından silmektir.
+- Gmail'in IMAP'i X-GM-RAW eklentisini desteklediği için gönderen bazlı arama
+  sorgusu aynen korundu; özetleme, eşleştirme, sayfa ve ek akışı değişmedi.
+- Sunucu tarafında `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` /
+  `GOOGLE_OAUTH_REDIRECT_URI` kaldırıldı; geriye tek gizli değer olarak
+  `EMAIL_TOKEN_ENC_KEY` kaldı.
+- Kullanıcının Gmail'de IMAP erişimini açmış olması gerekir.
 
 ## Kapsam dışı (bu sürümde yapılmayacak)
 

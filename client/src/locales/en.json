@@ -175,7 +175,10 @@
   },
   "offsets": {
     "title": "Offsetting",
-    "tabs": { "match": "Matching", "history": "History" },
+    "tabs": {
+      "match": "Matching",
+      "history": "History"
+    },
     "summary": {
       "totalOverpayment": "Total Overpaid",
       "totalDebt": "Total Owed",
@@ -887,8 +890,26 @@
     "remove": "Remove",
     "createButton": "Create",
     "creating": "Creating...",
-    "tax": { "customsTax": "Customs Tax", "additionalCustomsTax": "Add. Customs", "kkdf": "KKDF", "vat": "VAT", "stampTax": "Stamp" },
-    "col": { "category": "Category", "amount": "Amount", "currency": "Currency", "invoiceNumber": "Invoice No", "date": "Date", "page": "Page", "style": "Style", "unit": "Unit", "cost": "Unit Price", "totalValue": "Total", "trHsCode": "TR HS Code" },
+    "tax": {
+      "customsTax": "Customs Tax",
+      "additionalCustomsTax": "Add. Customs",
+      "kkdf": "KKDF",
+      "vat": "VAT",
+      "stampTax": "Stamp"
+    },
+    "col": {
+      "category": "Category",
+      "amount": "Amount",
+      "currency": "Currency",
+      "invoiceNumber": "Invoice No",
+      "date": "Date",
+      "page": "Page",
+      "style": "Style",
+      "unit": "Unit",
+      "cost": "Unit Price",
+      "totalValue": "Total",
+      "trHsCode": "TR HS Code"
+    },
     "category": {
       "export_registry_fee": "Export Registry Fee",
       "insurance": "Insurance",
@@ -1040,8 +1061,16 @@
       "search": "Search subject or body",
       "clear": "Clear filters"
     },
-    "status": { "new": "New", "read": "Read", "done": "Done" },
-    "urgency": { "high": "Urgent", "normal": "Normal", "low": "Low" },
+    "status": {
+      "new": "New",
+      "read": "Read",
+      "done": "Done"
+    },
+    "urgency": {
+      "high": "Urgent",
+      "normal": "Normal",
+      "low": "Low"
+    },
     "category": {
       "payment": "Payment",
       "document": "Documents",
@@ -1088,8 +1117,17 @@
   },
   "mailSettings": {
     "title": "Mailbox Connection",
-    "description": "Connect your Gmail account so incoming company emails can be read and summarized. The app gets read-only access; it cannot send or delete mail.",
-    "connect": "Connect Gmail",
+    "description": "Connect your Gmail account so incoming company emails can be read and summarized. The connection uses an app password you create in Google; the app only reads mail with it, and never sends or deletes.",
+    "connect": "Connect",
+    "connecting": "Connecting…",
+    "emailLabel": "Email address",
+    "emailPlaceholder": "name@yourcompany.com",
+    "passwordLabel": "App password",
+    "passwordPlaceholder": "16-character app password",
+    "passwordHelp": "This is NOT your normal Google password. Create an app password in Google and paste it here.",
+    "passwordHelpLink": "Create an app password",
+    "imapHint": "IMAP access must be enabled under Gmail → Settings → POP/IMAP.",
+    "revokeHint": "To revoke access completely, disconnect here and also delete this app password from your Google account.",
     "reconnect": "Reconnect",
     "disconnect": "Disconnect",
     "connected": "Connected: {{email}}",
@@ -1097,8 +1135,8 @@
     "statusError": "Connection lost. Please reconnect.",
     "lastSynced": "Last check: {{time}}",
     "neverSynced": "Not checked yet",
-    "connectSuccess": "Your Gmail account is connected",
-    "connectError": "Could not connect to Gmail",
+    "connectSuccess": "Your mailbox is connected",
+    "connectError": "Could not connect",
     "disconnectConfirm": "Disconnect the mailbox? Stored emails are kept, but no new mail will be read.",
     "disconnected": "Disconnected",
     "senders": {

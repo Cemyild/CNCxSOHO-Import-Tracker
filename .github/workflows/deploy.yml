@@ -16,15 +16,13 @@ jobs:
           MCP_BEARER_TOKEN: ${{ secrets.MCP_BEARER_TOKEN }}
           MCP_AGENT_ID: ${{ secrets.MCP_AGENT_ID }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           EMAIL_TOKEN_ENC_KEY: ${{ secrets.EMAIL_TOKEN_ENC_KEY }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          envs: MCP_BEARER_TOKEN,MCP_AGENT_ID,SESSION_SECRET,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,EMAIL_TOKEN_ENC_KEY
+          envs: MCP_BEARER_TOKEN,MCP_AGENT_ID,SESSION_SECRET,EMAIL_TOKEN_ENC_KEY
           script: |
             set -e
             cd /root/CNCxSOHO-Import-Tracker
@@ -57,27 +55,18 @@ jobs:
               echo "[deploy] ERROR: SESSION_SECRET not in .env and no GitHub secret set. App will fail to start. Add it via Settings -> Secrets."
             fi
 
-            echo "[deploy] === 3c. Gmail entegrasyonu (idempotent, degisken bazinda) ==="
-            # Her degisken bagimsiz kontrol edilir: .env'de zaten varsa dokunulmaz,
-            # yoksa ve GitHub secret'i geldiyse eklenir, o da yoksa uyarilir. Bu sayede
-            # bir sirrin (ornegin client secret) tek basina rotasyonu VPS'e yansir; eski
-            # kod hepsini tek blokta atlayip yalniz GOOGLE_CLIENT_ID varligina bakiyordu.
-            add_env_if_missing() {
-              key="$1"
-              value="$2"
-              if grep -q "^${key}=" .env; then
-                echo "[deploy] ${key} already in .env, leaving as-is"
-              elif [ -n "$value" ]; then
-                printf "\n# Gmail inbox - auto-injected by deploy workflow\n%s=%s\n" "$key" "$value" >> .env
-                echo "[deploy] ${key} added to .env"
-              else
-                echo "[deploy] WARNING: ${key} not set in GitHub secrets. Mail takibi devre disi kalabilir."
-              fi
-            }
-            add_env_if_missing GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID"
-            add_env_if_missing GOOGLE_CLIENT_SECRET "$GOOGLE_CLIENT_SECRET"
-            add_env_if_missing EMAIL_TOKEN_ENC_KEY "$EMAIL_TOKEN_ENC_KEY"
-            add_env_if_missing GOOGLE_OAUTH_REDIRECT_URI "https://cncsohoimportmanager.com/api/email/google/callback"
+            echo "[deploy] === 3c. Mail takibi sifreleme anahtari (idempotent) ==="
+            # Mail kutusuna IMAP + uygulama sifresi ile baglaniliyor; sunucunun
+            # ihtiyaci olan tek sir, o sifreyi sifreleyen anahtar. .env'de zaten
+            # varsa dokunulmaz (anahtar degisirse kayitli sifre cozulemez).
+            if grep -q "^EMAIL_TOKEN_ENC_KEY=" .env; then
+              echo "[deploy] EMAIL_TOKEN_ENC_KEY already in .env, leaving as-is"
+            elif [ -n "$EMAIL_TOKEN_ENC_KEY" ]; then
+              printf "\n# Mail inbox - auto-injected by deploy workflow\nEMAIL_TOKEN_ENC_KEY=%s\n" "$EMAIL_TOKEN_ENC_KEY" >> .env
+              echo "[deploy] EMAIL_TOKEN_ENC_KEY added to .env"
+            else
+              echo "[deploy] WARNING: EMAIL_TOKEN_ENC_KEY not set in GitHub secrets. Mail takibi devre disi kalir."
+            fi
 
             echo "[deploy] === 4. Apply DB DDL from db/manual-ddl/ (idempotent) ==="
             # VPS has no psql; apply via node + tsx (installed by npm install above)

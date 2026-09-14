@@ -1,56 +1,91 @@
-# Gmail Bağlantısı Kurulumu (bir kerelik)
+# Mail Bağlantısı Kurulumu (bir kerelik)
 
-Bu adımlar Google Cloud Console'da yapılır ve yaklaşık 15 dakika sürer.
-Sonunda elde edeceğiniz iki değeri (Client ID ve Client Secret) uygulamaya
-tanıtacağız.
+Uygulama, firmalardan gelen mailleri okuyabilmek için Gmail hesabınıza
+**uygulama şifresi** ile bağlanır. Google Cloud Console'a girmeniz gerekmez.
 
-## 1. Proje oluştur
-1. https://console.cloud.google.com adresine şirket hesabınızla girin.
-2. Üst çubuktaki proje seçiciden **New Project** deyin.
-3. Ada `CNCxSOHO Mail` yazıp **Create** deyin ve yeni projeye geçin.
+Toplam süre: yaklaşık 5 dakika.
 
-## 2. Gmail API'yi aç
-1. Sol menüden **APIs & Services → Library**.
-2. Arama kutusuna `Gmail API` yazın, çıkan sonuca tıklayın.
-3. **Enable** deyin.
+---
 
-## 3. İzin ekranını ayarla
-1. **APIs & Services → OAuth consent screen**.
-2. User Type olarak **Internal** seçin ve **Create** deyin.
-   (Internal seçilebiliyorsa Google'ın uygulama inceleme süreci gerekmez.)
-3. App name: `CNCxSOHO Import Tracker`. Support email ve developer email
-   alanlarına kendi şirket adresinizi yazın. **Save and Continue**.
-4. Scopes adımında **Add or Remove Scopes** deyip şu kapsamı seçin:
-   `https://www.googleapis.com/auth/gmail.readonly`
-   Başka hiçbir kapsam eklemeyin. **Update → Save and Continue → Back to Dashboard**.
+## 1. Gmail'de IMAP'i açın
 
-## 4. Kimlik bilgisi oluştur
-1. **APIs & Services → Credentials → Create Credentials → OAuth client ID**.
-2. Application type: **Web application**. Name: `CNCxSOHO Server`.
-3. **Authorized redirect URIs** bölümüne şu iki adresi ekleyin:
-   - `https://cncsohoimportmanager.com/api/email/google/callback`
-   - `http://localhost:5000/api/email/google/callback`
-4. **Create** deyin. Açılan kutudaki **Client ID** ve **Client Secret**
-   değerlerini kopyalayın — bir sonraki adımda lazım olacak.
+1. Gmail'i açın, sağ üstteki dişli çarka tıklayın, **"Tüm ayarları görüntüle"** deyin.
+2. Üstteki sekmelerden **"Yönlendirme ve POP/IMAP"** sekmesine geçin.
+3. **"IMAP erişimi"** bölümünde **"IMAP'i etkinleştir"** seçili olsun.
+4. Sayfanın altındaki **"Değişiklikleri kaydet"** düğmesine basın.
 
-## 5. Değerleri uygulamaya tanıt
-Bu adımı geliştirici yapar: değerler `GOOGLE_CLIENT_ID` ve
-`GOOGLE_CLIENT_SECRET` olarak sunucuya tanımlanır. Ayrıca token'ları şifrelemek
-için bir anahtar üretilir.
+Bu seçenek görünmüyorsa veya yönetici tarafından kapatılmışsa bu yöntem
+kullanılamaz — durumu bana bildirin, başka bir yol deneriz.
 
-## 6. Bağlan
-Uygulamada **Ayarlar → Mail Bağlantısı → Gmail'e bağlan** deyin, Google'ın
-ekranında hesabınızı seçip izin verin. Ardından **Takip Edilen Firmalar**
-bölümüne okunmasını istediğiniz firma adreslerini ekleyin.
+## 2. Uygulama şifresi oluşturun
 
-## Bağlantıyı iptal etmek
-İki yolu var: uygulamada **Bağlantıyı kes** düğmesi, veya
-https://myaccount.google.com/permissions adresinden uygulamanın erişimini
-kaldırmak. İkisi de anında etki eder.
+1. Tarayıcıda <https://myaccount.google.com/apppasswords> adresini açın.
+   (Uygulamadaki Ayarlar sayfasında da bu adrese giden bir bağlantı var.)
+2. Google sizden iki adımlı doğrulamayı açmanızı isterse önce onu açın; uygulama
+   şifresi ancak iki adımlı doğrulama açıkken oluşturulabiliyor.
+3. Açılan kutuya bir isim yazın — örneğin `CNCxSOHO Mail Takibi`. İsim yalnızca
+   sizin hatırlamanız içindir.
+4. **"Oluştur"** deyin. Google size 16 harflik bir şifre gösterecek
+   (`abcd efgh ijkl mnop` gibi). **Bu ekranı kapatmadan kopyalayın** — Google
+   bu şifreyi bir daha göstermez.
 
-## Sorun giderme
-- Mail takibi geçici olarak kapatılmak istenirse (örneğin bir sorun
-  araştırılırken), sunucu ortamına `EMAIL_SYNC_ENABLED=false` eklenip
-  yeniden başlatılırsa arka plandaki otomatik senkronizasyon durur; uygulamanın
-  geri kalanı normal çalışmaya devam eder. Tekrar açmak için bu değeri kaldırıp
-  sunucuyu yeniden başlatmak yeterlidir.
+> Bu şifre, Google hesabınızın normal şifresi değildir. Yalnızca bu uygulamaya
+> aittir ve dilediğiniz an aynı sayfadan silebilirsiniz.
+
+## 3. Uygulamaya girin
+
+1. Uygulamada **Ayarlar** sayfasını açın.
+2. **"Mail Bağlantısı"** kartında mail adresinizi ve az önce kopyaladığınız
+   uygulama şifresini yazıp **"Bağlan"** deyin.
+3. Uygulama şifreyi kaydetmeden önce bağlantıyı dener. Bir hata varsa ne
+   yapmanız gerektiğini söyleyen bir mesaj görürsünüz; şifre yanlışsa hiçbir şey
+   kaydedilmez.
+
+## 4. Takip edilecek firmaları ekleyin
+
+Aynı sayfadaki **"Takip Edilen Firmalar"** kartına, maillerini okumasını
+istediğiniz adresleri ekleyin:
+
+- Tek bir adres için: `ops@firma.com`
+- Firmanın bütün adresleri için: `@firma.com`
+
+**Bu liste boşken hiçbir mail taranmaz.** Uygulama yalnızca buraya yazdığınız
+adreslerden gelen mailleri okur; kutunuzdaki diğer hiçbir maile dokunmaz.
+
+## 5. İlk kontrolü başlatın
+
+**Mail Takibi** sayfasına gidip **"Şimdi kontrol et"** deyin. İlk kontrol son 7
+günü tarar ve birkaç dakika sürebilir; sayfa bu sırada kullanılabilir durumda
+kalır. Sonrasında uygulama 15 dakikada bir kendiliğinden bakar.
+
+---
+
+## Erişimi sonlandırmak
+
+İki adımı birlikte yapın:
+
+1. Uygulamada **Ayarlar → Mail Bağlantısı → "Bağlantıyı kes"**. Bu, bizdeki
+   şifre kopyasını siler; kayıtlı mailler ve özetler durmaya devam eder.
+2. <https://myaccount.google.com/apppasswords> adresinden o uygulama şifresini
+   silin. Asıl erişimi kesen adım budur.
+
+## Sık karşılaşılan hatalar
+
+| Mesaj | Anlamı |
+|---|---|
+| "Giriş başarısız… uygulama şifresi girilmeli" | Normal Google şifreniz yazılmış olabilir; 2. adımdaki 16 harfli şifreyi kullanın. |
+| "Gmail'de IMAP kapalı görünüyor" | 1. adımı atlamışsınız ya da ayar kaydedilmemiş. |
+| "Mail sunucusuna bağlanılamadı" | Geçici ağ sorunu; birkaç dakika sonra tekrar deneyin. |
+
+## Geliştirici notu
+
+Sunucunun ihtiyaç duyduğu tek gizli değer, uygulama şifresini şifreleyerek
+saklamak için kullanılan `EMAIL_TOKEN_ENC_KEY`. 64 karakterlik hex üretmek için:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+gh secret set EMAIL_TOKEN_ENC_KEY
+```
+
+Bu anahtar değişirse kayıtlı uygulama şifresi çözülemez ve kullanıcının yeniden
+bağlanması gerekir. Senkronu tamamen durdurmak için `EMAIL_SYNC_ENABLED=false`.

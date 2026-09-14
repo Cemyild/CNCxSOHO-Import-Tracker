@@ -175,7 +175,10 @@
   },
   "offsets": {
     "title": "Mahsuplaşma",
-    "tabs": { "match": "Eşleştirme", "history": "Geçmiş" },
+    "tabs": {
+      "match": "Eşleştirme",
+      "history": "Geçmiş"
+    },
     "summary": {
       "totalOverpayment": "Toplam Fazla",
       "totalDebt": "Toplam Borç",
@@ -887,8 +890,26 @@
     "remove": "Kaldır",
     "createButton": "Oluştur",
     "creating": "Oluşturuluyor...",
-    "tax": { "customsTax": "Gümrük Vergisi", "additionalCustomsTax": "Ek Gümrük", "kkdf": "KKDF", "vat": "KDV", "stampTax": "Damga" },
-    "col": { "category": "Kategori", "amount": "Tutar", "currency": "Para Birimi", "invoiceNumber": "Fatura No", "date": "Tarih", "page": "Sayfa", "style": "Model", "unit": "Adet", "cost": "Birim Fiyat", "totalValue": "Toplam", "trHsCode": "TR HS Kodu" },
+    "tax": {
+      "customsTax": "Gümrük Vergisi",
+      "additionalCustomsTax": "Ek Gümrük",
+      "kkdf": "KKDF",
+      "vat": "KDV",
+      "stampTax": "Damga"
+    },
+    "col": {
+      "category": "Kategori",
+      "amount": "Tutar",
+      "currency": "Para Birimi",
+      "invoiceNumber": "Fatura No",
+      "date": "Tarih",
+      "page": "Sayfa",
+      "style": "Model",
+      "unit": "Adet",
+      "cost": "Birim Fiyat",
+      "totalValue": "Toplam",
+      "trHsCode": "TR HS Kodu"
+    },
     "category": {
       "export_registry_fee": "İhracatçı Birliği Kayıt Ücreti",
       "insurance": "Sigorta",
@@ -1040,8 +1061,16 @@
       "search": "Konu veya içerikte ara",
       "clear": "Filtreleri temizle"
     },
-    "status": { "new": "Yeni", "read": "Okundu", "done": "Tamamlandı" },
-    "urgency": { "high": "Acil", "normal": "Normal", "low": "Düşük" },
+    "status": {
+      "new": "Yeni",
+      "read": "Okundu",
+      "done": "Tamamlandı"
+    },
+    "urgency": {
+      "high": "Acil",
+      "normal": "Normal",
+      "low": "Düşük"
+    },
     "category": {
       "payment": "Ödeme",
       "document": "Evrak",
@@ -1088,8 +1117,17 @@
   },
   "mailSettings": {
     "title": "Mail Bağlantısı",
-    "description": "Firmalardan gelen mailleri okuyup özetlemesi için Gmail hesabınızı bağlayın. Uygulama yalnızca okuma izni alır; mail gönderemez, silemez.",
-    "connect": "Gmail'e bağlan",
+    "description": "Firmalardan gelen mailleri okuyup özetlemesi için Gmail hesabınızı bağlayın. Bağlantı için Google'dan alacağınız bir uygulama şifresi kullanılır; uygulama bu şifreyle mailleri yalnızca okur, mail göndermez ve silmez.",
+    "connect": "Bağlan",
+    "connecting": "Bağlanılıyor…",
+    "emailLabel": "Mail adresi",
+    "emailPlaceholder": "ornek@sirketiniz.com",
+    "passwordLabel": "Uygulama şifresi",
+    "passwordPlaceholder": "16 haneli uygulama şifresi",
+    "passwordHelp": "Bu, Google hesabınızın normal şifresi DEĞİLDİR. Google'da uygulama şifresi oluşturun ve buraya yapıştırın.",
+    "passwordHelpLink": "Uygulama şifresi oluştur",
+    "imapHint": "Gmail → Ayarlar → POP/IMAP bölümünde IMAP erişiminin açık olması gerekir.",
+    "revokeHint": "Erişimi tamamen sonlandırmak için bağlantıyı kesmenin yanı sıra bu uygulama şifresini Google hesabınızdan da silin.",
     "reconnect": "Yeniden bağlan",
     "disconnect": "Bağlantıyı kes",
     "connected": "Bağlı: {{email}}",
@@ -1097,8 +1135,8 @@
     "statusError": "Bağlantı koptu. Yeniden bağlanın.",
     "lastSynced": "Son kontrol: {{time}}",
     "neverSynced": "Henüz kontrol edilmedi",
-    "connectSuccess": "Gmail hesabınız bağlandı",
-    "connectError": "Gmail bağlantısı kurulamadı",
+    "connectSuccess": "Mail hesabınız bağlandı",
+    "connectError": "Bağlantı kurulamadı",
     "disconnectConfirm": "Mail bağlantısı kesilsin mi? Kayıtlı mailler silinmez, yeni mail okunmaz.",
     "disconnected": "Bağlantı kesildi",
     "senders": {
