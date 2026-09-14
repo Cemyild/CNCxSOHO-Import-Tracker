@@ -1,10 +1,11 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
   emailAccounts,
   emailAttachments,
   emailWatchedSenders,
   emails,
+  procedures,
   type EmailAccount,
   type EmailRow,
   type WatchedSender,
@@ -12,6 +13,7 @@ import {
 import { encryptToken, decryptToken } from "./token-crypto";
 import type { ParsedAttachment, ParsedMessage } from "./message-parser";
 import type { ExtractedRefs } from "./reference-extractor";
+import type { MessageFilter } from "./query-params";
 
 // ---------------------------------------------------------------------------
 // Sender pattern doğrulama (saf fonksiyonlar — DB'siz test edilir)
@@ -284,5 +286,126 @@ export async function markAiFailed(id: number, message: string): Promise<void> {
       aiError: message.slice(0, 1000),
       updatedAt: new Date(),
     })
+    .where(eq(emails.id, id));
+}
+
+// ---------------------------------------------------------------------------
+// emails — liste, detay, güncelleme (yönetim API'si)
+// ---------------------------------------------------------------------------
+
+export interface MessageListItem {
+  id: number;
+  fromName: string | null;
+  fromAddress: string | null;
+  subject: string | null;
+  sentAt: Date | null;
+  summary: string | null;
+  category: string | null;
+  urgency: string | null;
+  status: string;
+  aiStatus: string;
+  hasAttachments: boolean;
+  procedureId: number | null;
+  procedureReference: string | null;
+}
+
+function filterConditions(filter: MessageFilter) {
+  const conditions = [];
+  if (filter.status) conditions.push(eq(emails.status, filter.status));
+  if (filter.category) conditions.push(eq(emails.category, filter.category));
+  if (filter.urgency) conditions.push(eq(emails.urgency, filter.urgency));
+  if (filter.matched === "yes") conditions.push(sql`${emails.procedureId} IS NOT NULL`);
+  if (filter.matched === "no") conditions.push(sql`${emails.procedureId} IS NULL`);
+  if (filter.sender) conditions.push(sql`${emails.fromAddress} ILIKE ${`%${filter.sender}%`}`);
+  if (filter.q) {
+    conditions.push(
+      sql`(${emails.subject} ILIKE ${`%${filter.q}%`} OR ${emails.summary} ILIKE ${`%${filter.q}%`} OR ${emails.bodyText} ILIKE ${`%${filter.q}%`})`,
+    );
+  }
+  return conditions;
+}
+
+export async function listMessages(
+  filter: MessageFilter,
+): Promise<{ items: MessageListItem[]; total: number }> {
+  const conditions = filterConditions(filter);
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const items = await db
+    .select({
+      id: emails.id,
+      fromName: emails.fromName,
+      fromAddress: emails.fromAddress,
+      subject: emails.subject,
+      sentAt: emails.sentAt,
+      summary: emails.summary,
+      category: emails.category,
+      urgency: emails.urgency,
+      status: emails.status,
+      aiStatus: emails.aiStatus,
+      hasAttachments: emails.hasAttachments,
+      procedureId: emails.procedureId,
+      procedureReference: procedures.reference,
+    })
+    .from(emails)
+    .leftJoin(procedures, eq(emails.procedureId, procedures.id))
+    .where(where)
+    .orderBy(desc(emails.sentAt))
+    .limit(filter.limit)
+    .offset(filter.offset);
+
+  const [{ value }] = await db
+    .select({ value: count() })
+    .from(emails)
+    .where(where);
+
+  return { items, total: Number(value) };
+}
+
+export async function getMessage(id: number) {
+  const [row] = await db
+    .select({
+      email: emails,
+      procedureReference: procedures.reference,
+      procedureShipper: procedures.shipper,
+    })
+    .from(emails)
+    .leftJoin(procedures, eq(emails.procedureId, procedures.id))
+    .where(eq(emails.id, id))
+    .limit(1);
+  if (!row) return null;
+
+  const attachments = await db
+    .select()
+    .from(emailAttachments)
+    .where(eq(emailAttachments.emailId, id))
+    .orderBy(emailAttachments.id);
+
+  return { ...row.email, procedureReference: row.procedureReference, procedureShipper: row.procedureShipper, attachments };
+}
+
+export async function updateMessage(
+  id: number,
+  patch: {
+    status?: string;
+    procedureId?: number | null;
+    actionItems?: Array<{ id: string; text: string; done: boolean }>;
+  },
+): Promise<void> {
+  const set: Record<string, unknown> = { updatedAt: new Date() };
+  if (patch.status) set.status = patch.status;
+  if (patch.actionItems) set.actionItems = patch.actionItems;
+  if (patch.procedureId !== undefined) {
+    set.procedureId = patch.procedureId;
+    set.matchConfidence = patch.procedureId === null ? "none" : "manual";
+    set.matchReason = patch.procedureId === null ? null : "Elle eşleştirildi";
+  }
+  await db.update(emails).set(set).where(eq(emails.id, id));
+}
+
+export async function resetForReprocess(id: number): Promise<void> {
+  await db
+    .update(emails)
+    .set({ aiStatus: "pending", aiAttempts: 0, aiError: null, updatedAt: new Date() })
     .where(eq(emails.id, id));
 }

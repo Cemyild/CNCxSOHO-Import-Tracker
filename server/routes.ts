@@ -52,6 +52,7 @@ import taxCalculationBeyannameRoute from "./tax-calculation-beyanname";
 import invoiceMakerRoute from "./invoice-maker";
 import excelEnrichmentRouter from "./excel-enrichment";
 import offsetsRoutes from "./offsets-routes";
+import emailRoutes from "./email/routes";
 // Import Claude AI utilities
 import claude from "./claude";
 import { extractCustomsDeclaration } from "./extractors/customs-declaration";
@@ -5371,6 +5372,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Cross-procedure payment offsetting
   app.use("/api/offsets", offsetsRoutes);
+
+  app.use("/api/email", emailRoutes);
 
   app.get("/api/tax-calculation/products", async (req, res) => {
     try {
