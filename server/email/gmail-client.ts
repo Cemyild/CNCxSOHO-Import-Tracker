@@ -64,6 +64,43 @@ export interface GmailClient {
   getAttachment(messageId: string, attachmentId: string): Promise<Buffer>;
 }
 
+export const MAX_PAGES_PER_QUERY = 20;
+
+export interface MessageIdPage {
+  ids: string[];
+  nextPageToken?: string;
+}
+
+/**
+ * Sayfalama döngüsü. İki koruma: sayfa sayısı üst sınırı ve ilerlemeyen
+ * sayfa belirtecinde durma — ikisi de 15 dakikada bir çalışan senkronun
+ * sonsuza kadar dönmesini engeller.
+ */
+export async function collectMessageIds(
+  fetchPage: (pageToken?: string) => Promise<MessageIdPage>,
+): Promise<string[]> {
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  let pages = 0;
+
+  while (pages < MAX_PAGES_PER_QUERY) {
+    const page = await fetchPage(pageToken);
+    ids.push(...page.ids);
+    pages++;
+
+    const next = page.nextPageToken;
+    if (!next || next === pageToken) break;
+    pageToken = next;
+  }
+
+  if (pages >= MAX_PAGES_PER_QUERY) {
+    console.warn(
+      `[email-inbox] sayfa üst sınırına ulaşıldı (${MAX_PAGES_PER_QUERY}); kalan mailler bir sonraki turda alınacak`,
+    );
+  }
+  return ids;
+}
+
 /**
  * refresh_token ile yetkilendirilmiş istemci. googleapis access token'ı
  * kendisi tazeler, bu yüzden access token'ı saklamak zorunda değiliz.
@@ -75,19 +112,18 @@ export function createGmailClient(account: { refreshToken: string }): GmailClien
 
   return {
     async listMessageIds(query: string) {
-      const ids: string[] = [];
-      let pageToken: string | undefined;
-      do {
+      return collectMessageIds(async (pageToken) => {
         const res = await gmail.users.messages.list({
           userId: "me",
           q: query,
           maxResults: 100,
           pageToken,
         });
-        for (const m of res.data.messages ?? []) if (m.id) ids.push(m.id);
-        pageToken = res.data.nextPageToken ?? undefined;
-      } while (pageToken);
-      return ids;
+        return {
+          ids: (res.data.messages ?? []).map((m) => m.id).filter((id): id is string => !!id),
+          nextPageToken: res.data.nextPageToken ?? undefined,
+        };
+      });
     },
 
     async getMessage(id: string) {
