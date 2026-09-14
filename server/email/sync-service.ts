@@ -63,9 +63,10 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
     }
 
     const startedAt = now();
+    const firstRunFloor = startedAt.getTime() - FIRST_RUN_LOOKBACK_MS;
     const afterMs = account.lastSyncedAt
-      ? account.lastSyncedAt.getTime() - OVERLAP_MS
-      : startedAt.getTime() - FIRST_RUN_LOOKBACK_MS;
+      ? Math.min(account.lastSyncedAt.getTime() - OVERLAP_MS, startedAt.getTime() - OVERLAP_MS)
+      : firstRunFloor;
     const queries = buildGmailQuery(patterns, Math.floor(afterMs / 1000));
 
     const gmail = createClient({ refreshToken: account.refreshToken });
@@ -75,15 +76,25 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
     for (const query of queries) {
       ids.push(...(await gmail.listMessageIds(query)));
     }
-    result.fetched = ids.length;
+    const uniqueIds = Array.from(new Set(ids));
+    result.fetched = uniqueIds.length;
 
-    const newIds = await store.filterNewMessageIds(Array.from(new Set(ids)));
+    const newIds = await store.filterNewMessageIds(uniqueIds);
     for (const id of newIds) {
-      const parsed = parseGmailMessage(await gmail.getMessage(id));
-      const emailId = await store.insertParsedMessage(account.id, parsed);
-      if (emailId !== null) {
-        await store.insertAttachments(emailId, parsed.attachments);
-        result.inserted++;
+      try {
+        const parsed = parseGmailMessage(await gmail.getMessage(id));
+        const emailId = await store.insertParsedMessage(account.id, parsed);
+        if (emailId !== null) {
+          await store.insertAttachments(emailId, parsed.attachments);
+          result.inserted++;
+        }
+      } catch (error) {
+        // Tek bir mailin alınamaması turu durdurmaz: zaman damgası yine
+        // ilerler, aksi halde aynı bozuk mail her turda tekrar denenir ve
+        // sorgu penceresi sonsuza kadar büyür. Mail Gmail'de duruyor.
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[email-inbox] mail ${id} alınamadı:`, message);
+        result.failed++;
       }
     }
 
@@ -138,7 +149,11 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error(`[email-inbox] mail ${row.id} işlenemedi:`, message);
-        await store.markAiFailed(row.id, message);
+        try {
+          await store.markAiFailed(row.id, message);
+        } catch (markError) {
+          console.error(`[email-inbox] mail ${row.id} hata durumu yazılamadı:`, markError);
+        }
         result.failed++;
       }
     }

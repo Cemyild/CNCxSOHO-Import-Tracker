@@ -230,6 +230,56 @@ describe("runSync", () => {
     expect(summarize.mock.calls[0][0].attachmentNames).toEqual(["fatura.pdf", "pl.xlsx"]);
   });
 
+  it("tek bir mail alınamazsa diğerlerini işlemeye devam eder", async () => {
+    const { deps, store } = makeDeps({
+      gmail: {
+        listMessageIds: vi.fn().mockResolvedValue(["m1", "m2"]),
+        getMessage: vi.fn()
+          .mockRejectedValueOnce(new Error("404 not found"))
+          .mockResolvedValueOnce(gmailMessage("m2", "ikinci", "gövde")),
+      },
+    });
+    const result = await runSync(deps);
+    expect(result.inserted).toBe(1);
+    expect(result.failed).toBeGreaterThanOrEqual(1);
+    expect(store.markAccountSynced).toHaveBeenCalledTimes(1);
+  });
+
+  it("hata durumu yazılamasa da tur tamamlanır", async () => {
+    const summarize = vi.fn().mockRejectedValue(new Error("529 overloaded"));
+    const { deps, store } = makeDeps({
+      summarize,
+      store: { markAiFailed: vi.fn().mockRejectedValue(new Error("DB down")) },
+    });
+    const result = await runSync(deps);
+    expect(result.skipped).toBeUndefined();
+    expect(store.markAccountSynced).toHaveBeenCalledTimes(1);
+  });
+
+  it("aynı mail iki sorgu parçasında çıksa da bir kez sayılır", async () => {
+    const { deps } = makeDeps({
+      gmail: { listMessageIds: vi.fn().mockResolvedValue(["m1", "m1"]) },
+    });
+    const result = await runSync(deps);
+    expect(result.fetched).toBe(1);
+  });
+
+  it("son senkron zamanı gelecekteyse pencereyi şimdiye sabitler", async () => {
+    const now = new Date("2026-09-14T12:00:00Z");
+    const future = new Date("2026-09-20T12:00:00Z");
+    const { deps, gmail } = makeDeps({
+      store: {
+        getAccount: vi.fn().mockResolvedValue({
+          id: 1, userId: 1, emailAddress: "cem@sirket.com",
+          refreshToken: "rt", lastSyncedAt: future, status: "connected",
+        }),
+      },
+    });
+    await runSync({ ...deps, now: () => now });
+    const query = gmail.listMessageIds.mock.calls[0][0] as string;
+    expect(query).toContain(`after:${Math.floor((now.getTime() - 10 * 60 * 1000) / 1000)}`);
+  });
+
   it("aynı anda ikinci kez çağrılırsa ikincisi atlanır", async () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((resolve) => { release = resolve; });
