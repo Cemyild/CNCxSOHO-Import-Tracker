@@ -32,6 +32,7 @@ import AskPage from "@/pages/ask";
 import StorageCalculatorPage from "@/pages/storage-calculator";
 import BulkDownloadPage from "@/pages/bulk-download";
 import InvoiceMakerPage from "@/pages/invoice-maker";
+import InboxPage from "@/pages/inbox";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 function Router() {
@@ -220,6 +221,13 @@ function Router() {
         {() => (
           <ProtectedRoute>
             <InvoiceMakerPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/inbox">
+        {() => (
+          <ProtectedRoute>
+            <InboxPage />
           </ProtectedRoute>
         )}
       </Route>

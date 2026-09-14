@@ -31,7 +31,6 @@ type PageLayoutProps = {
 };
 
 export function PageLayout({ title, children }: PageLayoutProps) {
-  const navItems = defaultNavItems;
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -44,6 +43,10 @@ export function PageLayout({ title, children }: PageLayoutProps) {
       return await response.json();
     },
   });
+
+  const navItems = defaultNavItems.filter(
+    (item) => !item.adminOnly || currentUser?.role === 'admin',
+  );
 
   const logoutMutation = useMutation({
     mutationFn: async () => {

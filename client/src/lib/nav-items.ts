@@ -8,6 +8,7 @@ import {
   FileText,
   Home,
   Inbox,
+  Mail,
   Search,
   Settings,
   Sparkles,
@@ -18,6 +19,8 @@ export type NavItem = {
   titleKey: string;
   url: string;
   icon: ComponentType<any>;
+  /** Yalnızca admin rolüne gösterilir. */
+  adminOnly?: boolean;
 };
 
 export const defaultNavItems: NavItem[] = [
@@ -32,5 +35,6 @@ export const defaultNavItems: NavItem[] = [
   { titleKey: "nav.bulkDownload", url: "/bulk-download", icon: Archive },
   { titleKey: "nav.askCnc", url: "/ask", icon: Sparkles },
   { titleKey: "nav.invoiceMaker", url: "/invoice-maker", icon: FileText },
+  { titleKey: "nav.emailInbox", url: "/inbox", icon: Mail, adminOnly: true },
   { titleKey: "nav.settings", url: "/settings", icon: Settings },
 ];

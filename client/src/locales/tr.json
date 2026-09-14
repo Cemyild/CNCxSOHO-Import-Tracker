@@ -11,6 +11,7 @@
     "bulkDownload": "Toplu İndirme",
     "askCnc": "CNC'ye Sor",
     "invoiceMaker": "Fatura Oluşturucu",
+    "emailInbox": "Mail Takibi",
     "settings": "Ayarlar"
   },
   "common": {
@@ -1010,6 +1011,47 @@
     "noPalletsDesc": "Dışa aktarmadan önce en az bir palet satırı ekleyin.",
     "excelExportedTitle": "Excel dışa aktarıldı",
     "exportFailedTitle": "Dışa aktarma başarısız"
+  },
+  "emailInbox": {
+    "title": "Mail Takibi",
+    "syncNow": "Şimdi kontrol et",
+    "syncing": "Kontrol ediliyor…",
+    "syncDone": "{{inserted}} yeni mail bulundu, {{processed}} tanesi özetlendi",
+    "syncBusy": "Kontrol zaten çalışıyor, lütfen bekleyin",
+    "lastSynced": "Son kontrol: {{time}}",
+    "neverSynced": "Henüz kontrol edilmedi",
+    "notConnected": "Mail hesabı bağlı değil",
+    "notConnectedHelp": "Ayarlar sayfasından Gmail hesabınızı bağlayın.",
+    "connectionLost": "Mail bağlantısı koptu. Ayarlar sayfasından yeniden bağlanın.",
+    "noSenders": "Takip edilen firma yok",
+    "noSendersHelp": "Ayarlar sayfasından takip edilecek firma mail adreslerini ekleyin.",
+    "empty": "Gösterilecek mail yok",
+    "goToSettings": "Ayarlara git",
+    "filters": {
+      "all": "Tümü",
+      "status": "Durum",
+      "urgency": "Aciliyet",
+      "category": "Konu",
+      "matched": "Eşleşme",
+      "matchedYes": "Eşleşenler",
+      "matchedNo": "Eşleşmeyenler",
+      "search": "Konu veya içerikte ara",
+      "clear": "Filtreleri temizle"
+    },
+    "status": { "new": "Yeni", "read": "Okundu", "done": "Tamamlandı" },
+    "urgency": { "high": "Acil", "normal": "Normal", "low": "Düşük" },
+    "category": {
+      "payment": "Ödeme",
+      "document": "Evrak",
+      "customs": "Gümrük",
+      "shipment": "Sevkiyat",
+      "other": "Diğer"
+    },
+    "aiFailed": "Özetlenemedi",
+    "aiPending": "Özetleniyor…",
+    "unmatched": "Eşleşmedi",
+    "attachments": "Ekler",
+    "loadError": "Mailler yüklenemedi"
   },
   "incomingPayments": {
     "title": "Gelen Ödemeler",
