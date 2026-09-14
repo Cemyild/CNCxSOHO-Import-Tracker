@@ -713,3 +713,79 @@ export const invoiceMakerHistory = pgTable("invoice_maker_history", {
 });
 
 export type InvoiceMakerHistory = typeof invoiceMakerHistory.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Admin mail takibi (2026-09-14). Durum kolonları bilinçli olarak text; DDL:
+// db/manual-ddl/004_email_inbox.sql
+// ---------------------------------------------------------------------------
+
+export const emailAccounts = pgTable("email_accounts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  provider: text("provider").notNull().default("gmail"),
+  emailAddress: text("email_address").notNull(),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  tokenExpiresAt: timestamp("token_expires_at"),
+  lastSyncedAt: timestamp("last_synced_at"),
+  status: text("status").notNull().default("connected"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const emailWatchedSenders = pgTable("email_watched_senders", {
+  id: serial("id").primaryKey(),
+  pattern: text("pattern").notNull().unique(),
+  label: text("label"),
+  active: boolean("active").notNull().default(true),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const emails = pgTable("emails", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").references(() => emailAccounts.id).notNull(),
+  gmailMessageId: text("gmail_message_id").notNull().unique(),
+  gmailThreadId: text("gmail_thread_id"),
+  fromAddress: text("from_address"),
+  fromName: text("from_name"),
+  toAddress: text("to_address"),
+  subject: text("subject"),
+  sentAt: timestamp("sent_at"),
+  snippet: text("snippet"),
+  bodyText: text("body_text"),
+  summary: text("summary"),
+  category: text("category"),
+  urgency: text("urgency"),
+  actionItems: jsonb("action_items"),
+  extractedRefs: jsonb("extracted_refs"),
+  procedureId: integer("procedure_id").references(() => procedures.id),
+  matchConfidence: text("match_confidence"),
+  matchReason: text("match_reason"),
+  status: text("status").notNull().default("new"),
+  aiStatus: text("ai_status").notNull().default("pending"),
+  aiError: text("ai_error"),
+  aiAttempts: integer("ai_attempts").notNull().default(0),
+  hasAttachments: boolean("has_attachments").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const emailAttachments = pgTable("email_attachments", {
+  id: serial("id").primaryKey(),
+  emailId: integer("email_id").references(() => emails.id, { onDelete: "cascade" }).notNull(),
+  gmailAttachmentId: text("gmail_attachment_id").notNull(),
+  filename: text("filename"),
+  mimeType: text("mime_type"),
+  sizeBytes: integer("size_bytes"),
+  storagePath: text("storage_path"),
+  procedureDocumentId: integer("procedure_document_id").references(() => procedureDocuments.id),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type EmailAccount = typeof emailAccounts.$inferSelect;
+export type WatchedSender = typeof emailWatchedSenders.$inferSelect;
+export type EmailRow = typeof emails.$inferSelect;
+export type EmailAttachmentRow = typeof emailAttachments.$inferSelect;
