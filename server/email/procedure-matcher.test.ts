@@ -6,6 +6,7 @@ import {
   matchByReferences,
   parseAiMatch,
   matchEmailToProcedure,
+  buildShipperHint,
   type ProcedureCandidate,
 } from "./procedure-matcher";
 
@@ -79,6 +80,15 @@ describe("matchByReferences", () => {
       procedureId: null, confidence: "none", reason: null,
     });
   });
+
+  it("iki ayrı prosedür farklı alanlardan eşleşirse kesin sonuç vermez", () => {
+    const result = matchByReferences(
+      { ...emptyRefs, procedureRefs: ["CNCALO-112"], awbNumbers: ["235-51135254"] },
+      [p({ id: 5, reference: "CNCALO-112" }), p({ id: 7, awbNumber: "235-51135254" })],
+    );
+    expect(result.confidence).toBe("none");
+    expect(result.procedureId).toBeNull();
+  });
 });
 
 describe("parseAiMatch", () => {
@@ -99,6 +109,25 @@ describe("parseAiMatch", () => {
 
   it("bozuk cevabı none olarak döner", () => {
     expect(parseAiMatch("bozuk", candidates).confidence).toBe("none");
+  });
+
+  it("sayı yerine metin gelen id'yi reddeder", () => {
+    expect(parseAiMatch('{"procedureId": "5"}', [p({ id: 5 })]).procedureId).toBeNull();
+  });
+});
+
+describe("buildShipperHint", () => {
+  it("alan adının ilk parçasını büyük harfle verir", () => {
+    expect(buildShipperHint("ops@issglobal.com")).toBe("ISSGLOBAL");
+  });
+  it("joker karakterleri kaçırır", () => {
+    expect(buildShipperHint("a@te%st_x.com")).toBe("TE\\%ST\\_X");
+  });
+  it("çok kısa ipucunda null döner", () => {
+    expect(buildShipperHint("a@ab.com")).toBeNull();
+  });
+  it("adres bozuksa null döner", () => {
+    expect(buildShipperHint("düzgün-olmayan-adres")).toBeNull();
   });
 });
 

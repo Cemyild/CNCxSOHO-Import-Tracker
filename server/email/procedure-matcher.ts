@@ -1,4 +1,4 @@
-import { desc, ilike, inArray, or, sql } from "drizzle-orm";
+import { desc, inArray, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { procedures } from "@shared/schema";
 import { analyzeText } from "../claude";
@@ -126,6 +126,20 @@ Cevap biçimi: {"procedureId": <id veya null>, "reason": "tek cümle gerekçe"}`
   }
 }
 
+/**
+ * Gönderen adresinden firma ipucu çıkarır: ops@issglobal.com -> "ISSGLOBAL".
+ * ILIKE joker karakterleri kaçırılır; ipucu çok kısaysa null döner ve
+ * gönderen bazlı daraltma yapılmaz.
+ */
+export function buildShipperHint(fromAddress: string): string | null {
+  const domain = fromAddress.split("@")[1] ?? "";
+  const word = domain.split(".")[0] ?? "";
+  if (word.length < 3) return null;
+  // LIKE joker karakterlerini kaçır: \ önce gelmeli.
+  const escaped = word.toUpperCase().replace(/([\\%_])/g, "\\$1");
+  return escaped;
+}
+
 const CANDIDATE_COLUMNS = {
   id: procedures.id,
   reference: procedures.reference,
@@ -170,19 +184,21 @@ export function createDbMatcherDeps(): MatcherDeps {
     },
 
     async findShortlist(fromAddress: string) {
-      // Gönderenin alan adının ilk parçasını firma adı ipucu olarak kullan:
-      // ops@issglobal.com -> "issglobal"
-      const domainWord = fromAddress.split("@")[1]?.split(".")[0] ?? "";
+      const hint = buildShipperHint(fromAddress);
 
-      const byShipper =
-        domainWord.length >= 3
-          ? await db
-              .select(CANDIDATE_COLUMNS)
-              .from(procedures)
-              .where(ilike(procedures.shipper, `%${domainWord}%`))
-              .orderBy(desc(procedures.id))
-              .limit(20)
-          : [];
+      // Gerçek veride gönderici adları boşluklu ("ISS GLOBAL FORWADING UAE
+      // LLC") ama alan adı bitişik ("issglobal"), o yüzden iki tarafın da
+      // boşluklarını atarak karşılaştırıyoruz.
+      const byShipper = hint
+        ? await db
+            .select(CANDIDATE_COLUMNS)
+            .from(procedures)
+            .where(
+              sql`UPPER(REPLACE(${procedures.shipper}, ' ', '')) LIKE ${'%' + hint + '%'} ESCAPE '\\'`,
+            )
+            .orderBy(desc(procedures.id))
+            .limit(20)
+        : [];
 
       if (byShipper.length > 0) return byShipper;
 
