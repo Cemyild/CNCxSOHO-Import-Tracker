@@ -1,4 +1,4 @@
--- Admin mail takibi. Tasarım: docs/superpowers/specs/2026-09-14-admin-email-inbox-design.md
+-- Admin mail takibi (Gmail'e IMAP + uygulama sifresi ile baglanilir). Tasarım: docs/superpowers/specs/2026-09-14-admin-email-inbox-design.md
 -- Kolon şeklinin kaynağı: shared/schema.ts → emailAccounts / emailWatchedSenders /
 -- emails / emailAttachments. Durum kolonları bilinçli olarak TEXT (enum değil):
 -- mevcut tablolardaki enum'lar şema kaymasına yol açıyor.
@@ -9,9 +9,7 @@ CREATE TABLE IF NOT EXISTS email_accounts (
   user_id          INTEGER NOT NULL REFERENCES users(id),
   provider         TEXT NOT NULL DEFAULT 'gmail',
   email_address    TEXT NOT NULL,
-  access_token     TEXT,
-  refresh_token    TEXT,
-  token_expires_at TIMESTAMP,
+  app_password     TEXT,
   last_synced_at   TIMESTAMP,
   status           TEXT NOT NULL DEFAULT 'connected',
   last_error       TEXT,

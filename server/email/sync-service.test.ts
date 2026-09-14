@@ -4,23 +4,19 @@ vi.mock("../db", () => ({ db: {}, pool: {}, rawDb: {} }));
 
 import { runSync, FIRST_RUN_LOOKBACK_MS } from "./sync-service";
 
-const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64url");
-
-function gmailMessage(id: string, subject: string, body: string) {
+/** IMAP istemcisi artık ham veri değil, hazır ParsedMessage döndürüyor. */
+function mailMessage(uid: string, subject: string, body: string) {
   return {
-    id,
-    threadId: `t-${id}`,
+    gmailMessageId: uid,
+    gmailThreadId: uid,
+    fromAddress: "ops@issglobal.com",
+    fromName: "ISS Global",
+    toAddress: "cem@sirket.com",
+    subject,
+    sentAt: new Date(1757836800000),
     snippet: subject,
-    internalDate: "1757836800000",
-    payload: {
-      headers: [
-        { name: "From", value: "ISS Global <ops@issglobal.com>" },
-        { name: "To", value: "cem@sirket.com" },
-        { name: "Subject", value: subject },
-      ],
-      mimeType: "text/plain",
-      body: { data: b64(body) },
-    },
+    bodyText: body,
+    attachments: [],
   };
 }
 
@@ -32,7 +28,7 @@ function makeDeps(overrides: any = {}) {
   const store = {
     getAccount: vi.fn().mockResolvedValue({
       id: 1, userId: 1, emailAddress: "cem@sirket.com",
-      refreshToken: "rt", lastSyncedAt: null, status: "connected",
+      appPassword: "uygulama-sifresi", lastSyncedAt: null, status: "connected",
     }),
     listActiveSenderPatterns: vi.fn().mockResolvedValue(["ops@issglobal.com"]),
     filterNewMessageIds: vi.fn().mockImplementation(async (ids: string[]) => ids),
@@ -59,11 +55,12 @@ function makeDeps(overrides: any = {}) {
     ...overrides.store,
   };
 
-  const gmail = {
+  const mail = {
     listMessageIds: vi.fn().mockResolvedValue(["m1"]),
-    getMessage: vi.fn().mockResolvedValue(gmailMessage("m1", "CNCALO-112 evrak", "Konşimento lazım")),
+    getMessage: vi.fn().mockResolvedValue(mailMessage("m1", "CNCALO-112 evrak", "Konşimento lazım")),
     getAttachment: vi.fn(),
-    ...overrides.gmail,
+    close: vi.fn().mockResolvedValue(undefined),
+    ...overrides.mail,
   };
 
   const summarize = overrides.summarize ??
@@ -82,8 +79,8 @@ function makeDeps(overrides: any = {}) {
   };
 
   return {
-    deps: { store, createGmailClient: () => gmail, summarize, matcherDeps } as any,
-    store, gmail, summarize, matcherDeps, inserted, aiSaved, aiFailed,
+    deps: { store, createMailClient: () => mail, summarize, matcherDeps } as any,
+    store, mail, summarize, matcherDeps, inserted, aiSaved, aiFailed,
   };
 }
 
@@ -91,25 +88,25 @@ describe("runSync", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("hesap yoksa hiçbir şey yapmaz", async () => {
-    const { deps, store, gmail } = makeDeps({ store: { getAccount: vi.fn().mockResolvedValue(null) } });
+    const { deps, store, mail } = makeDeps({ store: { getAccount: vi.fn().mockResolvedValue(null) } });
     const result = await runSync(deps);
     expect(result.skipped).toBe("no-account");
-    expect(gmail.listMessageIds).not.toHaveBeenCalled();
+    expect(mail.listMessageIds).not.toHaveBeenCalled();
     expect(store.markAccountSynced).not.toHaveBeenCalled();
   });
 
   it("gönderen listesi boşsa hiçbir şey taramaz", async () => {
-    const { deps, gmail } = makeDeps({ store: { listActiveSenderPatterns: vi.fn().mockResolvedValue([]) } });
+    const { deps, mail } = makeDeps({ store: { listActiveSenderPatterns: vi.fn().mockResolvedValue([]) } });
     const result = await runSync(deps);
     expect(result.skipped).toBe("no-senders");
-    expect(gmail.listMessageIds).not.toHaveBeenCalled();
+    expect(mail.listMessageIds).not.toHaveBeenCalled();
   });
 
   it("ilk turda 7 günlük geçmişi tarar", async () => {
     const now = new Date("2026-09-14T12:00:00Z");
-    const { deps, gmail } = makeDeps();
+    const { deps, mail } = makeDeps();
     await runSync({ ...deps, now: () => now });
-    const query = gmail.listMessageIds.mock.calls[0][0] as string;
+    const query = mail.listMessageIds.mock.calls[0][0] as string;
     const expected = Math.floor((now.getTime() - FIRST_RUN_LOOKBACK_MS) / 1000);
     expect(query).toContain(`after:${expected}`);
   });
@@ -117,7 +114,7 @@ describe("runSync", () => {
   it("son senkrondan 10 dakika geriye çakışma payı bırakır", async () => {
     const now = new Date("2026-09-14T12:00:00Z");
     const lastSynced = new Date("2026-09-14T11:00:00Z");
-    const { deps, gmail } = makeDeps({
+    const { deps, mail } = makeDeps({
       store: {
         getAccount: vi.fn().mockResolvedValue({
           id: 1, userId: 1, emailAddress: "cem@sirket.com",
@@ -126,16 +123,16 @@ describe("runSync", () => {
       },
     });
     await runSync({ ...deps, now: () => now });
-    const query = gmail.listMessageIds.mock.calls[0][0] as string;
+    const query = mail.listMessageIds.mock.calls[0][0] as string;
     expect(query).toContain(`after:${Math.floor((lastSynced.getTime() - 10 * 60 * 1000) / 1000)}`);
   });
 
   it("zaten kayıtlı mailleri yeniden çekmez", async () => {
-    const { deps, gmail } = makeDeps({
+    const { deps, mail } = makeDeps({
       store: { filterNewMessageIds: vi.fn().mockResolvedValue([]) },
     });
     const result = await runSync(deps);
-    expect(gmail.getMessage).not.toHaveBeenCalled();
+    expect(mail.getMessage).not.toHaveBeenCalled();
     expect(result.inserted).toBe(0);
   });
 
@@ -179,7 +176,7 @@ describe("runSync", () => {
 
   it("Gmail listeleme hatasında son senkron zamanını GÜNCELLEMEZ", async () => {
     const { deps, store } = makeDeps({
-      gmail: { listMessageIds: vi.fn().mockRejectedValue(new Error("401 invalid_grant")) },
+      mail: { listMessageIds: vi.fn().mockRejectedValue(new Error("401 invalid_grant")) },
     });
     const result = await runSync(deps);
     expect(store.markAccountSynced).not.toHaveBeenCalled();
@@ -232,11 +229,11 @@ describe("runSync", () => {
 
   it("tek bir mail alınamazsa diğerlerini işlemeye devam eder", async () => {
     const { deps, store } = makeDeps({
-      gmail: {
+      mail: {
         listMessageIds: vi.fn().mockResolvedValue(["m1", "m2"]),
         getMessage: vi.fn()
           .mockRejectedValueOnce(new Error("404 not found"))
-          .mockResolvedValueOnce(gmailMessage("m2", "ikinci", "gövde")),
+          .mockResolvedValueOnce(mailMessage("m2", "ikinci", "gövde")),
       },
     });
     const result = await runSync(deps);
@@ -258,7 +255,7 @@ describe("runSync", () => {
 
   it("aynı mail iki sorgu parçasında çıksa da bir kez sayılır", async () => {
     const { deps } = makeDeps({
-      gmail: { listMessageIds: vi.fn().mockResolvedValue(["m1", "m1"]) },
+      mail: { listMessageIds: vi.fn().mockResolvedValue(["m1", "m1"]) },
     });
     const result = await runSync(deps);
     expect(result.fetched).toBe(1);
@@ -267,7 +264,7 @@ describe("runSync", () => {
   it("son senkron zamanı gelecekteyse pencereyi şimdiye sabitler", async () => {
     const now = new Date("2026-09-14T12:00:00Z");
     const future = new Date("2026-09-20T12:00:00Z");
-    const { deps, gmail } = makeDeps({
+    const { deps, mail } = makeDeps({
       store: {
         getAccount: vi.fn().mockResolvedValue({
           id: 1, userId: 1, emailAddress: "cem@sirket.com",
@@ -276,7 +273,7 @@ describe("runSync", () => {
       },
     });
     await runSync({ ...deps, now: () => now });
-    const query = gmail.listMessageIds.mock.calls[0][0] as string;
+    const query = mail.listMessageIds.mock.calls[0][0] as string;
     expect(query).toContain(`after:${Math.floor((now.getTime() - 10 * 60 * 1000) / 1000)}`);
   });
 
@@ -284,7 +281,7 @@ describe("runSync", () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const { deps } = makeDeps({
-      gmail: {
+      mail: {
         listMessageIds: vi.fn().mockImplementation(async () => { await gate; return []; }),
       },
     });

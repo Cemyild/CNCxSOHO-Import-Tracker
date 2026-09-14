@@ -39,7 +39,7 @@ export interface DecryptedAccount {
   id: number;
   userId: number;
   emailAddress: string;
-  refreshToken: string;
+  appPassword: string;
   lastSyncedAt: Date | null;
   status: string;
 }
@@ -51,12 +51,12 @@ export async function getAccountRow(): Promise<EmailAccount | null> {
 
 export async function getAccount(): Promise<DecryptedAccount | null> {
   const row = await getAccountRow();
-  if (!row || !row.refreshToken) return null;
+  if (!row || !row.appPassword) return null;
   return {
     id: row.id,
     userId: row.userId,
     emailAddress: row.emailAddress,
-    refreshToken: decryptToken(row.refreshToken),
+    appPassword: decryptToken(row.appPassword),
     lastSyncedAt: row.lastSyncedAt ?? null,
     status: row.status,
   };
@@ -65,9 +65,7 @@ export async function getAccount(): Promise<DecryptedAccount | null> {
 export interface SaveAccountInput {
   userId: number;
   emailAddress: string;
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: Date;
+  appPassword: string;
 }
 
 /** Aynı kullanıcı+adres varsa günceller, yoksa ekler. */
@@ -75,9 +73,7 @@ export async function saveAccount(input: SaveAccountInput): Promise<void> {
   const values = {
     userId: input.userId,
     emailAddress: input.emailAddress,
-    accessToken: encryptToken(input.accessToken),
-    refreshToken: encryptToken(input.refreshToken),
-    tokenExpiresAt: input.expiresAt,
+    appPassword: encryptToken(input.appPassword),
     status: "connected",
     lastError: null as string | null,
     updatedAt: new Date(),
@@ -109,7 +105,7 @@ export async function markAccountSynced(id: number, at: Date): Promise<void> {
 export async function disconnectAccount(id: number): Promise<void> {
   await db
     .update(emailAccounts)
-    .set({ status: "disconnected", accessToken: null, refreshToken: null, updatedAt: new Date() })
+    .set({ status: "disconnected", appPassword: null, updatedAt: new Date() })
     .where(eq(emailAccounts.id, id));
 }
 

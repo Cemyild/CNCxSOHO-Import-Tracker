@@ -1,7 +1,7 @@
 import { db } from "../db";
 import { procedureDocuments } from "@shared/schema";
 import { uploadFile as defaultUploadFile } from "../object-storage";
-import { createGmailClient as defaultCreateGmailClient } from "./gmail-client";
+import { createImapClient as defaultCreateMailClient } from "./imap-client";
 import * as defaultStore from "./store";
 
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
@@ -39,7 +39,7 @@ export interface SaveAttachmentDeps {
     typeof defaultStore,
     "getAttachmentContext" | "getAccount" | "markAttachmentSaved" | "getProcedureReference"
   >;
-  createGmailClient: typeof defaultCreateGmailClient;
+  createMailClient: typeof defaultCreateMailClient;
   uploadFile: typeof defaultUploadFile;
   createProcedureDocument(input: {
     name: string;
@@ -75,7 +75,7 @@ export function safeFilename(raw: string | null | undefined): string {
 export function createAttachmentDeps(): SaveAttachmentDeps {
   return {
     store: defaultStore,
-    createGmailClient: defaultCreateGmailClient,
+    createMailClient: defaultCreateMailClient,
     uploadFile: defaultUploadFile,
     createProcedureDocument: insertProcedureDocument,
   };
@@ -99,8 +99,18 @@ export async function saveAttachmentToProcedure(
   const account = await deps.store.getAccount();
   if (!account) throw new Error("Mail hesabı bağlı değil");
 
-  const gmail = deps.createGmailClient({ refreshToken: account.refreshToken });
-  const buffer = await gmail.getAttachment(gmailMessageId, attachment.gmailAttachmentId);
+  const mail = deps.createMailClient({
+    emailAddress: account.emailAddress,
+    appPassword: account.appPassword,
+  });
+  let buffer: Buffer;
+  try {
+    buffer = await mail.getAttachment(gmailMessageId, attachment.gmailAttachmentId);
+  } finally {
+    await mail.close().catch(() => {
+      // kapanış hatası kaydı engellemez
+    });
+  }
   if (buffer.length > MAX_ATTACHMENT_BYTES) throw new AttachmentTooLargeError();
 
   const reference =

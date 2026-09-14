@@ -510,9 +510,32 @@ async function embedSignatures(
   if (!signature && !stamp) return;
 
   // In-cell order defines all rich-value indexes: vm="i+1" → rv[i] → rel[i].
-  const inCell: { buf: Buffer; col: string; templateRow: number }[] = [];
-  if (stamp) inCell.push({ buf: stamp, col: "E", templateRow: 29 });
-  if (signature) inCell.push({ buf: signature, col: "C", templateRow: 30 });
+  // Each image also gets a merged block (mirroring the hand-tuned reference:
+  // stamp E29:E36, signature C30:D36) — a rich-value image sizes itself to its
+  // cell, so a single cell renders it tiny; the merge lets it fill the area.
+  const inCell: {
+    buf: Buffer;
+    col: string;
+    templateRow: number;
+    mergeEndCol: string;
+    mergeEndRow: number;
+  }[] = [];
+  if (stamp)
+    inCell.push({
+      buf: stamp,
+      col: "E",
+      templateRow: 29,
+      mergeEndCol: "E",
+      mergeEndRow: 36,
+    });
+  if (signature)
+    inCell.push({
+      buf: signature,
+      col: "C",
+      templateRow: 30,
+      mergeEndCol: "D",
+      mergeEndRow: 36,
+    });
 
   // --- media (shared by the in-cell values and the PL floating pictures)
   inCell.forEach((item, i) => {
@@ -605,6 +628,21 @@ async function embedSignatures(
       (sAttr) => `<c r="${ref}"${sAttr} t="e" vm="${i + 1}"><v>#VALUE!</v></c>`,
     );
   });
+
+  // Merge each image's block so it fills the area instead of one tiny cell.
+  // The rich-value cell is the block's top-left anchor; coordinates follow the
+  // reference and are shifted by the item-row delta like everything below the
+  // grand total.
+  const sigMerges = inCell
+    .map(
+      (item) =>
+        `<mergeCell ref="${item.col}${item.templateRow + invDelta}:${item.mergeEndCol}${item.mergeEndRow + invDelta}"/>`,
+    )
+    .join("");
+  sheet1 = sheet1.replace(
+    /<mergeCells count="(\d+)">/,
+    (_m, c) => `<mergeCells count="${Number(c) + inCell.length}">${sigMerges}`,
+  );
   zip.file("xl/worksheets/sheet1.xml", sheet1);
 
   // workbook-level wiring for the metadata part AND the four rich-value

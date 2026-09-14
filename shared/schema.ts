@@ -724,9 +724,8 @@ export const emailAccounts = pgTable("email_accounts", {
   userId: integer("user_id").references(() => users.id).notNull(),
   provider: text("provider").notNull().default("gmail"),
   emailAddress: text("email_address").notNull(),
-  accessToken: text("access_token"),
-  refreshToken: text("refresh_token"),
-  tokenExpiresAt: timestamp("token_expires_at"),
+  /** IMAP uygulama şifresi, EMAIL_TOKEN_ENC_KEY ile şifreli saklanır. */
+  appPassword: text("app_password"),
   lastSyncedAt: timestamp("last_synced_at"),
   status: text("status").notNull().default("connected"),
   lastError: text("last_error"),

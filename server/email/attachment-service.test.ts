@@ -12,11 +12,12 @@ import {
 } from "./attachment-service";
 
 function makeDeps(overrides: any = {}) {
-  const gmail = {
+  const mail = {
     listMessageIds: vi.fn(),
     getMessage: vi.fn(),
     getAttachment: vi.fn().mockResolvedValue(Buffer.from("PDF içeriği")),
-    ...overrides.gmail,
+    close: vi.fn().mockResolvedValue(undefined),
+    ...overrides.mail,
   };
 
   const store = {
@@ -30,7 +31,7 @@ function makeDeps(overrides: any = {}) {
     }),
     getAccount: vi.fn().mockResolvedValue({
       id: 1, userId: 1, emailAddress: "cem@sirket.com",
-      refreshToken: "rt", lastSyncedAt: null, status: "connected",
+      appPassword: "uygulama-sifresi", lastSyncedAt: null, status: "connected",
     }),
     markAttachmentSaved: vi.fn().mockResolvedValue(undefined),
     getProcedureReference: vi.fn().mockResolvedValue("CNCALO-112"),
@@ -41,8 +42,8 @@ function makeDeps(overrides: any = {}) {
   const createProcedureDocument = overrides.createProcedureDocument ?? vi.fn().mockResolvedValue(77);
 
   return {
-    deps: { store, createGmailClient: () => gmail, uploadFile, createProcedureDocument } as any,
-    store, gmail, uploadFile, createProcedureDocument,
+    deps: { store, createMailClient: () => mail, uploadFile, createProcedureDocument } as any,
+    store, mail, uploadFile, createProcedureDocument,
   };
 }
 
@@ -50,10 +51,10 @@ const input = { attachmentId: 11, procedureId: 5, documentType: "Fatura", userId
 
 describe("saveAttachmentToProcedure", () => {
   it("eki indirir, yükler ve prosedür belgesi oluşturur", async () => {
-    const { deps, gmail, uploadFile, createProcedureDocument, store } = makeDeps();
+    const { deps, mail, uploadFile, createProcedureDocument, store } = makeDeps();
     const result = await saveAttachmentToProcedure(input, deps);
 
-    expect(gmail.getAttachment).toHaveBeenCalledWith("m1", "att-1");
+    expect(mail.getAttachment).toHaveBeenCalledWith("m1", "att-1");
     expect(uploadFile).toHaveBeenCalledTimes(1);
     expect(uploadFile).toHaveBeenCalledWith(
       expect.any(Buffer), "fatura.pdf", "application/pdf", "CNCALO-112",
@@ -74,7 +75,7 @@ describe("saveAttachmentToProcedure", () => {
   });
 
   it("çok büyük eki indirmeye kalkışmaz", async () => {
-    const { deps, gmail } = makeDeps({
+    const { deps, mail } = makeDeps({
       store: {
         getAttachmentContext: vi.fn().mockResolvedValue({
           attachment: {
@@ -86,7 +87,7 @@ describe("saveAttachmentToProcedure", () => {
       },
     });
     await expect(saveAttachmentToProcedure(input, deps)).rejects.toThrow(AttachmentTooLargeError);
-    expect(gmail.getAttachment).not.toHaveBeenCalled();
+    expect(mail.getAttachment).not.toHaveBeenCalled();
   });
 
   it("yükleme başarısız olursa veritabanına hiçbir şey yazmaz", async () => {
@@ -104,7 +105,7 @@ describe("saveAttachmentToProcedure", () => {
   });
 
   it("zaten kaydedilmiş eki yeniden kaydetmez", async () => {
-    const { deps, gmail, uploadFile } = makeDeps({
+    const { deps, mail, uploadFile } = makeDeps({
       store: {
         getAttachmentContext: vi.fn().mockResolvedValue({
           attachment: {
@@ -116,7 +117,7 @@ describe("saveAttachmentToProcedure", () => {
       },
     });
     await expect(saveAttachmentToProcedure(input, deps)).rejects.toThrow(AttachmentAlreadyHandledError);
-    expect(gmail.getAttachment).not.toHaveBeenCalled();
+    expect(mail.getAttachment).not.toHaveBeenCalled();
     expect(uploadFile).not.toHaveBeenCalled();
   });
 

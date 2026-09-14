@@ -2,11 +2,9 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { requireRole } from "../auth-middleware";
 import { storage } from "../storage";
-import { roleSatisfies } from "../auth-roles";
 import * as store from "./store";
 import { readMessageFilter, parseId } from "./query-params";
-import { createAuthUrl, exchangeCode, revokeAccess } from "./gmail-client";
-import { signState, verifyState, InvalidStateError } from "./oauth-state";
+import { testImapConnection, describeImapError } from "./imap-client";
 import { runSync, isSyncRunning } from "./sync-service";
 import {
   saveAttachmentToProcedure,
@@ -49,38 +47,34 @@ router.get("/account", requireRole("admin"), async (_req, res) => {
   }
 });
 
-router.get("/google/auth-url", requireRole("admin"), async (req, res) => {
-  try {
-    return res.json({ url: createAuthUrl(signState(userId(req))) });
-  } catch (error) {
-    return fail(res, error, "Google OAuth ayarları eksik");
-  }
-});
-
 /**
- * Tarayıcı Google'dan buraya döner; Authorization başlığı taşıyamaz.
- * Koruma: imzalı state + kullanıcının rolünün DB'den yeniden doğrulanması.
+ * Mail kutusunu bağlar. Uygulama şifresi KAYDEDİLMEDEN ÖNCE denenir; yanlışsa
+ * hiçbir şey saklanmaz ve kullanıcı ne yapması gerektiğini söyleyen bir mesaj
+ * alır.
  */
-router.get("/google/callback", async (req, res) => {
-  const redirect = (params: string) => res.redirect(`/settings?${params}`);
+router.post("/account", requireRole("admin"), async (req, res) => {
+  const emailAddress = String(req.body?.emailAddress ?? "").trim().toLowerCase();
+  const appPassword = String(req.body?.appPassword ?? "").replace(/\s+/g, "");
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress)) {
+    return res.status(400).json({ message: "Geçerli bir mail adresi girin" });
+  }
+  if (appPassword.length < 8) {
+    return res.status(400).json({ message: "Uygulama şifresi eksik görünüyor" });
+  }
+
   try {
-    const code = typeof req.query.code === "string" ? req.query.code : "";
-    const state = typeof req.query.state === "string" ? req.query.state : "";
-    if (!code) return redirect("mail=error&reason=no_code");
-
-    const { userId: actingUserId } = verifyState(state);
-    const user = await storage.getUserById(actingUserId);
-    if (!user || !roleSatisfies(user.role, ["admin"])) {
-      return redirect("mail=error&reason=forbidden");
-    }
-
-    const tokens = await exchangeCode(code);
-    await store.saveAccount({ userId: actingUserId, ...tokens });
-    return redirect("mail=connected");
+    await testImapConnection({ emailAddress, appPassword });
   } catch (error) {
-    if (error instanceof InvalidStateError) return redirect("mail=error&reason=state");
-    console.error("[email-inbox] OAuth callback hatası:", error);
-    return redirect("mail=error&reason=exchange");
+    console.error("[email-inbox] IMAP bağlantı denemesi başarısız:", error);
+    return res.status(400).json({ message: describeImapError(error) });
+  }
+
+  try {
+    await store.saveAccount({ userId: userId(req), emailAddress, appPassword });
+    return res.json({ ok: true, emailAddress });
+  } catch (error) {
+    return fail(res, error);
   }
 });
 
@@ -88,11 +82,8 @@ router.delete("/account", requireRole("admin"), async (_req, res) => {
   try {
     const account = await store.getAccount();
     if (!account) return res.json({ ok: true });
-    try {
-      await revokeAccess(account.refreshToken);
-    } catch (error) {
-      console.warn("[email-inbox] Google token iptali başarısız, yerel kayıt yine de siliniyor:", error);
-    }
+    // Uygulama şifresinin kendisi ancak Google hesabından silinebilir; burada
+    // yalnızca bizdeki kopyayı siliyoruz. Kullanıcıya bu, arayüzde söyleniyor.
     await store.disconnectAccount(account.id);
     return res.json({ ok: true });
   } catch (error) {

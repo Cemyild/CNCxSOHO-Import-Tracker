@@ -1,7 +1,10 @@
 import { randomUUID } from "crypto";
 import * as defaultStore from "./store";
-import { buildGmailQuery, createGmailClient as defaultCreateGmailClient } from "./gmail-client";
-import { parseGmailMessage } from "./message-parser";
+import {
+  buildSearchQuery,
+  createImapClient as defaultCreateMailClient,
+  type MailClient,
+} from "./imap-client";
 import { extractReferences, mergeRefs } from "./reference-extractor";
 import { summarizeEmail as defaultSummarize } from "./summarizer";
 import {
@@ -25,7 +28,7 @@ export interface SyncResult {
 
 export interface SyncDeps {
   store: typeof defaultStore;
-  createGmailClient: typeof defaultCreateGmailClient;
+  createMailClient: typeof defaultCreateMailClient;
   summarize: typeof defaultSummarize;
   matcherDeps: MatcherDeps;
   now?: () => Date;
@@ -44,12 +47,13 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
   running = true;
 
   const store = overrides.store ?? defaultStore;
-  const createClient = overrides.createGmailClient ?? defaultCreateGmailClient;
+  const createClient = overrides.createMailClient ?? defaultCreateMailClient;
   const summarize = overrides.summarize ?? defaultSummarize;
   const matcherDeps = overrides.matcherDeps ?? createDbMatcherDeps();
   const now = overrides.now ?? (() => new Date());
 
   const result: SyncResult = { fetched: 0, inserted: 0, processed: 0, failed: 0 };
+  let mail: MailClient | null = null;
 
   try {
     const account = await store.getAccount();
@@ -67,14 +71,18 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
     const afterMs = account.lastSyncedAt
       ? Math.min(account.lastSyncedAt.getTime() - OVERLAP_MS, startedAt.getTime() - OVERLAP_MS)
       : firstRunFloor;
-    const queries = buildGmailQuery(patterns, Math.floor(afterMs / 1000));
+    const queries = buildSearchQuery(patterns, Math.floor(afterMs / 1000));
 
-    const gmail = createClient({ refreshToken: account.refreshToken });
+    // IMAP bağlantısı durumludur; tur bitince mutlaka kapatılır.
+    mail = createClient({
+      emailAddress: account.emailAddress,
+      appPassword: account.appPassword,
+    });
 
     // 1) Listele + yeni olanları kaydet
     const ids: string[] = [];
     for (const query of queries) {
-      ids.push(...(await gmail.listMessageIds(query)));
+      ids.push(...(await mail.listMessageIds(query)));
     }
     const uniqueIds = Array.from(new Set(ids));
     result.fetched = uniqueIds.length;
@@ -82,7 +90,7 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
     const newIds = await store.filterNewMessageIds(uniqueIds);
     for (const id of newIds) {
       try {
-        const parsed = parseGmailMessage(await gmail.getMessage(id));
+        const parsed = await mail.getMessage(id);
         const emailId = await store.insertParsedMessage(account.id, parsed);
         if (emailId !== null) {
           await store.insertAttachments(emailId, parsed.attachments);
@@ -170,6 +178,13 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
     }
     return { ...result, skipped: "error", error: message };
   } finally {
+    if (mail) {
+      try {
+        await mail.close();
+      } catch (closeError) {
+        console.error("[email-inbox] IMAP bağlantısı kapatılamadı:", closeError);
+      }
+    }
     running = false;
   }
 }
