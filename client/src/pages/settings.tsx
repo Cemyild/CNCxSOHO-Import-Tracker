@@ -31,6 +31,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { MailConnectionSettings } from "@/components/inbox/MailConnectionSettings";
+import { WatchedSenders } from "@/components/inbox/WatchedSenders";
 import { 
   Calendar,
   Home,
@@ -946,6 +948,13 @@ export function SettingsPage() {
                   </TabsContent>
                 )}
               </Tabs>
+
+      {isAdmin && (
+        <div className="space-y-4">
+          <MailConnectionSettings />
+          <WatchedSenders />
+        </div>
+      )}
 
       {/* Create User Dialog */}
       <Dialog open={showCreateUserDialog} onOpenChange={setShowCreateUserDialog}>

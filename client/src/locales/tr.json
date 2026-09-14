@@ -1080,6 +1080,37 @@
       "tooLarge": "Ek 25 MB'tan büyük; Gmail'den elle indirin"
     }
   },
+  "mailSettings": {
+    "title": "Mail Bağlantısı",
+    "description": "Firmalardan gelen mailleri okuyup özetlemesi için Gmail hesabınızı bağlayın. Uygulama yalnızca okuma izni alır; mail gönderemez, silemez.",
+    "connect": "Gmail'e bağlan",
+    "reconnect": "Yeniden bağlan",
+    "disconnect": "Bağlantıyı kes",
+    "connected": "Bağlı: {{email}}",
+    "notConnected": "Bağlı değil",
+    "statusError": "Bağlantı koptu. Yeniden bağlanın.",
+    "lastSynced": "Son kontrol: {{time}}",
+    "neverSynced": "Henüz kontrol edilmedi",
+    "connectSuccess": "Gmail hesabınız bağlandı",
+    "connectError": "Gmail bağlantısı kurulamadı",
+    "disconnectConfirm": "Mail bağlantısı kesilsin mi? Kayıtlı mailler silinmez, yeni mail okunmaz.",
+    "disconnected": "Bağlantı kesildi",
+    "senders": {
+      "title": "Takip Edilen Firmalar",
+      "description": "Yalnızca buraya eklediğiniz adreslerden gelen mailler okunur. Tek bir adres (ornek@firma.com) veya firmanın tüm adresleri (@firma.com) yazabilirsiniz.",
+      "placeholder": "ornek@firma.com veya @firma.com",
+      "labelPlaceholder": "Firma adı (isteğe bağlı)",
+      "add": "Ekle",
+      "empty": "Henüz firma eklenmedi. Liste boşken hiçbir mail taranmaz.",
+      "active": "Aktif",
+      "remove": "Sil",
+      "removeConfirm": "Bu gönderen listeden çıkarılsın mı?",
+      "invalid": "Geçerli bir mail adresi (ornek@firma.com) veya alan adı (@firma.com) girin",
+      "duplicate": "Bu gönderen zaten listede",
+      "added": "Gönderen eklendi",
+      "removed": "Gönderen silindi"
+    }
+  },
   "incomingPayments": {
     "title": "Gelen Ödemeler",
     "newPayment": "Yeni Ödeme",

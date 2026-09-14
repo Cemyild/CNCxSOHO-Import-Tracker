@@ -1080,6 +1080,37 @@
       "tooLarge": "Attachment is larger than 25 MB; download it from Gmail"
     }
   },
+  "mailSettings": {
+    "title": "Mailbox Connection",
+    "description": "Connect your Gmail account so incoming company emails can be read and summarized. The app gets read-only access; it cannot send or delete mail.",
+    "connect": "Connect Gmail",
+    "reconnect": "Reconnect",
+    "disconnect": "Disconnect",
+    "connected": "Connected: {{email}}",
+    "notConnected": "Not connected",
+    "statusError": "Connection lost. Please reconnect.",
+    "lastSynced": "Last check: {{time}}",
+    "neverSynced": "Not checked yet",
+    "connectSuccess": "Your Gmail account is connected",
+    "connectError": "Could not connect to Gmail",
+    "disconnectConfirm": "Disconnect the mailbox? Stored emails are kept, but no new mail will be read.",
+    "disconnected": "Disconnected",
+    "senders": {
+      "title": "Watched Senders",
+      "description": "Only mail from the addresses listed here is read. Enter a single address (name@company.com) or a whole domain (@company.com).",
+      "placeholder": "name@company.com or @company.com",
+      "labelPlaceholder": "Company name (optional)",
+      "add": "Add",
+      "empty": "No senders yet. While this list is empty, no mail is scanned.",
+      "active": "Active",
+      "remove": "Remove",
+      "removeConfirm": "Remove this sender from the list?",
+      "invalid": "Enter a valid email address (name@company.com) or domain (@company.com)",
+      "duplicate": "This sender is already on the list",
+      "added": "Sender added",
+      "removed": "Sender removed"
+    }
+  },
   "incomingPayments": {
     "title": "Incoming Payments",
     "newPayment": "New Payment",
