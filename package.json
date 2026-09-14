@@ -71,6 +71,7 @@
     "express-rate-limit": "^8.2.1",
     "express-session": "^1.18.1",
     "framer-motion": "^11.18.2",
+    "googleapis": "^180.0.0",
     "i18next": "^23.16.8",
     "input-otp": "^1.2.4",
     "jspdf": "^3.0.4",
