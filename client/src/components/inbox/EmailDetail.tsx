@@ -44,14 +44,37 @@ export function EmailDetail({ emailId }: Props) {
     },
   });
 
-  const patch = useMutation({
+  const patch = useMutation<Response, Error, Record<string, unknown>, { previous?: MessageDetail }>({
     mutationFn: async (body: Record<string, unknown>) =>
       apiRequest("PATCH", `/api/email/messages/${emailId}`, body),
-    onSuccess: () => {
+
+    // Yapılacaklar listesinde art arda tik atılabiliyor; her istek listenin
+    // tamamını gönderdiği için önbelleği hemen güncellemezsek ikinci tik
+    // birincisini geri alır.
+    onMutate: async (body: Record<string, unknown>) => {
+      if (!Array.isArray((body as any).actionItems)) return { previous: undefined };
+      await queryClient.cancelQueries({ queryKey: ["/api/email/messages", emailId] });
+      const previous = queryClient.getQueryData<MessageDetail>(["/api/email/messages", emailId]);
+      if (previous) {
+        queryClient.setQueryData<MessageDetail>(["/api/email/messages", emailId], {
+          ...previous,
+          actionItems: (body as any).actionItems,
+        });
+      }
+      return { previous };
+    },
+
+    onError: (_error, _body, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["/api/email/messages", emailId], context.previous);
+      }
+      toast({ variant: "destructive", description: t("emailInbox.detail.saveFailed") });
+    },
+
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/email/messages", emailId] });
       queryClient.invalidateQueries({ queryKey: ["/api/email/messages"] });
     },
-    onError: () => toast({ variant: "destructive", description: t("emailInbox.detail.saveFailed") }),
   });
 
   const reprocess = useMutation({

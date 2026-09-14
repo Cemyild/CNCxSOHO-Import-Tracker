@@ -65,8 +65,13 @@ export function AttachmentActions({ emailId, attachments, defaultProcedureId }: 
       toast({ description: t("emailInbox.detail.attachmentDismissed") });
       invalidate();
     },
-    onError: () => {
-      toast({ variant: "destructive", description: t("emailInbox.detail.saveFailed") });
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        description: error.message.startsWith("409")
+          ? t("emailInbox.detail.attachmentAlreadyHandled")
+          : t("emailInbox.detail.saveFailed"),
+      });
     },
   });
 
@@ -108,12 +113,17 @@ export function AttachmentActions({ emailId, attachments, defaultProcedureId }: 
               <div className="ml-auto flex gap-2">
                 <Button
                   size="sm"
-                  disabled={!defaultProcedureId || documentType === "" || save.isPending}
+                  disabled={!defaultProcedureId || documentType === "" || save.isPending || dismiss.isPending}
                   onClick={() => save.mutate(attachment.id)}
                 >
                   {t("emailInbox.detail.attachmentSave")}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => dismiss.mutate(attachment.id)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={save.isPending || dismiss.isPending}
+                  onClick={() => dismiss.mutate(attachment.id)}
+                >
                   {t("emailInbox.detail.attachmentDismiss")}
                 </Button>
               </div>
