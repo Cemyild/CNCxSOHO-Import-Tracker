@@ -20,6 +20,13 @@ export class AttachmentNotFoundError extends Error {
   }
 }
 
+export class AttachmentAlreadyHandledError extends Error {
+  constructor() {
+    super("Bu ek zaten işlendi");
+    this.name = "AttachmentAlreadyHandledError";
+  }
+}
+
 export interface SaveAttachmentInput {
   attachmentId: number;
   procedureId: number;
@@ -28,11 +35,10 @@ export interface SaveAttachmentInput {
 }
 
 export interface SaveAttachmentDeps {
-  store: Pick<typeof defaultStore, "getAttachmentContext" | "getAccount" | "markAttachmentSaved"> & {
-    // Opsiyonel: gerçek store bunu her zaman sağlar, ancak testteki sahte
-    // store nesnesi sağlamıyor — eksikse referans yerine yedek isim kullanılır.
-    getProcedureReference?: typeof defaultStore.getProcedureReference;
-  };
+  store: Pick<
+    typeof defaultStore,
+    "getAttachmentContext" | "getAccount" | "markAttachmentSaved" | "getProcedureReference"
+  >;
   createGmailClient: typeof defaultCreateGmailClient;
   uploadFile: typeof defaultUploadFile;
   createProcedureDocument(input: {
@@ -53,6 +59,17 @@ async function insertProcedureDocument(input: {
 }): Promise<number> {
   const [row] = await db.insert(procedureDocuments).values(input).returning({ id: procedureDocuments.id });
   return row.id;
+}
+
+/** Gönderenin verdiği dosya adını güvenli hale getirir: yol ayırıcıları,
+ *  kontrol karakterleri ve aşırı uzunluk temizlenir. */
+export function safeFilename(raw: string | null | undefined): string {
+  const cleaned = (raw ?? "")
+    .replace(/[\/\\]/g, "_")
+    .replace(/[\x00-\x1f\x7f]/g, "")
+    .replace(/^\.+/, "")
+    .trim();
+  return cleaned === "" ? "ek" : cleaned.slice(0, 120);
 }
 
 export function createAttachmentDeps(): SaveAttachmentDeps {
@@ -76,6 +93,7 @@ export async function saveAttachmentToProcedure(
   if (!context) throw new AttachmentNotFoundError();
 
   const { attachment, gmailMessageId } = context;
+  if (attachment.status !== "pending") throw new AttachmentAlreadyHandledError();
   if ((attachment.sizeBytes ?? 0) > MAX_ATTACHMENT_BYTES) throw new AttachmentTooLargeError();
 
   const account = await deps.store.getAccount();
@@ -86,17 +104,18 @@ export async function saveAttachmentToProcedure(
   if (buffer.length > MAX_ATTACHMENT_BYTES) throw new AttachmentTooLargeError();
 
   const reference =
-    (await deps.store.getProcedureReference?.(input.procedureId)) ?? `procedure-${input.procedureId}`;
+    (await deps.store.getProcedureReference(input.procedureId)) ?? `procedure-${input.procedureId}`;
+  const filename = safeFilename(attachment.filename);
 
   const storagePath = await deps.uploadFile(
     buffer,
-    attachment.filename || "ek",
+    filename,
     attachment.mimeType || "application/octet-stream",
     reference,
   );
 
   const procedureDocumentId = await deps.createProcedureDocument({
-    name: attachment.filename || "ek",
+    name: filename,
     type: input.documentType,
     path: storagePath,
     procedureId: input.procedureId,

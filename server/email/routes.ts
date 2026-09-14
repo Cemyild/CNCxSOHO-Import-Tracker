@@ -13,6 +13,7 @@ import {
   createAttachmentDeps,
   AttachmentTooLargeError,
   AttachmentNotFoundError,
+  AttachmentAlreadyHandledError,
 } from "./attachment-service";
 
 const router = Router();
@@ -272,6 +273,9 @@ router.post("/attachments/:id/save", requireRole("admin"), async (req, res) => {
     }
     if (error instanceof AttachmentNotFoundError) {
       return res.status(404).json({ message: error.message });
+    }
+    if (error instanceof AttachmentAlreadyHandledError) {
+      return res.status(409).json({ message: error.message });
     }
     return fail(res, error);
   }
