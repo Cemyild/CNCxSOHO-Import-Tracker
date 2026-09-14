@@ -5,6 +5,7 @@ import { registerRoutes } from "./routes";
 import { mcpRouter } from "./mcp/index";
 import { setupVite, serveStatic, log } from "./vite";
 import { verifyToken } from "./auth-token";
+import { startEmailSyncScheduler } from "./email/scheduler";
 import fs from "fs";
 import path from "path";
 
@@ -135,6 +136,9 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
+
+  // Admin mail takibi: 15 dakikada bir Gmail senkronu (hata sürecı düşürmez).
+  startEmailSyncScheduler();
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
