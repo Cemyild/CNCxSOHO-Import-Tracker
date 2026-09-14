@@ -16,7 +16,7 @@ export interface ExtractedRefs {
 }
 
 const PROCEDURE_RE = /\bCNC[A-Z]{2,6}\s*-\s*\d{2,5}(?:\s*\/\s*\d+)?/gi;
-const AWB_RE = /(?<!\d\s)\d{3}-\d{8}(?![\d-])/g;
+const AWB_RE = /(?<![\d-])(?<!\d\s)\d{3}-\d{8}(?![\d-])/g;
 const CUSTOMS_RE = /(?<![\d\-/.])\d{2}-\d{5}(?![\d\-/.])/g;
 
 function unique(values: string[]): string[] {

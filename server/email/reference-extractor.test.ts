@@ -42,6 +42,16 @@ describe("extractReferences", () => {
       procedureRefs: [], awbNumbers: [], customsFileNumbers: [], invoiceNumbers: [],
     });
   });
+
+  it("daha uzun bir rakam dizisinin içindeki AWB'yi yakalamaz", () => {
+    const r = extractReferences("Fatura tutarı 9235-51135254 olarak göründü");
+    expect(r.awbNumbers).toEqual([]);
+  });
+
+  it("gerçek AWB'yi cümle içinde yakalamaya devam eder", () => {
+    const r = extractReferences("AWB 235-51135254 bugün indi, 716-97206071 ise yarın");
+    expect(r.awbNumbers).toEqual(["235-51135254", "716-97206071"]);
+  });
 });
 
 describe("mergeRefs", () => {
