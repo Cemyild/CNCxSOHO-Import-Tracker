@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Redirect } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,13 +14,17 @@ import { EmailDetail } from "@/components/inbox/EmailDetail";
 import { InboxFilters, EMPTY_FILTERS, type InboxFilterState } from "@/components/inbox/InboxFilters";
 import type { AccountStatus, MessageListResponse } from "@/components/inbox/types";
 
-function buildQueryString(filters: InboxFilterState): string {
+const PAGE_SIZE = 50;
+
+function buildQueryString(filters: InboxFilterState, page: number): string {
   const params = new URLSearchParams();
   if (filters.status !== "all") params.set("status", filters.status);
   if (filters.urgency !== "all") params.set("urgency", filters.urgency);
   if (filters.category !== "all") params.set("category", filters.category);
   if (filters.matched !== "all") params.set("matched", filters.matched);
   if (filters.q.trim() !== "") params.set("q", filters.q.trim());
+  params.set("limit", String(PAGE_SIZE));
+  params.set("offset", String(page * PAGE_SIZE));
   return params.toString();
 }
 
@@ -32,32 +36,55 @@ export default function InboxPage() {
 
   const [filters, setFilters] = useState<InboxFilterState>(EMPTY_FILTERS);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
+
+  // Filtreler değişince sayfa 0'a dönsün; yoksa örneğin 3. sayfadayken
+  // filtre değiştirince boş bir sonuç sayfası görünebilir.
+  useEffect(() => {
+    setPage(0);
+  }, [filters]);
 
   const account = useQuery<AccountStatus>({
     queryKey: ["/api/email/account"],
     queryFn: async () => (await apiRequest("GET", "/api/email/account")).json(),
+    // Senkron arka planda çalışırken kısa aralıklarla yoklayıp bittiğinde
+    // mail listesini tazeleyebilelim (bkz. aşağıdaki useEffect).
+    refetchInterval: (query) => (query.state.data?.syncing ? 5000 : false),
   });
 
-  const queryString = buildQueryString(filters);
-  const messages = useQuery<MessageListResponse>({
-    queryKey: ["/api/email/messages", queryString],
-    queryFn: async () =>
-      (await apiRequest("GET", `/api/email/messages${queryString ? `?${queryString}` : ""}`)).json(),
+  // Bağlıyken takip edilen firma sayısı: gün birinde hesap bağlı ama hiç
+  // gönderen eklenmemişse kullanıcıyı bilgilendirmek için.
+  const senders = useQuery<Array<{ active: boolean }>>({
+    queryKey: ["/api/email/senders"],
+    queryFn: async () => (await apiRequest("GET", "/api/email/senders")).json(),
+    enabled: !!account.data?.connected,
   });
+  const hasActiveSender = (senders.data ?? []).some((s) => s.active);
+
+  const queryString = buildQueryString(filters, page);
+  const messages = useQuery<MessageListResponse>({
+    queryKey: ["/api/email/messages", queryString, page],
+    queryFn: async () => (await apiRequest("GET", `/api/email/messages?${queryString}`)).json(),
+  });
+
+  // Senkron artık arka planda çalışıyor (bkz. server/email/routes.ts POST /sync);
+  // "çalışıyor"dan "bitti"ye geçişi yakalayıp mail listesini o an tazeliyoruz.
+  const wasSyncing = useRef(false);
+  useEffect(() => {
+    const syncing = account.data?.syncing ?? false;
+    if (wasSyncing.current && !syncing) {
+      queryClient.invalidateQueries({ queryKey: ["/api/email/messages"] });
+    }
+    wasSyncing.current = syncing;
+  }, [account.data?.syncing, queryClient]);
 
   const sync = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", "/api/email/sync");
       return response.json();
     },
-    onSuccess: (result: { inserted: number; processed: number }) => {
-      toast({
-        description: t("emailInbox.syncDone", {
-          inserted: result.inserted ?? 0,
-          processed: result.processed ?? 0,
-        }),
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/email/messages"] });
+    onSuccess: () => {
+      toast({ description: t("emailInbox.syncStarted") });
       queryClient.invalidateQueries({ queryKey: ["/api/email/account"] });
     },
     onError: (error: Error) => {
@@ -69,6 +96,8 @@ export default function InboxPage() {
       });
     },
   });
+
+  const isSyncing = sync.isPending || Boolean(account.data?.syncing);
 
   const markRead = useMutation({
     mutationFn: async (id: number) =>
@@ -116,33 +145,73 @@ export default function InboxPage() {
           </Card>
         )}
 
+        {account.data?.connected && !hasActiveSender && (
+          <Card className="border-amber-400 p-4">
+            <p className="font-medium">{t("emailInbox.noSenders")}</p>
+            <p className="text-sm text-muted-foreground">{t("emailInbox.noSendersHelp")}</p>
+            <Button className="mt-2" variant="outline" size="sm" asChild>
+              <a href="/settings">{t("emailInbox.goToSettings")}</a>
+            </Button>
+          </Card>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-2">
           <InboxFilters value={filters} onChange={setFilters} />
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground">{lastSynced}</span>
-            <Button size="sm" onClick={() => sync.mutate()} disabled={sync.isPending}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${sync.isPending ? "animate-spin" : ""}`} />
-              {sync.isPending ? t("emailInbox.syncing") : t("emailInbox.syncNow")}
+            <Button size="sm" onClick={() => sync.mutate()} disabled={isSyncing}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+              {isSyncing ? t("emailInbox.syncing") : t("emailInbox.syncNow")}
             </Button>
           </div>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
-          <Card className="max-h-[70vh] overflow-y-auto">
-            {messages.isLoading ? (
-              <div className="flex justify-center p-6">
-                <Loader2 className="h-5 w-5 animate-spin" />
+          <div className="space-y-2">
+            <Card className="max-h-[70vh] overflow-y-auto">
+              {messages.isLoading ? (
+                <div className="flex justify-center p-6">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </div>
+              ) : messages.isError ? (
+                <p className="p-4 text-sm text-destructive">{t("emailInbox.loadError")}</p>
+              ) : (
+                <EmailList
+                  items={messages.data?.items ?? []}
+                  selectedId={selectedId}
+                  onSelect={handleSelect}
+                />
+              )}
+            </Card>
+
+            {messages.data && messages.data.total > PAGE_SIZE && (
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                >
+                  {t("emailInbox.previous")}
+                </Button>
+                <span>
+                  {t("emailInbox.pageInfo", {
+                    from: page * PAGE_SIZE + 1,
+                    to: Math.min((page + 1) * PAGE_SIZE, messages.data.total),
+                    total: messages.data.total,
+                  })}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={(page + 1) * PAGE_SIZE >= messages.data.total}
+                >
+                  {t("emailInbox.next")}
+                </Button>
               </div>
-            ) : messages.isError ? (
-              <p className="p-4 text-sm text-destructive">{t("emailInbox.loadError")}</p>
-            ) : (
-              <EmailList
-                items={messages.data?.items ?? []}
-                selectedId={selectedId}
-                onSelect={handleSelect}
-              />
             )}
-          </Card>
+          </div>
 
           <Card className="max-h-[70vh] overflow-y-auto">
             <EmailDetail emailId={selectedId} />

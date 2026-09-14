@@ -57,12 +57,17 @@ function neutralizeDelimiters(body: string): string {
 }
 
 function buildPrompt(input: SummarizeInput): string {
+  const fromName = neutralizeDelimiters(input.fromName);
+  const fromAddress = neutralizeDelimiters(input.fromAddress);
+  const subject = neutralizeDelimiters(input.subject);
+  const attachmentNames = input.attachmentNames.map(neutralizeDelimiters);
+
   return `Aşağıdaki iş mailini özetle.
 
-Gönderen: ${input.fromName} <${input.fromAddress}>
-Konu: ${input.subject}
+Gönderen: ${fromName} <${fromAddress}>
+Konu: ${subject}
 Tarih: ${input.sentAt.toISOString()}
-Ekler: ${input.attachmentNames.length > 0 ? input.attachmentNames.join(", ") : "yok"}
+Ekler: ${attachmentNames.length > 0 ? attachmentNames.join(", ") : "yok"}
 
 <mail_icerigi>
 ${neutralizeDelimiters(input.bodyText)}

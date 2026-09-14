@@ -78,10 +78,27 @@ export function EmailDetail({ emailId }: Props) {
   });
 
   const reprocess = useMutation({
-    mutationFn: async () => apiRequest("POST", `/api/email/messages/${emailId}/reprocess`),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/email/messages/${emailId}/reprocess`);
+      return response.json();
+    },
+    onSuccess: (result: { skipped?: "no-account" | "no-senders" | "error" }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/email/messages", emailId] });
       queryClient.invalidateQueries({ queryKey: ["/api/email/messages"] });
+
+      // /reprocess resets the row then runs a synchronous sync round; that
+      // round can itself be a no-op (disconnected account, empty sender
+      // list) or fail outright, and the "özetlenemedi" badge would then
+      // never move again unless we surface that here.
+      if (result.skipped === "no-senders") {
+        toast({ variant: "destructive", description: t("emailInbox.noSendersHelp") });
+      } else if (result.skipped === "no-account") {
+        toast({ variant: "destructive", description: t("emailInbox.notConnectedHelp") });
+      } else if (result.skipped === "error") {
+        toast({ variant: "destructive", description: t("emailInbox.syncFailed") });
+      } else {
+        toast({ description: t("emailInbox.detail.retryQueued") });
+      }
     },
     onError: (error: Error) => {
       toast({

@@ -235,15 +235,17 @@ router.post("/messages/:id/reprocess", requireRole("admin"), async (req, res) =>
 // --- Manuel senkron ----------------------------------------------------------
 
 router.post("/sync", requireRole("admin"), async (_req, res) => {
-  try {
-    const result = await runSync();
-    if (result.skipped === "already-running") {
-      return res.status(409).json({ message: "Senkron zaten çalışıyor", ...result });
-    }
-    return res.json(result);
-  } catch (error) {
-    return fail(res, error);
+  if (isSyncRunning()) {
+    return res.status(409).json({ message: "Senkron zaten çalışıyor" });
   }
+  // Tam bir tur dakikalar sürebilir (ilk dolumda 7 günlük mail + Claude
+  // çağrıları); ters vekil sunucu ~60 saniyede bağlantıyı keser. Bu yüzden
+  // işi başlatıp hemen cevap veriyoruz, ilerleme /account'taki `syncing`
+  // alanından izleniyor.
+  void runSync().catch((error) => {
+    console.error("[email-inbox] arka plan senkronu başarısız:", error);
+  });
+  return res.status(202).json({ started: true });
 });
 
 // --- Ekler -------------------------------------------------------------------

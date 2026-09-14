@@ -57,17 +57,27 @@ jobs:
               echo "[deploy] ERROR: SESSION_SECRET not in .env and no GitHub secret set. App will fail to start. Add it via Settings -> Secrets."
             fi
 
-            echo "[deploy] === 3c. Gmail entegrasyonu (idempotent) ==="
-            if grep -q '^GOOGLE_CLIENT_ID=' .env; then
-              echo "[deploy] Gmail env vars already in .env, leaving as-is"
-            elif [ -n "$GOOGLE_CLIENT_ID" ] && [ -n "$GOOGLE_CLIENT_SECRET" ] && [ -n "$EMAIL_TOKEN_ENC_KEY" ]; then
-              printf "\n# Gmail inbox - auto-injected by deploy workflow\nGOOGLE_CLIENT_ID=%s\nGOOGLE_CLIENT_SECRET=%s\nEMAIL_TOKEN_ENC_KEY=%s\nGOOGLE_OAUTH_REDIRECT_URI=%s\n" \
-                "$GOOGLE_CLIENT_ID" "$GOOGLE_CLIENT_SECRET" "$EMAIL_TOKEN_ENC_KEY" \
-                "https://cncsohoimportmanager.com/api/email/google/callback" >> .env
-              echo "[deploy] Gmail env vars added to .env"
-            else
-              echo "[deploy] WARNING: Gmail secrets not set in GitHub. Mail takibi devre dışı kalır."
-            fi
+            echo "[deploy] === 3c. Gmail entegrasyonu (idempotent, degisken bazinda) ==="
+            # Her degisken bagimsiz kontrol edilir: .env'de zaten varsa dokunulmaz,
+            # yoksa ve GitHub secret'i geldiyse eklenir, o da yoksa uyarilir. Bu sayede
+            # bir sirrin (ornegin client secret) tek basina rotasyonu VPS'e yansir; eski
+            # kod hepsini tek blokta atlayip yalniz GOOGLE_CLIENT_ID varligina bakiyordu.
+            add_env_if_missing() {
+              key="$1"
+              value="$2"
+              if grep -q "^${key}=" .env; then
+                echo "[deploy] ${key} already in .env, leaving as-is"
+              elif [ -n "$value" ]; then
+                printf "\n# Gmail inbox - auto-injected by deploy workflow\n%s=%s\n" "$key" "$value" >> .env
+                echo "[deploy] ${key} added to .env"
+              else
+                echo "[deploy] WARNING: ${key} not set in GitHub secrets. Mail takibi devre disi kalabilir."
+              fi
+            }
+            add_env_if_missing GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID"
+            add_env_if_missing GOOGLE_CLIENT_SECRET "$GOOGLE_CLIENT_SECRET"
+            add_env_if_missing EMAIL_TOKEN_ENC_KEY "$EMAIL_TOKEN_ENC_KEY"
+            add_env_if_missing GOOGLE_OAUTH_REDIRECT_URI "https://cncsohoimportmanager.com/api/email/google/callback"
 
             echo "[deploy] === 4. Apply DB DDL from db/manual-ddl/ (idempotent) ==="
             # VPS has no psql; apply via node + tsx (installed by npm install above)
