@@ -13,7 +13,8 @@
     "askCnc": "Ask CNC?",
     "invoiceMaker": "Invoice Maker",
     "emailInbox": "Email Inbox",
-    "settings": "Settings"
+    "settings": "Settings",
+    "procedureMails": "Procedure Mails"
   },
   "common": {
     "selectPlaceholder": "Select {{label}}...",
@@ -1119,6 +1120,12 @@
       "attachmentAlreadyHandled": "This attachment has already been handled",
       "documentType": "Document type",
       "tooLarge": "Attachment is larger than 25 MB; download it from Gmail"
+    },
+    "thread": {
+      "messageCount": "{{count}} emails",
+      "openActions": "{{count}} to do",
+      "expand": "Expand conversation",
+      "collapse": "Collapse conversation"
     }
   },
   "mailSettings": {
@@ -2952,6 +2959,46 @@
       "uploaded": "Uploaded",
       "procedure": "Procedure",
       "actions": "Actions"
+    }
+  },
+  "procedureMails": {
+    "title": "Procedure Mails",
+    "description": "Procedures that have received mail. Open one to see its documents, emails and to-dos together.",
+    "empty": "No email has been matched to a procedure yet.",
+    "emptyHelp": "Link an email to a procedure from the Email Inbox page and it will appear here.",
+    "loadError": "Could not load procedures",
+    "backToList": "Back to the procedure list",
+    "columns": {
+      "reference": "Procedure",
+      "shipper": "Shipper",
+      "mails": "Emails",
+      "todos": "Open to-dos",
+      "attachments": "Unsaved files",
+      "lastMail": "Last email"
+    },
+    "sections": {
+      "documents": "Documents",
+      "mails": "Emails",
+      "todos": "To-dos"
+    },
+    "documents": {
+      "empty": "No documents on this procedure",
+      "fromMail": "From email",
+      "fromProcedure": "Procedure document",
+      "saved": "Saved",
+      "pending": "Not saved",
+      "dismissed": "Not relevant",
+      "openMail": "Open the source email"
+    },
+    "todos": {
+      "empty": "Nothing to do on this procedure",
+      "done": "Completed",
+      "fromMail": "Source email",
+      "saveFailed": "Could not save"
+    },
+    "mails": {
+      "empty": "No emails for this procedure",
+      "open": "Open in Email Inbox"
     }
   }
 }

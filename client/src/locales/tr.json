@@ -13,7 +13,8 @@
     "askCnc": "CNC'ye Sor",
     "invoiceMaker": "Fatura Oluşturucu",
     "emailInbox": "Mail Takibi",
-    "settings": "Ayarlar"
+    "settings": "Ayarlar",
+    "procedureMails": "İşlem Mailleri"
   },
   "common": {
     "selectPlaceholder": "{{label}} seçin...",
@@ -1119,6 +1120,12 @@
       "attachmentAlreadyHandled": "Bu ek zaten işlendi",
       "documentType": "Belge türü",
       "tooLarge": "Ek 25 MB'tan büyük; Gmail'den elle indirin"
+    },
+    "thread": {
+      "messageCount": "{{count}} mail",
+      "openActions": "{{count}} iş",
+      "expand": "Konuşmayı aç",
+      "collapse": "Konuşmayı kapat"
     }
   },
   "mailSettings": {
@@ -2952,6 +2959,46 @@
       "uploaded": "Yükleme",
       "procedure": "Prosedür",
       "actions": "İşlemler"
+    }
+  },
+  "procedureMails": {
+    "title": "İşlem Mailleri",
+    "description": "Mail gelen işlemler. Bir işleme girince o işlemin belgeleri, mailleri ve yapılacakları bir arada görünür.",
+    "empty": "Henüz hiçbir mail bir işlemle eşleşmedi.",
+    "emptyHelp": "Mail Takibi sayfasından bir maili elle bir işleme bağlarsan burada görünür.",
+    "loadError": "İşlemler yüklenemedi",
+    "backToList": "İşlem listesine dön",
+    "columns": {
+      "reference": "İşlem",
+      "shipper": "Gönderici",
+      "mails": "Mail",
+      "todos": "Bekleyen iş",
+      "attachments": "Bekleyen ek",
+      "lastMail": "Son mail"
+    },
+    "sections": {
+      "documents": "Belgeler",
+      "mails": "Mailler",
+      "todos": "Yapılacaklar"
+    },
+    "documents": {
+      "empty": "Bu işlemde belge yok",
+      "fromMail": "Mailden",
+      "fromProcedure": "İşlem belgesi",
+      "saved": "Kaydedildi",
+      "pending": "Kaydedilmedi",
+      "dismissed": "İlgisiz",
+      "openMail": "Geldiği maili aç"
+    },
+    "todos": {
+      "empty": "Bu işlemde yapılacak iş yok",
+      "done": "Tamamlananlar",
+      "fromMail": "Kaynak mail",
+      "saveFailed": "Kaydedilemedi"
+    },
+    "mails": {
+      "empty": "Bu işleme ait mail yok",
+      "open": "Mail Takibi'nde aç"
     }
   }
 }

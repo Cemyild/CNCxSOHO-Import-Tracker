@@ -33,6 +33,7 @@ import StorageCalculatorPage from "@/pages/storage-calculator";
 import BulkDownloadPage from "@/pages/bulk-download";
 import InvoiceMakerPage from "@/pages/invoice-maker";
 import InboxPage from "@/pages/inbox";
+import ProcedureMailsPage from "@/pages/procedure-mails";
 import TareksReportsPage from "@/pages/tareks-reports";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
@@ -236,6 +237,13 @@ function Router() {
         {() => (
           <ProtectedRoute>
             <InboxPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/procedure-mails">
+        {() => (
+          <ProtectedRoute>
+            <ProcedureMailsPage />
           </ProtectedRoute>
         )}
       </Route>

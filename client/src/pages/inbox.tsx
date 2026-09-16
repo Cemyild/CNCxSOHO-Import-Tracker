@@ -9,10 +9,10 @@ import { Card } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { EmailList } from "@/components/inbox/EmailList";
+import { ThreadList } from "@/components/inbox/ThreadList";
 import { EmailDetail } from "@/components/inbox/EmailDetail";
 import { InboxFilters, EMPTY_FILTERS, type InboxFilterState } from "@/components/inbox/InboxFilters";
-import type { AccountStatus, MessageListResponse } from "@/components/inbox/types";
+import type { AccountStatus, ThreadListResponse } from "@/components/inbox/types";
 
 const PAGE_SIZE = 50;
 
@@ -62,8 +62,8 @@ export default function InboxPage() {
   const hasActiveSender = (senders.data ?? []).some((s) => s.active);
 
   const queryString = buildQueryString(filters, page);
-  const messages = useQuery<MessageListResponse>({
-    queryKey: ["/api/email/messages", queryString, page],
+  const messages = useQuery<ThreadListResponse>({
+    queryKey: ["/api/email/threads", queryString, page],
     queryFn: async () => (await apiRequest("GET", `/api/email/messages?${queryString}`)).json(),
   });
 
@@ -74,6 +74,7 @@ export default function InboxPage() {
     const syncing = account.data?.syncing ?? false;
     if (wasSyncing.current && !syncing) {
       queryClient.invalidateQueries({ queryKey: ["/api/email/messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/email/threads"] });
     }
     wasSyncing.current = syncing;
   }, [account.data?.syncing, queryClient]);
@@ -102,13 +103,18 @@ export default function InboxPage() {
   const markRead = useMutation({
     mutationFn: async (id: number) =>
       apiRequest("PATCH", `/api/email/messages/${id}`, { status: "read" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/email/messages"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/email/messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/email/threads"] });
+    },
   });
 
-  const handleSelect = (id: number) => {
+  // Durumu çağıran taraf veriyor: seçilen mail bir konuşmanın içinden de
+  // gelebiliyor ve o zaman listede karşılığı bulunmuyor. "done" olan bir maili
+  // yeniden "read" yapmamak için yalnızca "new" olanı işaretliyoruz.
+  const handleSelect = (id: number, status?: string) => {
     setSelectedId(id);
-    const item = messages.data?.items.find((m) => m.id === id);
-    if (item?.status === "new") markRead.mutate(id);
+    if (status === "new") markRead.mutate(id);
   };
 
   if (authLoading) {
@@ -176,7 +182,7 @@ export default function InboxPage() {
               ) : messages.isError ? (
                 <p className="p-4 text-sm text-destructive">{t("emailInbox.loadError")}</p>
               ) : (
-                <EmailList
+                <ThreadList
                   items={messages.data?.items ?? []}
                   selectedId={selectedId}
                   onSelect={handleSelect}

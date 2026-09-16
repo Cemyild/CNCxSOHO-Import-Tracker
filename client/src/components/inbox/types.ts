@@ -55,3 +55,68 @@ export interface MessageDetail extends MessageListItem {
   procedureShipper: string | null;
   attachments: AttachmentItem[];
 }
+
+export interface ThreadListItem {
+  threadId: string;
+  latestEmailId: number;
+  subject: string | null;
+  fromName: string | null;
+  fromAddress: string | null;
+  lastSentAt: string | null;
+  summary: string | null;
+  category: string | null;
+  urgency: string | null;
+  status: string;
+  aiStatus: string;
+  messageCount: number;
+  unreadCount: number;
+  openActionCount: number;
+  hasAttachments: boolean;
+  procedureId: number | null;
+  procedureReference: string | null;
+}
+
+export interface ThreadListResponse {
+  items: ThreadListItem[];
+  total: number;
+}
+
+export interface ProcedureMailSummary {
+  procedureId: number;
+  reference: string | null;
+  shipper: string | null;
+  messageCount: number;
+  threadCount: number;
+  openActionCount: number;
+  unreadCount: number;
+  pendingAttachmentCount: number;
+  lastMailAt: string | null;
+}
+
+export interface ProcedureMailDocument {
+  source: "procedure" | "email";
+  id: number;
+  name: string | null;
+  type: string | null;
+  createdAt: string | null;
+  emailId: number | null;
+  emailSubject: string | null;
+  status: string | null;
+  sizeBytes: number | null;
+}
+
+export interface ProcedureActionItem {
+  emailId: number;
+  emailSubject: string | null;
+  sentAt: string | null;
+  itemId: string;
+  text: string;
+  done: boolean;
+}
+
+export interface ProcedureMailDetail {
+  summary: ProcedureMailSummary;
+  documents: ProcedureMailDocument[];
+  actionItems: ProcedureActionItem[];
+  threads: ThreadListItem[];
+}
