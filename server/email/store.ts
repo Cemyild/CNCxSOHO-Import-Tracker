@@ -223,6 +223,28 @@ export async function insertAttachments(
  */
 export type PendingEmail = EmailRow & { attachmentNames: string[] };
 
+/**
+ * Konu kimliği kendi mail kimliğine eşit olan kayıtlar: bunlar Gmail konu
+ * kimliği çekilmeden önce kaydedilmişti, senkron turu bunları onarıyor.
+ */
+export async function listMessagesNeedingThreadId(
+  limit: number,
+): Promise<Array<{ id: number; gmailMessageId: string }>> {
+  return db
+    .select({ id: emails.id, gmailMessageId: emails.gmailMessageId })
+    .from(emails)
+    .where(sql`${emails.gmailThreadId} = ${emails.gmailMessageId}`)
+    .orderBy(desc(emails.id))
+    .limit(limit);
+}
+
+export async function setThreadId(id: number, threadId: string): Promise<void> {
+  await db
+    .update(emails)
+    .set({ gmailThreadId: threadId, updatedAt: new Date() })
+    .where(eq(emails.id, id));
+}
+
 export async function listPendingForAi(limit: number): Promise<PendingEmail[]> {
   const rows = await db
     .select({
@@ -312,6 +334,7 @@ function filterConditions(filter: MessageFilter) {
   if (filter.urgency) conditions.push(eq(emails.urgency, filter.urgency));
   if (filter.matched === "yes") conditions.push(sql`${emails.procedureId} IS NOT NULL`);
   if (filter.matched === "no") conditions.push(sql`${emails.procedureId} IS NULL`);
+  if (filter.procedureId !== undefined) conditions.push(eq(emails.procedureId, filter.procedureId));
   if (filter.sender) {
     conditions.push(
       sql`${emails.fromAddress} ILIKE ${`%${escapeLikePattern(filter.sender)}%`} ESCAPE '\\'`,
@@ -462,4 +485,295 @@ export async function getProcedureReference(procedureId: number): Promise<string
     .where(eq(procedures.id, procedureId))
     .limit(1);
   return row?.reference ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Konuşma (thread) bazlı liste ve prosedür özetleri
+// ---------------------------------------------------------------------------
+
+export interface ThreadListItem {
+  threadId: string;
+  latestEmailId: number;
+  subject: string | null;
+  fromName: string | null;
+  fromAddress: string | null;
+  lastSentAt: Date | null;
+  summary: string | null;
+  category: string | null;
+  urgency: string | null;
+  status: string;
+  aiStatus: string;
+  messageCount: number;
+  unreadCount: number;
+  openActionCount: number;
+  hasAttachments: boolean;
+  procedureId: number | null;
+  procedureReference: string | null;
+}
+
+/**
+ * Aynı konuşmadaki mailleri tek satırda toplar. Filtre bir konuşmanın
+ * HERHANGİ bir mailine uyuyorsa konuşma listeye girer; gösterilen bilgiler
+ * konuşmanın en son mailinden gelir.
+ */
+export async function listThreads(
+  filter: MessageFilter,
+): Promise<{ items: ThreadListItem[]; total: number }> {
+  const conditions = filterConditions(filter);
+  const where = conditions.length > 0 ? and(...conditions) : sql`TRUE`;
+
+  const matching = sql`
+    SELECT DISTINCT ${emails.gmailThreadId} AS thread_id
+    FROM ${emails}
+    WHERE ${where}
+  `;
+
+  const rows = await db.execute<{
+    thread_id: string;
+    latest_email_id: number;
+    subject: string | null;
+    from_name: string | null;
+    from_address: string | null;
+    last_sent_at: Date | null;
+    summary: string | null;
+    category: string | null;
+    urgency: string | null;
+    status: string;
+    ai_status: string;
+    message_count: number;
+    unread_count: number;
+    open_action_count: number;
+    has_attachments: boolean;
+    procedure_id: number | null;
+    procedure_reference: string | null;
+  }>(sql`
+    WITH matching AS (${matching}),
+    agg AS (
+      SELECT e.gmail_thread_id,
+             COUNT(*)::int AS message_count,
+             COUNT(*) FILTER (WHERE e.status = 'new')::int AS unread_count,
+             BOOL_OR(e.has_attachments) AS has_attachments,
+             MAX(e.sent_at) AS last_sent_at,
+             COALESCE(SUM((
+               SELECT COUNT(*) FROM jsonb_array_elements(COALESCE(e.action_items, '[]'::jsonb)) ai
+               WHERE COALESCE((ai->>'done')::boolean, false) = false
+             )), 0)::int AS open_action_count
+      FROM emails e
+      WHERE e.gmail_thread_id IN (SELECT thread_id FROM matching)
+      GROUP BY e.gmail_thread_id
+    )
+    SELECT agg.gmail_thread_id AS thread_id,
+           agg.message_count, agg.unread_count, agg.has_attachments,
+           agg.last_sent_at, agg.open_action_count,
+           latest.id AS latest_email_id, latest.subject, latest.from_name,
+           latest.from_address, latest.summary, latest.category, latest.urgency,
+           latest.status, latest.ai_status, latest.procedure_id,
+           p.reference AS procedure_reference
+    FROM agg
+    JOIN LATERAL (
+      SELECT * FROM emails e2
+      WHERE e2.gmail_thread_id = agg.gmail_thread_id
+      ORDER BY e2.sent_at DESC NULLS LAST, e2.id DESC
+      LIMIT 1
+    ) latest ON TRUE
+    LEFT JOIN procedures p ON p.id = latest.procedure_id
+    ORDER BY agg.last_sent_at DESC NULLS LAST
+    LIMIT ${filter.limit} OFFSET ${filter.offset}
+  `);
+
+  const [{ value }] = await db
+    .select({ value: count() })
+    .from(sql`(${matching}) AS m` as any);
+
+  return {
+    items: (rows.rows ?? []).map((r) => ({
+      threadId: r.thread_id,
+      latestEmailId: r.latest_email_id,
+      subject: r.subject,
+      fromName: r.from_name,
+      fromAddress: r.from_address,
+      lastSentAt: r.last_sent_at,
+      summary: r.summary,
+      category: r.category,
+      urgency: r.urgency,
+      status: r.status,
+      aiStatus: r.ai_status,
+      messageCount: Number(r.message_count),
+      unreadCount: Number(r.unread_count),
+      openActionCount: Number(r.open_action_count),
+      hasAttachments: r.has_attachments,
+      procedureId: r.procedure_id,
+      procedureReference: r.procedure_reference,
+    })),
+    total: Number(value),
+  };
+}
+
+/** Bir konuşmadaki mailler, eskiden yeniye. */
+export async function listThreadMessages(threadId: string): Promise<MessageListItem[]> {
+  return db
+    .select({
+      id: emails.id,
+      fromName: emails.fromName,
+      fromAddress: emails.fromAddress,
+      subject: emails.subject,
+      sentAt: emails.sentAt,
+      summary: emails.summary,
+      category: emails.category,
+      urgency: emails.urgency,
+      status: emails.status,
+      aiStatus: emails.aiStatus,
+      hasAttachments: emails.hasAttachments,
+      procedureId: emails.procedureId,
+      procedureReference: procedures.reference,
+    })
+    .from(emails)
+    .leftJoin(procedures, eq(emails.procedureId, procedures.id))
+    .where(eq(emails.gmailThreadId, threadId))
+    .orderBy(emails.sentAt, emails.id);
+}
+
+export interface ProcedureMailSummary {
+  procedureId: number;
+  reference: string | null;
+  shipper: string | null;
+  messageCount: number;
+  threadCount: number;
+  openActionCount: number;
+  unreadCount: number;
+  pendingAttachmentCount: number;
+  lastMailAt: Date | null;
+}
+
+/** Maili olan işlemler, en son mail alanı üstte. */
+export async function listProceduresWithMail(): Promise<ProcedureMailSummary[]> {
+  const rows = await db.execute<{
+    procedure_id: number;
+    reference: string | null;
+    shipper: string | null;
+    message_count: number;
+    thread_count: number;
+    open_action_count: number;
+    unread_count: number;
+    pending_attachment_count: number;
+    last_mail_at: Date | null;
+  }>(sql`
+    SELECT e.procedure_id,
+           p.reference,
+           p.shipper,
+           COUNT(*)::int AS message_count,
+           COUNT(DISTINCT e.gmail_thread_id)::int AS thread_count,
+           COUNT(*) FILTER (WHERE e.status = 'new')::int AS unread_count,
+           MAX(e.sent_at) AS last_mail_at,
+           COALESCE(SUM((
+             SELECT COUNT(*) FROM jsonb_array_elements(COALESCE(e.action_items, '[]'::jsonb)) ai
+             WHERE COALESCE((ai->>'done')::boolean, false) = false
+           )), 0)::int AS open_action_count,
+           COALESCE(SUM((
+             SELECT COUNT(*) FROM email_attachments a
+             WHERE a.email_id = e.id AND a.status = 'pending'
+           )), 0)::int AS pending_attachment_count
+    FROM emails e
+    JOIN procedures p ON p.id = e.procedure_id
+    WHERE e.procedure_id IS NOT NULL
+    GROUP BY e.procedure_id, p.reference, p.shipper
+    ORDER BY MAX(e.sent_at) DESC NULLS LAST
+  `);
+
+  return (rows.rows ?? []).map((r) => ({
+    procedureId: r.procedure_id,
+    reference: r.reference,
+    shipper: r.shipper,
+    messageCount: Number(r.message_count),
+    threadCount: Number(r.thread_count),
+    openActionCount: Number(r.open_action_count),
+    unreadCount: Number(r.unread_count),
+    pendingAttachmentCount: Number(r.pending_attachment_count),
+    lastMailAt: r.last_mail_at,
+  }));
+}
+
+export interface ProcedureMailDocument {
+  source: "procedure" | "email";
+  /** procedure_documents.id ya da email_attachments.id */
+  id: number;
+  name: string | null;
+  type: string | null;
+  createdAt: Date | null;
+  /** Yalnızca mailden gelenlerde dolu */
+  emailId: number | null;
+  emailSubject: string | null;
+  status: string | null;
+  sizeBytes: number | null;
+}
+
+/** İşlemin kendi belgeleri ve maillerinden gelen ekler tek listede. */
+export async function listProcedureDocuments(
+  procedureId: number,
+): Promise<ProcedureMailDocument[]> {
+  const own = await db.execute<any>(sql`
+    SELECT 'procedure' AS source, d.id, d.name, d.type, d.created_at,
+           NULL::int AS email_id, NULL::text AS email_subject,
+           NULL::text AS status, NULL::int AS size_bytes
+    FROM procedure_documents d
+    WHERE d.procedure_id = ${procedureId}
+    ORDER BY d.created_at DESC NULLS LAST
+  `);
+
+  const fromMail = await db.execute<any>(sql`
+    SELECT 'email' AS source, a.id, a.filename AS name, a.mime_type AS type,
+           a.created_at, a.email_id, e.subject AS email_subject,
+           a.status, a.size_bytes
+    FROM email_attachments a
+    JOIN emails e ON e.id = a.email_id
+    WHERE e.procedure_id = ${procedureId}
+    ORDER BY a.created_at DESC NULLS LAST
+  `);
+
+  const map = (r: any): ProcedureMailDocument => ({
+    source: r.source,
+    id: Number(r.id),
+    name: r.name,
+    type: r.type,
+    createdAt: r.created_at,
+    emailId: r.email_id === null ? null : Number(r.email_id),
+    emailSubject: r.email_subject,
+    status: r.status,
+    sizeBytes: r.size_bytes === null ? null : Number(r.size_bytes),
+  });
+
+  return [...(own.rows ?? []).map(map), ...(fromMail.rows ?? []).map(map)];
+}
+
+export interface ProcedureActionItem {
+  emailId: number;
+  emailSubject: string | null;
+  sentAt: Date | null;
+  itemId: string;
+  text: string;
+  done: boolean;
+}
+
+/** İşlemin bütün maillerinden çıkan yapılacaklar, tek listede. */
+export async function listProcedureActionItems(
+  procedureId: number,
+): Promise<ProcedureActionItem[]> {
+  const rows = await db.execute<any>(sql`
+    SELECT e.id AS email_id, e.subject AS email_subject, e.sent_at,
+           ai->>'id' AS item_id, ai->>'text' AS text,
+           COALESCE((ai->>'done')::boolean, false) AS done
+    FROM emails e,
+         jsonb_array_elements(COALESCE(e.action_items, '[]'::jsonb)) ai
+    WHERE e.procedure_id = ${procedureId}
+    ORDER BY COALESCE((ai->>'done')::boolean, false), e.sent_at DESC NULLS LAST
+  `);
+
+  return (rows.rows ?? []).map((r: any) => ({
+    emailId: Number(r.email_id),
+    emailSubject: r.email_subject,
+    sentAt: r.sent_at,
+    itemId: r.item_id ?? "",
+    text: r.text ?? "",
+    done: r.done === true,
+  }));
 }

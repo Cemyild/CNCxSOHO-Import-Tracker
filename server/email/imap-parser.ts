@@ -43,8 +43,8 @@ function filenameOf(node: ImapStructureNode): string {
   return node.dispositionParameters?.filename ?? node.parameters?.name ?? "";
 }
 
-/** Outlook ve Gmail imza resimlerini image001.png gibi adlandırır. */
-const AUTO_IMAGE_NAME = /^image\d+\.(png|jpe?g|gif|bmp)$/i;
+/** Outlook ve Gmail imza resimlerini image001.png ya da image.png diye adlandırır. */
+const AUTO_IMAGE_NAME = /^image\d*\.(png|jpe?g|gif|bmp)$/i;
 
 /**
  * Mail imzasındaki logo/resim mi? Bu parçalar gövdenin içinde gösterilmek

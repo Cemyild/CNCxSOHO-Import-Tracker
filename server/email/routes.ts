@@ -295,4 +295,60 @@ router.get("/document-types", requireRole("admin"), async (_req, res) => {
   }
 });
 
+// --- Konuşmalar (aynı konudaki mailler) --------------------------------------
+
+router.get("/threads", requireRole("admin"), async (req, res) => {
+  try {
+    return res.json(await store.listThreads(readMessageFilter(req.query as any)));
+  } catch (error) {
+    return fail(res, error);
+  }
+});
+
+router.get("/threads/:threadId", requireRole("admin"), async (req, res) => {
+  try {
+    const threadId = String(req.params.threadId ?? "").trim();
+    if (threadId === "" || threadId.length > 200) {
+      return res.status(400).json({ message: "Geçersiz konuşma" });
+    }
+    return res.json(await store.listThreadMessages(threadId));
+  } catch (error) {
+    return fail(res, error);
+  }
+});
+
+// --- İşlem bazlı mail görünümü -----------------------------------------------
+
+router.get("/procedures", requireRole("admin"), async (_req, res) => {
+  try {
+    return res.json(await store.listProceduresWithMail());
+  } catch (error) {
+    return fail(res, error);
+  }
+});
+
+router.get("/procedures/:id", requireRole("admin"), async (req, res) => {
+  try {
+    const procedureId = parseId(req.params.id);
+    if (procedureId === null) {
+      return res.status(400).json({ message: "Geçersiz işlem numarası" });
+    }
+
+    const [summary] = (await store.listProceduresWithMail()).filter(
+      (p) => p.procedureId === procedureId,
+    );
+    if (!summary) return res.status(404).json({ message: "Bu işleme ait mail yok" });
+
+    const [documents, actionItems, threads] = await Promise.all([
+      store.listProcedureDocuments(procedureId),
+      store.listProcedureActionItems(procedureId),
+      store.listThreads({ procedureId, limit: 100, offset: 0 }),
+    ]);
+
+    return res.json({ summary, documents, actionItems, threads: threads.items });
+  } catch (error) {
+    return fail(res, error);
+  }
+});
+
 export default router;

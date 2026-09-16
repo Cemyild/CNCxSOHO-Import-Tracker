@@ -12,6 +12,7 @@ export interface MessageFilter {
   matched?: "yes" | "no";
   sender?: string;
   q?: string;
+  procedureId?: number;
   limit: number;
   offset: number;
 }
@@ -50,6 +51,8 @@ export function readMessageFilter(query: Record<string, unknown>): MessageFilter
   if (sender) filter.sender = sender;
   const q = text(query.q);
   if (q) filter.q = q;
+  const procedureId = parseId(query.procedureId);
+  if (procedureId !== null) filter.procedureId = procedureId;
 
   return filter;
 }

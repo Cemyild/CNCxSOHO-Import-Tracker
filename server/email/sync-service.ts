@@ -16,6 +16,8 @@ import {
 export const OVERLAP_MS = 10 * 60 * 1000;
 export const FIRST_RUN_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 export const MAX_AI_PER_RUN = 30;
+/** Tur başına onarılacak eksik konu kimliği sayısı. */
+export const MAX_THREAD_REPAIR_PER_RUN = 50;
 
 export interface SyncResult {
   fetched: number;
@@ -104,6 +106,25 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
         console.error(`[email-inbox] mail ${id} alınamadı:`, message);
         result.failed++;
       }
+    }
+
+    // 1b) Konu kimliği eksik eski kayıtları onar. Gmail konu kimliği sonradan
+    // eklendiği için ilk sürümde kaydedilen mailler gruplanamıyor; IMAP
+    // bağlantısı zaten açıkken bunları tamamlıyoruz. Buradaki hata turu bozmaz.
+    try {
+      const needRepair = await store.listMessagesNeedingThreadId(MAX_THREAD_REPAIR_PER_RUN);
+      for (const row of needRepair) {
+        try {
+          const parsed = await mail.getMessage(row.gmailMessageId);
+          if (parsed.gmailThreadId && parsed.gmailThreadId !== row.gmailMessageId) {
+            await store.setThreadId(row.id, parsed.gmailThreadId);
+          }
+        } catch (error) {
+          console.error(`[email-inbox] konu kimliği onarılamadı (${row.gmailMessageId}):`, error);
+        }
+      }
+    } catch (error) {
+      console.error("[email-inbox] konu kimliği onarım adımı atlandı:", error);
     }
 
     // Liste adımı sorunsuz bittiyse zaman damgasını ilerlet.

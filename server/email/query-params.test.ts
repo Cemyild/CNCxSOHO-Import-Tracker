@@ -36,6 +36,15 @@ describe("readMessageFilter", () => {
     expect(readMessageFilter({ q: "   " }).q).toBeUndefined();
   });
 
+  it("işlem numarasını okur", () => {
+    expect(readMessageFilter({ procedureId: "42" }).procedureId).toBe(42);
+  });
+
+  it("geçersiz işlem numarasını yok sayar", () => {
+    expect(readMessageFilter({ procedureId: "abc" }).procedureId).toBeUndefined();
+    expect(readMessageFilter({ procedureId: "0" }).procedureId).toBeUndefined();
+  });
+
   it("ondalıklı limiti aşağı yuvarlar", () => {
     expect(readMessageFilter({ limit: "50.7" }).limit).toBe(50);
   });

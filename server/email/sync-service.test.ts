@@ -52,6 +52,8 @@ function makeDeps(overrides: any = {}) {
     }),
     markAccountSynced: vi.fn().mockResolvedValue(undefined),
     markAccountError: vi.fn().mockResolvedValue(undefined),
+    listMessagesNeedingThreadId: vi.fn().mockResolvedValue([]),
+    setThreadId: vi.fn().mockResolvedValue(undefined),
     ...overrides.store,
   };
 
@@ -275,6 +277,48 @@ describe("runSync", () => {
     await runSync({ ...deps, now: () => now });
     const query = mail.listMessageIds.mock.calls[0][0] as string;
     expect(query).toContain(`after:${Math.floor((now.getTime() - 10 * 60 * 1000) / 1000)}`);
+  });
+
+  it("konu kimliği eksik maillerin kimliğini tamamlar", async () => {
+    const { deps, store, mail } = makeDeps({
+      store: {
+        listMessagesNeedingThreadId: vi.fn().mockResolvedValue([
+          { id: 7, gmailMessageId: "m7" },
+          { id: 8, gmailMessageId: "m8" },
+        ]),
+      },
+      mail: {
+        listMessageIds: vi.fn().mockResolvedValue([]),
+        getMessage: vi
+          .fn()
+          .mockResolvedValueOnce({ ...mailMessage("m7", "konu", "g"), gmailThreadId: "T1" })
+          .mockResolvedValueOnce({ ...mailMessage("m8", "konu", "g"), gmailThreadId: "T1" }),
+      },
+    });
+
+    await runSync(deps);
+
+    expect(store.setThreadId).toHaveBeenCalledWith(7, "T1");
+    expect(store.setThreadId).toHaveBeenCalledWith(8, "T1");
+    expect(store.markAccountSynced).toHaveBeenCalledTimes(1);
+  });
+
+  it("konu kimliği tamamlanamazsa tur yine biter", async () => {
+    const { deps, store } = makeDeps({
+      store: {
+        listMessagesNeedingThreadId: vi.fn().mockResolvedValue([{ id: 7, gmailMessageId: "m7" }]),
+      },
+      mail: {
+        listMessageIds: vi.fn().mockResolvedValue([]),
+        getMessage: vi.fn().mockRejectedValue(new Error("mail silinmiş")),
+      },
+    });
+
+    const result = await runSync(deps);
+
+    expect(result.skipped).toBeUndefined();
+    expect(store.setThreadId).not.toHaveBeenCalled();
+    expect(store.markAccountSynced).toHaveBeenCalledTimes(1);
   });
 
   it("aynı anda ikinci kez çağrılırsa ikincisi atlanır", async () => {

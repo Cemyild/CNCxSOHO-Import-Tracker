@@ -165,6 +165,10 @@ describe("isSignatureImage", () => {
     expect(isSignatureImage(image({ type: "image/jpeg", dispositionParameters: { filename: "image002.jpeg" } }))).toBe(true);
   });
 
+  it("rakamsız image.png adını da imza sayar", () => {
+    expect(isSignatureImage(image({ dispositionParameters: { filename: "image.png" } }))).toBe(true);
+  });
+
   it("gerçek adı olan resmi imza saymaz", () => {
     expect(
       isSignatureImage(image({ dispositionParameters: { filename: "gumruk-damgasi.png" } })),
