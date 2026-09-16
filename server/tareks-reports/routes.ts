@@ -8,6 +8,7 @@ import { products, tareksReports, tareksReportStyles } from "@shared/schema";
 import { uploadFile, getFile, deleteFile } from "../object-storage";
 import { resolveUserId } from "../auth-identity";
 import { detectStyles, normalizeStyle, buildZipPaths } from "./style-matcher";
+import { decodeMultipartFilename } from "./multipart-filename";
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024; // lab reports are scans; 25MB is generous
 const MAX_FILES_PER_UPLOAD = 50;
@@ -156,16 +157,30 @@ export function registerTareksReportRoutes(app: Express): void {
       const created: Array<{ id: number; originalFilename: string; styles: string[] }> = [];
       const failed: Array<{ filename: string; error: string }> = [];
 
+      // Styles are only detected again when `meta` has nothing for this file;
+      // an entry with an empty list means the user deliberately cleared it.
+      let knownStyles: string[] | null = null;
+
       for (const file of files) {
-        const entry = metaByName.get(file.originalname);
-        const styles = [...new Set((entry?.styles ?? []).map(normalizeStyle).filter(Boolean))];
+        // multer decodes multipart filenames as latin1, which both mangles the
+        // stored name and breaks the lookup against the browser's meta keys.
+        const filename = decodeMultipartFilename(file.originalname);
+        const entry = metaByName.get(filename) ?? metaByName.get(file.originalname);
+
+        let styles: string[];
+        if (entry) {
+          styles = [...new Set((entry.styles ?? []).map(normalizeStyle).filter(Boolean))];
+        } else {
+          if (knownStyles === null) knownStyles = await loadKnownStyles();
+          styles = detectStyles(filename, knownStyles);
+        }
         const procedureReference = entry?.procedureReference?.trim() || null;
 
         try {
           // Object keys are grouped per procedure; unlinked reports get their own folder.
           const objectKey = await uploadFile(
             file.buffer,
-            file.originalname,
+            filename,
             file.mimetype,
             procedureReference ? `TAREKS_REPORTS/${procedureReference}` : "TAREKS_REPORTS",
           );
@@ -173,7 +188,7 @@ export function registerTareksReportRoutes(app: Express): void {
           const [row] = await db
             .insert(tareksReports)
             .values({
-              originalFilename: file.originalname,
+              originalFilename: filename,
               objectKey,
               fileSize: file.size,
               fileType: file.mimetype,
@@ -193,8 +208,8 @@ export function registerTareksReportRoutes(app: Express): void {
 
           created.push({ id: row.id, originalFilename: row.originalFilename, styles });
         } catch (err) {
-          console.error(`tareks-reports: upload failed for ${file.originalname}:`, err);
-          failed.push({ filename: file.originalname, error: String(err) });
+          console.error(`tareks-reports: upload failed for ${filename}:`, err);
+          failed.push({ filename, error: String(err) });
         }
       }
 
