@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { InboxTabs } from "@/components/inbox/InboxTabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -304,8 +305,9 @@ export default function ProcedureMailsPage() {
   if (user?.role !== "admin") return <Redirect to="/dashboard" />;
 
   return (
-    <PageLayout title={t("nav.procedureMails")}>
+    <PageLayout title={t("nav.emailInbox")}>
       <div className="space-y-4 p-4">
+        <InboxTabs />
         {openId === null ? (
           <Card>
             <CardHeader className="pb-2">

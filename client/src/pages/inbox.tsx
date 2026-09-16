@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ThreadList } from "@/components/inbox/ThreadList";
+import { InboxTabs } from "@/components/inbox/InboxTabs";
 import { EmailDetail } from "@/components/inbox/EmailDetail";
 import { InboxFilters, EMPTY_FILTERS, type InboxFilterState } from "@/components/inbox/InboxFilters";
 import type { AccountStatus, ThreadListResponse } from "@/components/inbox/types";
@@ -135,6 +136,7 @@ export default function InboxPage() {
   return (
     <PageLayout title={t("nav.emailInbox")}>
       <div className="space-y-4 p-4">
+        <InboxTabs />
         {account.data && !account.data.connected && (
           <Card className="border-amber-400 p-4">
             <p className="font-medium">{t("emailInbox.notConnected")}</p>

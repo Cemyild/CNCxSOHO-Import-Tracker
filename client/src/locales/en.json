@@ -13,8 +13,7 @@
     "askCnc": "Ask CNC?",
     "invoiceMaker": "Invoice Maker",
     "emailInbox": "Email Inbox",
-    "settings": "Settings",
-    "procedureMails": "Procedure Mails"
+    "settings": "Settings"
   },
   "common": {
     "selectPlaceholder": "Select {{label}}...",
@@ -1126,6 +1125,10 @@
       "openActions": "{{count}} to do",
       "expand": "Expand conversation",
       "collapse": "Collapse conversation"
+    },
+    "tabs": {
+      "mails": "Emails",
+      "procedures": "Procedure Mails"
     }
   },
   "mailSettings": {

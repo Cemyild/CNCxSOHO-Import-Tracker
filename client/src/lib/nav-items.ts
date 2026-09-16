@@ -10,7 +10,6 @@ import {
   Home,
   Inbox,
   Mail,
-  Mails,
   Search,
   Settings,
   Sparkles,
@@ -39,6 +38,5 @@ export const defaultNavItems: NavItem[] = [
   { titleKey: "nav.askCnc", url: "/ask", icon: Sparkles },
   { titleKey: "nav.invoiceMaker", url: "/invoice-maker", icon: FileText },
   { titleKey: "nav.emailInbox", url: "/inbox", icon: Mail, adminOnly: true },
-  { titleKey: "nav.procedureMails", url: "/procedure-mails", icon: Mails, adminOnly: true },
   { titleKey: "nav.settings", url: "/settings", icon: Settings },
 ];

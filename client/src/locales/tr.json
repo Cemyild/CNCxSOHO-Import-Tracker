@@ -13,8 +13,7 @@
     "askCnc": "CNC'ye Sor",
     "invoiceMaker": "Fatura Oluşturucu",
     "emailInbox": "Mail Takibi",
-    "settings": "Ayarlar",
-    "procedureMails": "İşlem Mailleri"
+    "settings": "Ayarlar"
   },
   "common": {
     "selectPlaceholder": "{{label}} seçin...",
@@ -1126,6 +1125,10 @@
       "openActions": "{{count}} iş",
       "expand": "Konuşmayı aç",
       "collapse": "Konuşmayı kapat"
+    },
+    "tabs": {
+      "mails": "Mailler",
+      "procedures": "İşlem Mailleri"
     }
   },
   "mailSettings": {
