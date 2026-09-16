@@ -6,6 +6,7 @@ import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { products, tareksReports, tareksReportStyles } from "@shared/schema";
 import { uploadFile, getFile, deleteFile } from "../object-storage";
+import { resolveUserId } from "../auth-identity";
 import { detectStyles, normalizeStyle, buildZipPaths } from "./style-matcher";
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024; // lab reports are scans; 25MB is generous
@@ -33,10 +34,15 @@ async function loadKnownStyles(): Promise<string[]> {
   return rows.map((r) => r.style as string);
 }
 
+/**
+ * The acting user, or null after sending 401. Identity comes from the session
+ * cookie OR a signed bearer token — the front-end authenticates with the token,
+ * so a session-only check rejects logged-in users.
+ */
 function requireUser(req: Request, res: Response): number | null {
-  const userId = (req.session as any)?.userId;
+  const userId = resolveUserId(req);
   if (!userId) {
-    res.status(401).json({ error: "Not authenticated" });
+    res.status(401).json({ error: "Giriş gerekli" });
     return null;
   }
   return userId;

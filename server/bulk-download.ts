@@ -5,6 +5,7 @@ import { db } from "./db";
 import { procedures, expenseDocuments, importExpenses } from "@shared/schema";
 import { inArray } from "drizzle-orm";
 import { getFile } from "./object-storage";
+import { resolveUserId } from "./auth-identity";
 
 // ── Pure utilities (exported for testing) ──────────────────────────────────
 
@@ -347,7 +348,7 @@ export async function resolveProcedureIds(req: BulkDownloadRequest): Promise<Res
 export function registerBulkDownloadRoutes(app: Express): void {
   app.post("/api/bulk-download/count", async (req: Request, res: Response) => {
     try {
-      const userId = (req.session as any)?.userId;
+      const userId = resolveUserId(req);
       if (!userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
@@ -386,7 +387,7 @@ export function registerBulkDownloadRoutes(app: Express): void {
   });
 
   app.post("/api/bulk-download", async (req: Request, res: Response) => {
-    const userId = (req.session as any)?.userId;
+    const userId = resolveUserId(req);
     if (!userId) {
       return res.status(401).json({ error: "Not authenticated" });
     }
