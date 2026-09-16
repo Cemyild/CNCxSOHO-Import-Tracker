@@ -223,6 +223,8 @@ export async function insertAttachments(
  */
 export type PendingEmail = EmailRow & { attachmentNames: string[] };
 
+export const MAX_THREAD_REPAIR_ATTEMPTS = 3;
+
 /**
  * Konu kimliği kendi mail kimliğine eşit olan kayıtlar: bunlar Gmail konu
  * kimliği çekilmeden önce kaydedilmişti, senkron turu bunları onarıyor.
@@ -233,9 +235,22 @@ export async function listMessagesNeedingThreadId(
   return db
     .select({ id: emails.id, gmailMessageId: emails.gmailMessageId })
     .from(emails)
-    .where(sql`${emails.gmailThreadId} = ${emails.gmailMessageId}`)
+    .where(
+      and(
+        sql`${emails.gmailThreadId} = ${emails.gmailMessageId}`,
+        sql`${emails.threadRepairAttempts} < ${MAX_THREAD_REPAIR_ATTEMPTS}`,
+      ),
+    )
     .orderBy(desc(emails.id))
     .limit(limit);
+}
+
+/** Onarım denemesini sayar; arşivlenmiş/silinmiş mail kuyruğu tıkamasın. */
+export async function markThreadRepairAttempt(id: number): Promise<void> {
+  await db
+    .update(emails)
+    .set({ threadRepairAttempts: sql`${emails.threadRepairAttempts} + 1` })
+    .where(eq(emails.id, id));
 }
 
 export async function setThreadId(id: number, threadId: string): Promise<void> {
@@ -522,10 +537,13 @@ export async function listThreads(
   const conditions = filterConditions(filter);
   const where = conditions.length > 0 ? and(...conditions) : sql`TRUE`;
 
+  // Filtre tek tek maillere uyar; liste ise konuşma gösterir. Bir konuşma,
+  // filtreye UYAN maillerinden oluşuyormuş gibi özetlenir: sayaçlar ve
+  // gösterilen mail hep filtrenin içinden gelir, aksi halde "okunmamış" filtresi
+  // okunmuş bir maili başlık yapardı.
   const matching = sql`
-    SELECT DISTINCT ${emails.gmailThreadId} AS thread_id
-    FROM ${emails}
-    WHERE ${where}
+    SELECT * FROM ${emails}
+    WHERE ${where} AND ${emails.gmailThreadId} IS NOT NULL
   `;
 
   const rows = await db.execute<{
@@ -549,18 +567,19 @@ export async function listThreads(
   }>(sql`
     WITH matching AS (${matching}),
     agg AS (
-      SELECT e.gmail_thread_id,
+      SELECT m.gmail_thread_id,
              COUNT(*)::int AS message_count,
-             COUNT(*) FILTER (WHERE e.status = 'new')::int AS unread_count,
-             BOOL_OR(e.has_attachments) AS has_attachments,
-             MAX(e.sent_at) AS last_sent_at,
-             COALESCE(SUM((
-               SELECT COUNT(*) FROM jsonb_array_elements(COALESCE(e.action_items, '[]'::jsonb)) ai
-               WHERE COALESCE((ai->>'done')::boolean, false) = false
-             )), 0)::int AS open_action_count
-      FROM emails e
-      WHERE e.gmail_thread_id IN (SELECT thread_id FROM matching)
-      GROUP BY e.gmail_thread_id
+             COUNT(*) FILTER (WHERE m.status = 'new')::int AS unread_count,
+             BOOL_OR(m.has_attachments) AS has_attachments,
+             MAX(m.sent_at) AS last_sent_at,
+             COALESCE(SUM(
+               CASE WHEN jsonb_typeof(m.action_items) = 'array' THEN (
+                 SELECT COUNT(*) FROM jsonb_array_elements(m.action_items) ai
+                 WHERE COALESCE((ai->>'done')::boolean, false) = false
+               ) ELSE 0 END
+             ), 0)::int AS open_action_count
+      FROM matching m
+      GROUP BY m.gmail_thread_id
     )
     SELECT agg.gmail_thread_id AS thread_id,
            agg.message_count, agg.unread_count, agg.has_attachments,
@@ -571,19 +590,20 @@ export async function listThreads(
            p.reference AS procedure_reference
     FROM agg
     JOIN LATERAL (
-      SELECT * FROM emails e2
-      WHERE e2.gmail_thread_id = agg.gmail_thread_id
-      ORDER BY e2.sent_at DESC NULLS LAST, e2.id DESC
+      SELECT * FROM matching m2
+      WHERE m2.gmail_thread_id = agg.gmail_thread_id
+      ORDER BY m2.sent_at DESC NULLS LAST, m2.id DESC
       LIMIT 1
     ) latest ON TRUE
     LEFT JOIN procedures p ON p.id = latest.procedure_id
-    ORDER BY agg.last_sent_at DESC NULLS LAST
+    ORDER BY agg.last_sent_at DESC NULLS LAST, agg.gmail_thread_id
     LIMIT ${filter.limit} OFFSET ${filter.offset}
   `);
 
-  const [{ value }] = await db
-    .select({ value: count() })
-    .from(sql`(${matching}) AS m` as any);
+  const totals = await db.execute<{ value: number }>(
+    sql`SELECT COUNT(DISTINCT m.gmail_thread_id)::int AS value FROM (${matching}) AS m`,
+  );
+  const value = totals.rows?.[0]?.value ?? 0;
 
   return {
     items: (rows.rows ?? []).map((r) => ({
@@ -665,10 +685,12 @@ export async function listProceduresWithMail(): Promise<ProcedureMailSummary[]> 
            COUNT(DISTINCT e.gmail_thread_id)::int AS thread_count,
            COUNT(*) FILTER (WHERE e.status = 'new')::int AS unread_count,
            MAX(e.sent_at) AS last_mail_at,
-           COALESCE(SUM((
-             SELECT COUNT(*) FROM jsonb_array_elements(COALESCE(e.action_items, '[]'::jsonb)) ai
-             WHERE COALESCE((ai->>'done')::boolean, false) = false
-           )), 0)::int AS open_action_count,
+           COALESCE(SUM(
+             CASE WHEN jsonb_typeof(e.action_items) = 'array' THEN (
+               SELECT COUNT(*) FROM jsonb_array_elements(e.action_items) ai
+               WHERE COALESCE((ai->>'done')::boolean, false) = false
+             ) ELSE 0 END
+           ), 0)::int AS open_action_count,
            COALESCE(SUM((
              SELECT COUNT(*) FROM email_attachments a
              WHERE a.email_id = e.id AND a.status = 'pending'
@@ -727,6 +749,8 @@ export async function listProcedureDocuments(
     FROM email_attachments a
     JOIN emails e ON e.id = a.email_id
     WHERE e.procedure_id = ${procedureId}
+      -- Kaydedilen ek zaten procedure_documents'ta listeleniyor; iki kez çıkmasın.
+      AND a.procedure_document_id IS NULL
     ORDER BY a.created_at DESC NULLS LAST
   `);
 
@@ -763,7 +787,9 @@ export async function listProcedureActionItems(
            ai->>'id' AS item_id, ai->>'text' AS text,
            COALESCE((ai->>'done')::boolean, false) AS done
     FROM emails e,
-         jsonb_array_elements(COALESCE(e.action_items, '[]'::jsonb)) ai
+         jsonb_array_elements(
+           CASE WHEN jsonb_typeof(e.action_items) = 'array' THEN e.action_items ELSE '[]'::jsonb END
+         ) ai
     WHERE e.procedure_id = ${procedureId}
     ORDER BY COALESCE((ai->>'done')::boolean, false), e.sent_at DESC NULLS LAST
   `);

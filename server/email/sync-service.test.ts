@@ -54,6 +54,7 @@ function makeDeps(overrides: any = {}) {
     markAccountError: vi.fn().mockResolvedValue(undefined),
     listMessagesNeedingThreadId: vi.fn().mockResolvedValue([]),
     setThreadId: vi.fn().mockResolvedValue(undefined),
+    markThreadRepairAttempt: vi.fn().mockResolvedValue(undefined),
     ...overrides.store,
   };
 
@@ -301,6 +302,22 @@ describe("runSync", () => {
     expect(store.setThreadId).toHaveBeenCalledWith(7, "T1");
     expect(store.setThreadId).toHaveBeenCalledWith(8, "T1");
     expect(store.markAccountSynced).toHaveBeenCalledTimes(1);
+  });
+
+  it("onarım denemesini sayar, böylece silinmiş mail sonsuza kadar denenmez", async () => {
+    const { deps, store } = makeDeps({
+      store: {
+        listMessagesNeedingThreadId: vi.fn().mockResolvedValue([{ id: 7, gmailMessageId: "m7" }]),
+      },
+      mail: {
+        listMessageIds: vi.fn().mockResolvedValue([]),
+        getMessage: vi.fn().mockRejectedValue(new Error("mail arşivlenmiş")),
+      },
+    });
+
+    await runSync(deps);
+
+    expect(store.markThreadRepairAttempt).toHaveBeenCalledWith(7);
   });
 
   it("konu kimliği tamamlanamazsa tur yine biter", async () => {

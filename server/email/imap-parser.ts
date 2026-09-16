@@ -43,6 +43,13 @@ function filenameOf(node: ImapStructureNode): string {
   return node.dispositionParameters?.filename ?? node.parameters?.name ?? "";
 }
 
+/**
+ * Gömülü olmasına rağmen imza sayılmayacak büyüklük. Gönderici gövdeye gerçek
+ * bir fotoğraf (hasar tutanağı, damga) yapıştırmış olabilir; imza logoları
+ * pratikte bu boyutun çok altında kalıyor.
+ */
+export const SIGNATURE_IMAGE_MAX_BYTES = 100_000;
+
 /** Outlook ve Gmail imza resimlerini image001.png ya da image.png diye adlandırır. */
 const AUTO_IMAGE_NAME = /^image\d*\.(png|jpe?g|gif|bmp)$/i;
 
@@ -57,9 +64,12 @@ export function isSignatureImage(node: ImapStructureNode): boolean {
   if (filename === "") return false;
   if (!(node.type ?? "").toLowerCase().startsWith("image/")) return false;
 
-  if ((node.disposition ?? "").toLowerCase() === "inline") return true;
-  if (node.id) return true;
-  return AUTO_IMAGE_NAME.test(filename);
+  // Otomatik ad kesin işarettir, boyuta bakmadan eleriz.
+  if (AUTO_IMAGE_NAME.test(filename)) return true;
+
+  // Gövdeye gömülü ama adı anlamlı olan resimler: yalnızca küçükse imza sayılır.
+  const embedded = (node.disposition ?? "").toLowerCase() === "inline" || Boolean(node.id);
+  return embedded && (node.size ?? 0) < SIGNATURE_IMAGE_MAX_BYTES;
 }
 
 export function analyzeBodyStructure(root: ImapStructureNode): ImapStructureResult {

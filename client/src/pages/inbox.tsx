@@ -64,7 +64,7 @@ export default function InboxPage() {
   const queryString = buildQueryString(filters, page);
   const messages = useQuery<ThreadListResponse>({
     queryKey: ["/api/email/threads", queryString, page],
-    queryFn: async () => (await apiRequest("GET", `/api/email/messages?${queryString}`)).json(),
+    queryFn: async () => (await apiRequest("GET", `/api/email/threads?${queryString}`)).json(),
   });
 
   // Senkron artık arka planda çalışıyor (bkz. server/email/routes.ts POST /sync);

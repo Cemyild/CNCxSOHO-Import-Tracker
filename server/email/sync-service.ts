@@ -114,6 +114,15 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
     try {
       const needRepair = await store.listMessagesNeedingThreadId(MAX_THREAD_REPAIR_PER_RUN);
       for (const row of needRepair) {
+        // Denemeyi ÖNCE sayıyoruz: mail arşivlenmiş ya da silinmişse istek her
+        // turda başarısız olur ve sayaç olmadan bu kayıt kuyruğu sonsuza kadar
+        // tıkar (her denemesi bir IMAP çağrısı).
+        try {
+          await store.markThreadRepairAttempt(row.id);
+        } catch (error) {
+          console.error(`[email-inbox] onarım sayacı yazılamadı (${row.id}):`, error);
+        }
+
         try {
           const parsed = await mail.getMessage(row.gmailMessageId);
           if (parsed.gmailThreadId && parsed.gmailThreadId !== row.gmailMessageId) {

@@ -175,6 +175,28 @@ describe("isSignatureImage", () => {
     ).toBe(false);
   });
 
+  it("büyük bir gömülü resmi imza saymaz (gerçek fotoğraf olabilir)", () => {
+    // Gönderici gövdeye bir hasar/tutanak fotoğrafı yapıştırmış olabilir;
+    // bunlar imza logolarından çok daha büyüktür.
+    expect(
+      isSignatureImage(
+        image({ id: "<x@y>", size: 400_000, dispositionParameters: { filename: "hasar.jpg" } }),
+      ),
+    ).toBe(false);
+  });
+
+  it("büyük olsa bile imageNNN adını imza sayar", () => {
+    // Outlook'un gömdüğü logolar bazen 100 KB'ı geçiyor; ad kalıbı kesin işaret.
+    expect(
+      isSignatureImage({
+        part: "2",
+        type: "image/png",
+        size: 621_226,
+        dispositionParameters: { filename: "image002.png" },
+      }),
+    ).toBe(true);
+  });
+
   it("resim olmayan hiçbir parçayı imza saymaz", () => {
     // Gömülü gösterilen bir PDF bile gerçek belgedir.
     expect(
