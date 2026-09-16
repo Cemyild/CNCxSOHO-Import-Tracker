@@ -69,6 +69,7 @@ import rateLimit from "express-rate-limit";
 // Import Zod for validation
 import { z } from "zod";
 import { registerBulkDownloadRoutes } from "./bulk-download";
+import { registerTareksReportRoutes } from "./tareks-reports/routes";
 import { analyzeProcedureDocument, createProcedureFromDocument } from "./procedure-document-import";
 import { loadSplitPlan } from "./procedure-split-reference";
 import { renameProcedureReference, countReferenceUsage } from "./procedure-reference-rename";
@@ -10253,6 +10254,7 @@ Return ONLY valid JSON.`;
   });
 
   registerBulkDownloadRoutes(app);
+  registerTareksReportRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

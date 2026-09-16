@@ -788,3 +788,39 @@ export type EmailAccount = typeof emailAccounts.$inferSelect;
 export type WatchedSender = typeof emailWatchedSenders.$inferSelect;
 export type EmailRow = typeof emails.$inferSelect;
 export type EmailAttachmentRow = typeof emailAttachments.$inferSelect;
+
+// ── Tareks Reports ─────────────────────────────────────────────────────────
+// Test reports for products that went to Tareks / lab testing.
+// Listed by style number; a report can cover one or several styles.
+// DDL: db/manual-ddl/005_tareks_reports.sql
+
+export const tareksReports = pgTable("tareks_reports", {
+  id: serial("id").primaryKey(),
+  originalFilename: text("original_filename").notNull(),
+  objectKey: text("object_key").notNull(),
+  fileSize: integer("file_size").notNull().default(0),
+  fileType: text("file_type").notNull().default("application/pdf"),
+  // Optional link to a procedure — reports may be filed before a procedure exists.
+  procedureReference: text("procedure_reference").references(() => procedures.reference, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
+  testDate: text("test_date"),
+  notes: text("notes"),
+  uploadedBy: integer("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const tareksReportStyles = pgTable("tareks_report_styles", {
+  id: serial("id").primaryKey(),
+  reportId: integer("report_id")
+    .references(() => tareksReports.id, { onDelete: "cascade" })
+    .notNull(),
+  style: text("style").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  reportStyleUnique: unique("tareks_report_styles_report_style_key").on(table.reportId, table.style),
+}));
+
+export type TareksReport = typeof tareksReports.$inferSelect;
+export type TareksReportStyle = typeof tareksReportStyles.$inferSelect;

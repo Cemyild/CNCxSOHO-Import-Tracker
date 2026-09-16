@@ -33,6 +33,7 @@ import StorageCalculatorPage from "@/pages/storage-calculator";
 import BulkDownloadPage from "@/pages/bulk-download";
 import InvoiceMakerPage from "@/pages/invoice-maker";
 import InboxPage from "@/pages/inbox";
+import TareksReportsPage from "@/pages/tareks-reports";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 function Router() {
@@ -207,6 +208,13 @@ function Router() {
         {() => (
           <ProtectedRoute>
             <StorageCalculatorPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/tareks-reports">
+        {() => (
+          <ProtectedRoute>
+            <TareksReportsPage />
           </ProtectedRoute>
         )}
       </Route>
