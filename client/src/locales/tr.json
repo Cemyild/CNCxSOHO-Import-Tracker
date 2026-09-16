@@ -1464,7 +1464,13 @@
       "costUsd": "Maliyet (USD)",
       "unit": "Birim",
       "totalValueUsd": "Toplam Değer (USD)",
-      "trHsCode": "TR GTİP Kodu"
+      "trHsCode": "TR GTİP Kodu",
+      "tareksReport": "Tareks Raporu",
+      "tareksReportPresent": "Rapor var",
+      "tareksReportCount": "Rapor var ({{count}})",
+      "tareksReportMissing": "Rapor yok",
+      "tareksReportDownloadHint": "Bu style'ın test raporunu indir",
+      "tareksReportDownloadFailed": "Rapor indirilemedi"
     }
   },
   "reportsPages": {

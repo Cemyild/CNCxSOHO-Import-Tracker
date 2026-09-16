@@ -70,6 +70,7 @@ import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { registerBulkDownloadRoutes } from "./bulk-download";
 import { registerTareksReportRoutes } from "./tareks-reports/routes";
+import { findReportIdsForStyles } from "./tareks-reports/report-index";
 import { analyzeProcedureDocument, createProcedureFromDocument } from "./procedure-document-import";
 import { loadSplitPlan } from "./procedure-split-reference";
 import { renameProcedureReference, countReferenceUsage } from "./procedure-reference-rename";
@@ -1274,11 +1275,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get the items for this calculation
       const items = await storage.getTaxCalculationItems(calculation.id);
+
+      // Which of these styles already have a Tareks test report on file.
+      // The procedure detail page shows this per row while the shipment is in
+      // a Tareks stage, so the user can see what still has to go to testing.
+      const reportIdsByStyle = await findReportIdsForStyles(
+        items.map((item) => item.style ?? "").filter(Boolean),
+      );
+
       const products = items.map(item => ({
         style: item.style,
         cost: item.cost,
         unit_count: item.unit_count,
         tr_hs_code: item.tr_hs_code,
+        tareks_report_ids: reportIdsByStyle.get((item.style ?? "").trim().toUpperCase()) ?? [],
       }));
 
       res.json({ products });

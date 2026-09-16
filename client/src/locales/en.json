@@ -1464,7 +1464,13 @@
       "costUsd": "Cost (USD)",
       "unit": "Unit",
       "totalValueUsd": "Total Value (USD)",
-      "trHsCode": "TR HS Code"
+      "trHsCode": "TR HS Code",
+      "tareksReport": "Tareks Report",
+      "tareksReportPresent": "Report on file",
+      "tareksReportCount": "Reports on file ({{count}})",
+      "tareksReportMissing": "No report",
+      "tareksReportDownloadHint": "Download the test report for this style",
+      "tareksReportDownloadFailed": "Could not download the report"
     }
   },
   "reportsPages": {

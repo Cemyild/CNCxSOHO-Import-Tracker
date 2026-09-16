@@ -300,7 +300,7 @@ export default function ProcedureDetailsPage() {
   // Document preview functionality has been removed as per client requirements
 
   // Products from tax calculation
-  const [taxProducts, setTaxProducts] = useState<{ style: string; cost: string; unit_count: number; tr_hs_code: string | null }[]>([]);
+  const [taxProducts, setTaxProducts] = useState<{ style: string; cost: string; unit_count: number; tr_hs_code: string | null; tareks_report_ids?: number[] }[]>([]);
 
   // View distributions modal state
   const [isViewDistributionsOpen, setIsViewDistributionsOpen] = useState(false);
@@ -328,6 +328,51 @@ export default function ProcedureDetailsPage() {
       .then(data => setTaxProducts(data.products || []))
       .catch(() => setTaxProducts([]));
   }, [reference]);
+
+  // The Tareks report column only appears while the shipment is in a Tareks
+  // stage — elsewhere the products table stays as it was.
+  const isTareksStage =
+    procedure?.shipment_status === "tareks_application" ||
+    procedure?.shipment_status === "tareks_approved";
+
+  /** Download the test report(s) for one style: a single PDF, or a ZIP. */
+  const downloadTareksReports = async (style: string, reportIds: number[]) => {
+    if (reportIds.length === 0) return;
+    try {
+      const res =
+        reportIds.length === 1
+          ? await apiRequest("GET", `/api/tareks-reports/${reportIds[0]}/download`)
+          : await apiRequest("POST", "/api/tareks-reports/download", { ids: reportIds });
+      const blob = await res.blob();
+      const header = res.headers.get("content-disposition");
+      const utf8 = header ? /filename\*=UTF-8''([^;]+)/i.exec(header) : null;
+      const plain = header ? /filename="?([^";]+)"?/.exec(header) : null;
+      let filename = `${style}.pdf`;
+      if (utf8) {
+        try {
+          filename = decodeURIComponent(utf8[1]);
+        } catch {
+          filename = utf8[1];
+        }
+      } else if (plain) {
+        filename = plain[1];
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      toast({
+        title: t("procedurePages.details.tareksReportDownloadFailed"),
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    }
+  };
 
   // Calculate financial summary
   useEffect(() => {
@@ -1905,6 +1950,9 @@ export default function ProcedureDetailsPage() {
                     <TableHead className="text-right">{t("procedurePages.details.unit")}</TableHead>
                     <TableHead className="text-right">{t("procedurePages.details.totalValueUsd")}</TableHead>
                     <TableHead>{t("procedurePages.details.trHsCode")}</TableHead>
+                    {isTareksStage && (
+                      <TableHead>{t("procedurePages.details.tareksReport")}</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1917,6 +1965,35 @@ export default function ProcedureDetailsPage() {
                         {(parseFloat(product.cost) * product.unit_count).toFixed(2)}
                       </TableCell>
                       <TableCell>{product.tr_hs_code || "-"}</TableCell>
+                      {isTareksStage && (
+                        <TableCell>
+                          {(product.tareks_report_ids?.length ?? 0) > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                downloadTareksReports(product.style, product.tareks_report_ids ?? [])
+                              }
+                              title={t("procedurePages.details.tareksReportDownloadHint")}
+                            >
+                              <Badge className="cursor-pointer gap-1 border-green-200 bg-green-100 text-green-800 hover:bg-green-200">
+                                <Download className="h-3 w-3" />
+                                {(product.tareks_report_ids?.length ?? 0) > 1
+                                  ? t("procedurePages.details.tareksReportCount", {
+                                      count: product.tareks_report_ids?.length ?? 0,
+                                    })
+                                  : t("procedurePages.details.tareksReportPresent")}
+                              </Badge>
+                            </button>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="border-amber-200 bg-amber-50 text-amber-700"
+                            >
+                              {t("procedurePages.details.tareksReportMissing")}
+                            </Badge>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
