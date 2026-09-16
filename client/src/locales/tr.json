@@ -16,6 +16,11 @@
     "settings": "Ayarlar"
   },
   "common": {
+    "selectPlaceholder": "{{label}} seçin...",
+    "searchPlaceholder": "{{label}} ara...",
+    "noResultsFound": "{{label}} bulunamadı.",
+    "selectAll": "Tümünü seç",
+    "clearAll": "Seçimi temizle",
     "logout": "Çıkış Yap",
     "loggingOut": "Çıkış yapılıyor...",
     "loading": "Yükleniyor...",
@@ -1556,6 +1561,11 @@
       "filters": "Filtreler",
       "filtersDesc": "Veri görünümünü filtreleyin ve özelleştirin",
       "dateRange": "Tarih Aralığı",
+      "procedures": "İşlemler",
+      "allProcedures": "Tüm işlemler",
+      "searchProcedures": "İşlem ara...",
+      "loadingProcedures": "İşlemler yükleniyor...",
+      "proceduresSelected": "{{count}} işlem seçildi",
       "totalExpenses": "Toplam Giderler",
       "totalExpensesDesc": "Seçili dönem için toplam tutar",
       "expenseCount": "Gider Sayısı",
@@ -1590,6 +1600,11 @@
       "filters": "Filtreler",
       "filtersDesc": "Veri görünümünü filtreleyin ve özelleştirin",
       "dateRange": "Tarih Aralığı",
+      "procedures": "İşlemler",
+      "allProcedures": "Tüm işlemler",
+      "searchProcedures": "İşlem ara...",
+      "loadingProcedures": "İşlemler yükleniyor...",
+      "proceduresSelected": "{{count}} işlem seçildi",
       "totalTaxes": "Toplam Vergiler",
       "totalTaxesDesc": "Seçili dönem için toplam vergiler",
       "taxCount": "Vergi Sayısı",
@@ -1624,6 +1639,7 @@
       "noTaxDataForPeriod": "Seçili dönem için vergi verisi bulunmuyor"
     },
     "chart": {
+      "weekPeriod": "{{week}}. hafta {{year}}",
       "percentOfTotal": "toplamın %{{percentage}}'i",
       "noExpenseData": "Gider verisi bulunmuyor",
       "expenseAmount": "Gider Tutarı",

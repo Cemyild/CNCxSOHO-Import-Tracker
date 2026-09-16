@@ -9,6 +9,13 @@ const router = express.Router();
 const VALID_TAX_CATEGORIES = ['customs_tax', 'additional_customs_tax', 'kkdf', 'vat', 'stamp_tax', 'total'] as const;
 type TaxCategory = typeof VALID_TAX_CATEGORIES[number];
 
+// Front-end işlem filtresini virgülle ayrılmış referans listesi olarak gönderir.
+function parseProcedureRefs(raw: unknown): string[] | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const refs = raw.split(',').map((ref) => ref.trim()).filter(Boolean);
+  return refs.length > 0 ? refs : undefined;
+}
+
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 // ISO week number — Monday-anchored, matching /api/expenses/trend
@@ -52,10 +59,7 @@ router.get('/taxes/analytics', async (req, res) => {
     }
 
     // Parse procedure references if provided
-    let procedureReferences: string[] | undefined;
-    if (procedureRefs && typeof procedureRefs === 'string') {
-      procedureReferences = procedureRefs.split(',').map((s) => s.trim()).filter(Boolean);
-    }
+    const procedureReferences = parseProcedureRefs(procedureRefs);
 
     // 1. Get procedures in date range (parameterized)
     const procParams: any[] = [startDate, endDate];
@@ -126,7 +130,7 @@ router.get('/taxes/analytics', async (req, res) => {
 // Tax trend endpoint — filtered by date range
 router.get('/taxes/trend', async (req, res) => {
   try {
-    const { category, startDate, endDate, groupBy } = req.query;
+    const { category, startDate, endDate, groupBy, procedureRefs } = req.query;
 
     if (!category || !startDate || !endDate) {
       return res.status(400).json({
@@ -154,7 +158,13 @@ router.get('/taxes/trend', async (req, res) => {
     const procedures = proceduresResult.rows || [];
     if (procedures.length === 0) return res.json({ data: [] });
 
-    const refsList = procedures.map((p) => p.reference);
+    // İşlem filtresi seçiliyse tarih aralığındaki referanslarla kesiştir
+    const selectedRefs = parseProcedureRefs(procedureRefs);
+    const refsList = selectedRefs
+      ? procedures.map((p) => p.reference).filter((ref) => selectedRefs.includes(ref))
+      : procedures.map((p) => p.reference);
+    if (refsList.length === 0) return res.json({ data: [] });
+
     const placeholders = refsList.map((_, i) => `$${i + 1}`).join(',');
 
     let taxQuery: string;
@@ -193,8 +203,15 @@ router.get('/taxes/trend', async (req, res) => {
 // Tax trend endpoint — full history (no date filter)
 router.get('/taxes/trend-all', async (req, res) => {
   try {
-    const { category, groupBy } = req.query;
+    const { category, groupBy, procedureRefs } = req.query;
     if (!category) return res.status(400).json({ message: 'Category is required' });
+
+    const selectedRefs = parseProcedureRefs(procedureRefs);
+    const refFilterParams: string[] = selectedRefs ?? [];
+    // Referanslar parametre olarak geçer; SQL'e asla gömülmez.
+    const refClause = selectedRefs
+      ? ` t.procedure_reference IN (${selectedRefs.map((_, i) => `$${i + 1}`).join(',')}) `
+      : '';
 
     const taxCategory = String(category);
     if (!VALID_TAX_CATEGORIES.includes(taxCategory as TaxCategory)) {
@@ -209,6 +226,7 @@ router.get('/taxes/trend-all', async (req, res) => {
                p.import_dec_date AS date
         FROM taxes t
         JOIN procedures p ON t.procedure_reference = p.reference
+        ${refClause ? `WHERE ${refClause}` : ''}
         ORDER BY p.import_dec_date
       `;
     } else {
@@ -216,12 +234,12 @@ router.get('/taxes/trend-all', async (req, res) => {
         SELECT t.${taxCategory} AS amount, p.import_dec_date AS date
         FROM taxes t
         JOIN procedures p ON t.procedure_reference = p.reference
-        WHERE t.${taxCategory} > 0
+        WHERE t.${taxCategory} > 0${refClause ? ` AND ${refClause}` : ''}
         ORDER BY p.import_dec_date
       `;
     }
 
-    const taxResult = await pool.query(taxQuery);
+    const taxResult = await pool.query(taxQuery, refFilterParams);
     res.json({ data: groupTaxRecords(taxResult.rows, groupBy === 'month' ? 'month' : 'week') });
   } catch (error) {
     console.error('[Trend All API] Error:', error);

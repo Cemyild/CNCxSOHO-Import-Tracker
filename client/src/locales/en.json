@@ -16,6 +16,11 @@
     "settings": "Settings"
   },
   "common": {
+    "selectPlaceholder": "Select {{label}}...",
+    "searchPlaceholder": "Search {{label}}...",
+    "noResultsFound": "No {{label}} found.",
+    "selectAll": "Select all",
+    "clearAll": "Clear all",
     "logout": "Logout",
     "loggingOut": "Logging out...",
     "loading": "Loading...",
@@ -1556,6 +1561,11 @@
       "filters": "Filters",
       "filtersDesc": "Filter and customize the data view",
       "dateRange": "Date Range",
+      "procedures": "Procedures",
+      "allProcedures": "All procedures",
+      "searchProcedures": "Search procedures...",
+      "loadingProcedures": "Loading procedures...",
+      "proceduresSelected": "{{count}} procedures selected",
       "totalExpenses": "Total Expenses",
       "totalExpensesDesc": "Total amount for the selected period",
       "expenseCount": "Expense Count",
@@ -1590,6 +1600,11 @@
       "filters": "Filters",
       "filtersDesc": "Filter and customize the data view",
       "dateRange": "Date Range",
+      "procedures": "Procedures",
+      "allProcedures": "All procedures",
+      "searchProcedures": "Search procedures...",
+      "loadingProcedures": "Loading procedures...",
+      "proceduresSelected": "{{count}} procedures selected",
       "totalTaxes": "Total Taxes",
       "totalTaxesDesc": "Total taxes for the selected period",
       "taxCount": "Tax Count",
@@ -1624,6 +1639,7 @@
       "noTaxDataForPeriod": "No tax data available for the selected period"
     },
     "chart": {
+      "weekPeriod": "Week {{week}}, {{year}}",
       "percentOfTotal": "{{percentage}}% of total",
       "noExpenseData": "No expense data available",
       "expenseAmount": "Expense Amount",

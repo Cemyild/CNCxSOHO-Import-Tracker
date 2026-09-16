@@ -1,5 +1,6 @@
 // React and hooks imports
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 // Third-party component imports
 import { Check, ChevronsUpDown, ListFilter, X } from "lucide-react";
@@ -71,6 +72,8 @@ export const MultiSelectCombobox = <T extends BaseOption>({
   onChange,
   placeholder,
 }: Props<T>) => {
+  const { t } = useTranslation();
+
   // State for controlling popover visibility
   const [open, setOpen] = useState(false);
 
@@ -138,7 +141,7 @@ export const MultiSelectCombobox = <T extends BaseOption>({
           <div className="flex-1 overflow-hidden">
             {value.length > 0
               ? renderSelectedItem(value)
-              : `Select ${label}...`}
+              : t('common.selectPlaceholder', { label })}
           </div>
 
           {/* Control buttons */}
@@ -168,11 +171,11 @@ export const MultiSelectCombobox = <T extends BaseOption>({
       >
         <Command>
           <CommandInput
-            placeholder={placeholder || `Search ${label}...`}
+            placeholder={placeholder || t('common.searchPlaceholder', { label })}
             aria-label={`Search ${label}`}
           />
           <CommandList>
-            <CommandEmpty>No {label} found.</CommandEmpty>
+            <CommandEmpty>{t('common.noResultsFound', { label })}</CommandEmpty>
             <CommandGroup>
               {/* Select All / Clear All option */}
               <CommandItem
@@ -186,7 +189,7 @@ export const MultiSelectCombobox = <T extends BaseOption>({
                   )}
                   aria-hidden="true"
                 />
-                {isAllSelected ? "Clear All" : "Select All"}
+                {isAllSelected ? t('common.clearAll') : t('common.selectAll')}
               </CommandItem>
               
               {options.map((option) => (

@@ -29,6 +29,19 @@ import {
 import { eq, and, or, SQL, inArray, sql, gte, lte, isNull, isNotNull, desc, asc, sum } from "drizzle-orm";
 import { db } from "./db";
 
+/** Bir prosedürün masraf/ödeme özeti (tekil ve toplu hesap aynı şekli döndürür). */
+export interface FinancialSummary {
+  totalExpenses: number;
+  importExpenses: number;
+  serviceInvoices: number;
+  taxes: number;
+  advancePayments: number;
+  balancePayments: number;
+  totalPayments: number;
+  remainingBalance: number;
+  distributedPayments?: number;
+}
+
 export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
@@ -135,6 +148,13 @@ export interface IStorage {
     totalPayments: number;
     remainingBalance: number;
   }>;
+  // Toplu okuma (rapor ekranları için; referans başına sorgu atmayı önler)
+  getImportExpensesByReferences(references: string[]): Promise<Map<string, ImportExpense[]>>;
+  getImportServiceInvoicesByReferences(references: string[]): Promise<Map<string, ImportServiceInvoice[]>>;
+  getPaymentsByProcedureReferences(references: string[]): Promise<Map<string, Payment[]>>;
+  getPaymentDistributionsByProcedures(references: string[]): Promise<Map<string, PaymentDistribution[]>>;
+  getTaxesByProcedureReferences(references: string[]): Promise<Map<string, Tax>>;
+  calculateFinancialSummaryBatch(references: string[]): Promise<Map<string, FinancialSummary>>;
 
   // Invoice Line Item operations
   getInvoiceLineItemsByReference(reference: string): Promise<InvoiceLineItem[]>;
@@ -2376,6 +2396,168 @@ export class DatabaseStorage implements IStorage {
         totalPayments: 0,
         remainingBalance: 0
       };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Toplu (bulk) okuma yardımcıları
+  //
+  // Rapor ekranları yüzlerce prosedürü tek seferde işliyor. Referans başına ayrı
+  // sorgu atmak uzak veritabanına binlerce gidiş-dönüş demek: "Tüm Detaylar"
+  // raporu 200 prosedür için 2 dakikayı aşıyor ve canlıdaki 60 sn'lik proxy
+  // zaman aşımına takılıyordu. Aşağıdaki metotlar veriyi tablo başına TEK
+  // sorguda çekip referansa göre gruplar.
+  // ---------------------------------------------------------------------------
+
+  private groupByReference<T>(rows: T[], keyOf: (row: T) => string): Map<string, T[]> {
+    const grouped = new Map<string, T[]>();
+    for (const row of rows) {
+      const key = keyOf(row);
+      const bucket = grouped.get(key);
+      if (bucket) {
+        bucket.push(row);
+      } else {
+        grouped.set(key, [row]);
+      }
+    }
+    return grouped;
+  }
+
+  async getImportExpensesByReferences(references: string[]): Promise<Map<string, ImportExpense[]>> {
+    if (references.length === 0) return new Map();
+    const rows = await db.select().from(importExpenses)
+      .where(inArray(importExpenses.procedureReference, references));
+    return this.groupByReference(rows, (row) => row.procedureReference);
+  }
+
+  async getImportServiceInvoicesByReferences(references: string[]): Promise<Map<string, ImportServiceInvoice[]>> {
+    if (references.length === 0) return new Map();
+    const rows = await db.select().from(importServiceInvoices)
+      .where(inArray(importServiceInvoices.procedureReference, references));
+    return this.groupByReference(rows, (row) => row.procedureReference);
+  }
+
+  async getPaymentsByProcedureReferences(references: string[]): Promise<Map<string, Payment[]>> {
+    if (references.length === 0) return new Map();
+    const rows = await db.select().from(payments)
+      .where(inArray(payments.procedureReference, references));
+    return this.groupByReference(rows, (row) => row.procedureReference);
+  }
+
+  async getPaymentDistributionsByProcedures(references: string[]): Promise<Map<string, PaymentDistribution[]>> {
+    if (references.length === 0) return new Map();
+    const rows = await db.select().from(paymentDistributions)
+      .where(inArray(paymentDistributions.procedureReference, references))
+      .orderBy(desc(paymentDistributions.distributionDate));
+    return this.groupByReference(rows, (row) => row.procedureReference);
+  }
+
+  async getTaxesByProcedureReferences(references: string[]): Promise<Map<string, Tax>> {
+    if (references.length === 0) return new Map();
+    const rows = await db.select().from(taxes)
+      .where(inArray(taxes.procedureReference, references));
+    // Bir prosedürün tek vergi kaydı olması beklenir; tekrar varsa ilki kazanır
+    // (tekil getTaxByProcedureReference de ilk satırı döndürüyor).
+    const byReference = new Map<string, Tax>();
+    for (const row of rows) {
+      if (!byReference.has(row.procedureReference)) {
+        byReference.set(row.procedureReference, row);
+      }
+    }
+    return byReference;
+  }
+
+  /**
+   * calculateFinancialSummary'nin toplu sürümü: aynı hesabı yapar ama veriyi
+   * 5 sorguda (referans başına 5 yerine) çeker.
+   */
+  async calculateFinancialSummaryBatch(references: string[]): Promise<Map<string, FinancialSummary>> {
+    const summaries = new Map<string, FinancialSummary>();
+    if (references.length === 0) return summaries;
+
+    try {
+      const [expensesByRef, serviceInvoicesByRef, taxesByRef, paymentsByRef, distributionsByRef] =
+        await Promise.all([
+          this.getImportExpensesByReferences(references),
+          this.getImportServiceInvoicesByReferences(references),
+          this.getTaxesByProcedureReferences(references),
+          this.getPaymentsByProcedureReferences(references),
+          this.getPaymentDistributionsByProcedures(references),
+        ]);
+
+      const sumAmounts = (rows: Array<{ amount: string | null }>): number =>
+        rows.reduce((total, row) => total + (parseFloat(row.amount || '0') || 0), 0);
+
+      for (const reference of references) {
+        const expenses = expensesByRef.get(reference) || [];
+        const serviceInvoices = serviceInvoicesByRef.get(reference) || [];
+        const taxData = taxesByRef.get(reference);
+        const traditionalPayments = paymentsByRef.get(reference) || [];
+        const distributions = distributionsByRef.get(reference) || [];
+
+        const importExpensesTotal = sumAmounts(expenses);
+        const serviceInvoicesTotal = sumAmounts(serviceInvoices);
+
+        const totalTaxes = taxData
+          ? parseFloat(taxData.customsTax || '0') +
+            parseFloat(taxData.additionalCustomsTax || '0') +
+            parseFloat(taxData.kkdf || '0') +
+            parseFloat(taxData.vat || '0') +
+            parseFloat(taxData.stampTax || '0')
+          : 0;
+
+        const totalExpenses = importExpensesTotal + serviceInvoicesTotal + totalTaxes;
+
+        const sumByPaymentType = (type: 'advance' | 'balance'): { traditional: number; distributed: number } => ({
+          traditional: traditionalPayments
+            .filter((payment) => payment.paymentType === type)
+            .reduce((total, payment) => total + (parseFloat(payment.amount) || 0), 0),
+          distributed: distributions
+            .filter((dist) => dist.paymentType === type)
+            .reduce((total, dist) => {
+              const amount = typeof dist.distributedAmount === 'string'
+                ? parseFloat(dist.distributedAmount)
+                : Number(dist.distributedAmount);
+              return total + (amount || 0);
+            }, 0),
+        });
+
+        const advance = sumByPaymentType('advance');
+        const balance = sumByPaymentType('balance');
+
+        const totalDistributedPayments = advance.distributed + balance.distributed;
+        const totalPayments = advance.traditional + balance.traditional + totalDistributedPayments;
+
+        summaries.set(reference, {
+          totalExpenses,
+          importExpenses: importExpensesTotal,
+          serviceInvoices: serviceInvoicesTotal,
+          taxes: totalTaxes,
+          advancePayments: advance.traditional + advance.distributed,
+          balancePayments: balance.traditional + balance.distributed,
+          totalPayments,
+          remainingBalance: totalExpenses - totalPayments,
+          distributedPayments: totalDistributedPayments,
+        });
+      }
+
+      return summaries;
+    } catch (error) {
+      console.error('[calculateFinancialSummaryBatch] Error calculating financial summaries:', error);
+      // Tekil sürümle aynı davranış: hesap başarısızsa sıfırlarla devam et.
+      for (const reference of references) {
+        summaries.set(reference, {
+          totalExpenses: 0,
+          importExpenses: 0,
+          serviceInvoices: 0,
+          taxes: 0,
+          advancePayments: 0,
+          balancePayments: 0,
+          totalPayments: 0,
+          remainingBalance: 0,
+        });
+      }
+      return summaries;
     }
   }
 

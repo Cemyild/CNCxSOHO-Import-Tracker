@@ -18,6 +18,8 @@ import { Link } from "wouter"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useEffect, useState, useMemo } from "react"
 import { DatePickerWithRange } from "@/components/ui/date-range-picker"
+import { formatPeriodLabel } from "@/lib/period-label"
+import { MultiSelectCombobox, type BaseOption } from "@/components/ui/multi-select-combobox"
 import { DateRange } from "react-day-picker"
 import { addDays, format, subDays, subWeeks, startOfWeek, endOfWeek, getWeek, getMonth, getYear, startOfMonth, endOfMonth } from "date-fns"
 import { 
@@ -135,7 +137,7 @@ const formatCategoryName = (name: string) => {
 }
 
 export default function TaxAnalyticsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // Date range state with default values (last 90 days)
   const [date, setDate] = useState<DateRange | undefined>(() => {
     const to = new Date(); // Today
@@ -147,7 +149,6 @@ export default function TaxAnalyticsPage() {
   
   // State variables for filters and view modes
   const [selectedProcedures, setSelectedProcedures] = useState<string[]>([]);
-  const [aggregateView, setAggregateView] = useState<boolean>(true);
   
   // State for the trend analysis section
   const [selectedCategory, setSelectedCategory] = useState<string>("");
@@ -162,7 +163,7 @@ export default function TaxAnalyticsPage() {
   };
 
   const { data: analyticsData, isLoading, error } = useQuery({
-    queryKey: ['/api/taxes/analytics', date?.from, date?.to, selectedProcedures, aggregateView],
+    queryKey: ['/api/taxes/analytics', date?.from, date?.to, selectedProcedures],
     queryFn: async () => {
       const params = new URLSearchParams();
       
@@ -179,10 +180,8 @@ export default function TaxAnalyticsPage() {
       }
       
       if (selectedProcedures.length > 0) {
-        params.append('procedures', selectedProcedures.join(','));
+        params.append('procedureRefs', selectedProcedures.join(','));
       }
-      
-      params.append('aggregate', aggregateView ? 'true' : 'false');
       
       const response = await apiRequest('GET', `/api/taxes/analytics?${params.toString()}`);
       return response.json();
@@ -191,9 +190,38 @@ export default function TaxAnalyticsPage() {
   });
   
   // Fetch procedures for the filter dropdown
-  const { data: procedures, isLoading: isLoadingProcedures } = useQuery({
+  const { data: procedures, isLoading: isLoadingProcedures } = useQuery<{ procedures?: Array<{ reference: string; shipper?: string | null }> }>({
     queryKey: ['/api/procedures'],
   });
+
+  // İşlem filtresi seçenekleri: değer = referans (sunucu referansa göre filtreliyor)
+  const procedureOptions: BaseOption[] = useMemo(
+    () =>
+      (procedures?.procedures ?? [])
+        .filter((proc) => Boolean(proc.reference))
+        .map((proc) => ({
+          value: proc.reference,
+          label: proc.shipper ? `${proc.reference} — ${proc.shipper}` : proc.reference,
+        })),
+    [procedures],
+  );
+
+  // İşlem filtresi seçiliyse eğilim sorgusuna da uygula (referanslar boşluk ve
+  // "/" içerebildiği için kodlanarak gönderilir).
+  const procedureRefsParam =
+    selectedProcedures.length > 0
+      ? `&procedureRefs=${encodeURIComponent(selectedProcedures.join(','))}`
+      : '';
+
+  const renderProcedureItem = (option: BaseOption) => option.label;
+
+  const renderSelectedProcedures = (value: string[]) => {
+    if (value.length === 0) return t('reportsPages.taxReport.allProcedures');
+    if (value.length === 1) {
+      return procedureOptions.find((option) => option.value === value[0])?.label ?? value[0];
+    }
+    return t('reportsPages.taxReport.proceduresSelected', { count: value.length });
+  };
   
   // Format tax categories for display (e.g. "customs_tax" → "Customs Tax")
   // Coerce numeric fields defensively — pg-node returns SUM/COUNT as strings, which
@@ -213,7 +241,7 @@ export default function TaxAnalyticsPage() {
   
   // Fetch ALL historical trend data for taxes (not filtered by date range)
   const { data: trendAllData, isLoading: isTrendAllLoading, isError: isTrendAllError } = useQuery({
-    queryKey: ['/api/taxes/trend-all', selectedCategory, isMonthlyView],
+    queryKey: ['/api/taxes/trend-all', selectedCategory, isMonthlyView, selectedProcedures],
     queryFn: async () => {
       if (!selectedCategory) {
         console.log("Missing required params for trend data");
@@ -224,7 +252,7 @@ export default function TaxAnalyticsPage() {
       
       // Use the new "all" tax trend endpoint
       const response = await fetch(
-        `/api/taxes/trend-all?category=${selectedCategory}&groupBy=${isMonthlyView ? 'month' : 'week'}`
+        `/api/taxes/trend-all?category=${selectedCategory}&groupBy=${isMonthlyView ? 'month' : 'week'}${procedureRefsParam}`
       );
       
       if (!response.ok) {
@@ -241,7 +269,7 @@ export default function TaxAnalyticsPage() {
   
   // Also keep the filtered trend data for comparison
   const { data: filteredTrendData, isLoading: isFilteredTrendLoading } = useQuery({
-    queryKey: ['/api/taxes/trend', selectedCategory, isMonthlyView, date?.from, date?.to],
+    queryKey: ['/api/taxes/trend', selectedCategory, isMonthlyView, date?.from, date?.to, selectedProcedures],
     queryFn: async () => {
       if (!selectedCategory || !date?.from || !date?.to) {
         return { data: [] };
@@ -252,7 +280,7 @@ export default function TaxAnalyticsPage() {
       
       // Use the filtered tax trend endpoint
       const response = await fetch(
-        `/api/taxes/trend?category=${selectedCategory}&startDate=${fromDateStr}&endDate=${toDateStr}&groupBy=${isMonthlyView ? 'month' : 'week'}`
+        `/api/taxes/trend?category=${selectedCategory}&startDate=${fromDateStr}&endDate=${toDateStr}&groupBy=${isMonthlyView ? 'month' : 'week'}${procedureRefsParam}`
       );
       
       if (!response.ok) {
@@ -278,13 +306,21 @@ export default function TaxAnalyticsPage() {
       });
     }
     
-    // Process all historical data and mark if in selected range
+    // Process all historical data and mark if in selected range.
+    // Eşleştirme sunucunun ham etiketiyle yapılır; ekranda gösterilen etiket
+    // arayüz diline göre üretilir.
     return trendAllData.data.map((item: any) => ({
-      period: item.period,
+      period: formatPeriodLabel(
+        item.rawDate,
+        isMonthlyView ? 'month' : 'week',
+        i18n.language,
+        t,
+        item.period,
+      ),
       amount: typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount,
       inSelectedRange: selectedPeriods.has(item.period)
     }));
-  }, [trendAllData, filteredTrendData]);
+  }, [trendAllData, filteredTrendData, isMonthlyView, i18n.language, t]);
   
   // Format date range for display
   const formattedDateRange = useMemo(() => {
@@ -330,12 +366,28 @@ export default function TaxAnalyticsPage() {
                 {t('reportsPages.taxReport.filtersDesc')}
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-6">
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <Label className="mb-2 block">{t('reportsPages.taxReport.dateRange')}</Label>
                 <DatePickerWithRange
                   value={date}
                   onChange={setDate}
+                />
+              </div>
+              <div>
+                <Label className="mb-2 block">{t('reportsPages.taxReport.procedures')}</Label>
+                <MultiSelectCombobox
+                  label={t('reportsPages.taxReport.procedures')}
+                  options={procedureOptions}
+                  value={selectedProcedures}
+                  onChange={setSelectedProcedures}
+                  renderItem={renderProcedureItem}
+                  renderSelectedItem={renderSelectedProcedures}
+                  placeholder={
+                    isLoadingProcedures
+                      ? t('reportsPages.taxReport.loadingProcedures')
+                      : t('reportsPages.taxReport.searchProcedures')
+                  }
                 />
               </div>
             </CardContent>

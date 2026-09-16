@@ -18,6 +18,8 @@ import { Link } from "wouter"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useEffect, useState, useMemo } from "react"
 import { DatePickerWithRange } from "@/components/ui/date-range-picker"
+import { formatPeriodLabel } from "@/lib/period-label"
+import { MultiSelectCombobox, type BaseOption } from "@/components/ui/multi-select-combobox"
 import { DateRange } from "react-day-picker"
 import { addDays, format, subDays, subWeeks, startOfWeek, endOfWeek, getWeek, getMonth, getYear, startOfMonth, endOfMonth } from "date-fns"
 import { 
@@ -136,7 +138,7 @@ const formatCategoryName = (name: string) => {
 }
 
 export default function AnalyticsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // Date range state with default values (last 90 days)
   const [date, setDate] = useState<DateRange | undefined>(() => {
     const to = new Date(); // Today
@@ -148,7 +150,6 @@ export default function AnalyticsPage() {
   
   // State variables for filters and view modes
   const [selectedProcedures, setSelectedProcedures] = useState<string[]>([]);
-  const [aggregateView, setAggregateView] = useState<boolean>(true);
   
   // State for the trend analysis section
   const [selectedCategory, setSelectedCategory] = useState<string>("");
@@ -164,7 +165,7 @@ export default function AnalyticsPage() {
   };
 
   const { data: analyticsData, isLoading, error } = useQuery({
-    queryKey: ['/api/expenses/analytics', date?.from, date?.to, selectedProcedures, aggregateView],
+    queryKey: ['/api/expenses/analytics', date?.from, date?.to, selectedProcedures],
     queryFn: async () => {
       const params = new URLSearchParams();
       
@@ -183,10 +184,8 @@ export default function AnalyticsPage() {
       }
       
       if (selectedProcedures.length > 0) {
-        params.append('procedures', selectedProcedures.join(','));
+        params.append('procedureRefs', selectedProcedures.join(','));
       }
-      
-      params.append('aggregate', aggregateView ? 'true' : 'false');
       
       const response = await apiRequest('GET', `/api/expenses/analytics?${params.toString()}`);
       return response.json();
@@ -195,9 +194,38 @@ export default function AnalyticsPage() {
   });
   
   // Fetch procedures for the filter dropdown
-  const { data: procedures, isLoading: isLoadingProcedures } = useQuery({
+  const { data: procedures, isLoading: isLoadingProcedures } = useQuery<{ procedures?: Array<{ reference: string; shipper?: string | null }> }>({
     queryKey: ['/api/procedures'],
   });
+
+  // İşlem filtresi seçenekleri: değer = referans (sunucu referansa göre filtreliyor)
+  const procedureOptions: BaseOption[] = useMemo(
+    () =>
+      (procedures?.procedures ?? [])
+        .filter((proc) => Boolean(proc.reference))
+        .map((proc) => ({
+          value: proc.reference,
+          label: proc.shipper ? `${proc.reference} — ${proc.shipper}` : proc.reference,
+        })),
+    [procedures],
+  );
+
+  // İşlem filtresi seçiliyse eğilim sorgusuna da uygula (referanslar boşluk ve
+  // "/" içerebildiği için kodlanarak gönderilir).
+  const procedureRefsParam =
+    selectedProcedures.length > 0
+      ? `&procedureRefs=${encodeURIComponent(selectedProcedures.join(','))}`
+      : '';
+
+  const renderProcedureItem = (option: BaseOption) => option.label;
+
+  const renderSelectedProcedures = (value: string[]) => {
+    if (value.length === 0) return t('reportsPages.analytics.allProcedures');
+    if (value.length === 1) {
+      return procedureOptions.find((option) => option.value === value[0])?.label ?? value[0];
+    }
+    return t('reportsPages.analytics.proceduresSelected', { count: value.length });
+  };
   
   // Format data for charts
   // Coerce numeric fields defensively — pg-node returns SUM/COUNT as strings.
@@ -217,7 +245,7 @@ export default function AnalyticsPage() {
   
   // Fetch real trend data from API with current date range
   const { data: trendData, isLoading: isTrendLoading, isError: isTrendError } = useQuery({
-    queryKey: ['/api/expenses/trend', selectedCategory, isMonthlyView, date?.from, date?.to],
+    queryKey: ['/api/expenses/trend', selectedCategory, isMonthlyView, date?.from, date?.to, selectedProcedures],
     queryFn: async () => {
       if (!selectedCategory || !date?.from || !date?.to) {
         console.log("Missing required params for trend data");
@@ -238,7 +266,7 @@ export default function AnalyticsPage() {
       console.log(`Fetching trend data for ${selectedCategory} from ${fromDateStr} to ${toDateStr}`);
       
       const response = await fetch(
-        `/api/expenses/trend?category=${selectedCategory}&startDate=${fromDateStr}&endDate=${toDateStr}&groupBy=${isMonthlyView ? 'month' : 'week'}`
+        `/api/expenses/trend?category=${selectedCategory}&startDate=${fromDateStr}&endDate=${toDateStr}&groupBy=${isMonthlyView ? 'month' : 'week'}${procedureRefsParam}`
       );
       
       if (!response.ok) {
@@ -259,11 +287,18 @@ export default function AnalyticsPage() {
       return [];
     }
     
+    // Dönem etiketini arayüz dilinde üretiyoruz (sunucu sabit İngilizce dönüyordu)
     return trendData.data.map((item: any) => ({
-      period: item.period,
+      period: formatPeriodLabel(
+        item.date,
+        isMonthlyView ? 'month' : 'week',
+        i18n.language,
+        t,
+        item.period,
+      ),
       amount: typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount
     }));
-  }, [trendData]);
+  }, [trendData, isMonthlyView, i18n.language, t]);
 
   return (
     <PageLayout title={t('reportsPages.analytics.pageTitle')} navItems={items}>
@@ -295,12 +330,28 @@ export default function AnalyticsPage() {
                 {t('reportsPages.analytics.filtersDesc')}
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-6">
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <Label className="mb-2 block">{t('reportsPages.analytics.dateRange')}</Label>
                 <DatePickerWithRange
                   value={date}
                   onChange={setDate}
+                />
+              </div>
+              <div>
+                <Label className="mb-2 block">{t('reportsPages.analytics.procedures')}</Label>
+                <MultiSelectCombobox
+                  label={t('reportsPages.analytics.procedures')}
+                  options={procedureOptions}
+                  value={selectedProcedures}
+                  onChange={setSelectedProcedures}
+                  renderItem={renderProcedureItem}
+                  renderSelectedItem={renderSelectedProcedures}
+                  placeholder={
+                    isLoadingProcedures
+                      ? t('reportsPages.analytics.loadingProcedures')
+                      : t('reportsPages.analytics.searchProcedures')
+                  }
                 />
               </div>
             </CardContent>

@@ -6,6 +6,21 @@ import { Router } from 'express';
 import { storage } from './storage';
 import { format } from 'date-fns';
 import ExcelJS from 'exceljs';
+import type { Tax, ImportExpense, ImportServiceInvoice } from '@shared/schema';
+import type { FinancialSummary } from './storage';
+
+// Toplu hesapta bir referans hiç bulunamazsa kullanılacak nötr özet.
+const EMPTY_FINANCIAL_SUMMARY: FinancialSummary = {
+  totalExpenses: 0,
+  importExpenses: 0,
+  serviceInvoices: 0,
+  taxes: 0,
+  advancePayments: 0,
+  balancePayments: 0,
+  totalPayments: 0,
+  remainingBalance: 0,
+  distributedPayments: 0,
+};
 
 const router = Router();
 
@@ -53,6 +68,30 @@ router.post('/generate', async (req, res) => {
     }
 
     console.log(`[custom-report] Filtered to ${filteredProcedures.length} procedures`);
+
+    // Rapor tipine göre gereken veriyi TEK sorguda topluca çekiyoruz.
+    // (Önceden her prosedür için ayrı sorgu atılıyordu: 200 prosedürlük
+    // "Tüm Detaylar" raporu 2 dakikayı aşıp canlıdaki 60 sn'lik proxy
+    // zaman aşımına takılıyordu.)
+    const references = filteredProcedures.map((proc) => proc.reference);
+    const needsTaxes = filters.reportType === 'tax_details' || filters.reportType === 'all_details';
+    const needsExpenses = filters.reportType === 'import_expenses' || filters.reportType === 'all_details';
+    const needsFinancials = filters.reportType === 'payment_expense' || filters.reportType === 'all_details';
+
+    const [taxesByRef, expensesByRef, serviceInvoicesByRef, summariesByRef] = await Promise.all([
+      needsTaxes
+        ? storage.getTaxesByProcedureReferences(references)
+        : Promise.resolve(new Map<string, Tax>()),
+      needsExpenses
+        ? storage.getImportExpensesByReferences(references)
+        : Promise.resolve(new Map<string, ImportExpense[]>()),
+      needsExpenses
+        ? storage.getImportServiceInvoicesByReferences(references)
+        : Promise.resolve(new Map<string, ImportServiceInvoice[]>()),
+      needsFinancials
+        ? storage.calculateFinancialSummaryBatch(references)
+        : Promise.resolve(new Map<string, FinancialSummary>()),
+    ]);
 
     // Generate report data based on report type
     const reportData: ReportData[] = [];
@@ -126,7 +165,7 @@ router.post('/generate', async (req, res) => {
 
         // Get tax data
         try {
-          const taxData = await storage.getTaxByProcedureReference(procedure.reference);
+          const taxData = taxesByRef.get(procedure.reference);
           if (taxData) {
             if (!filters.categories || filters.categories.includes('customs_tax')) {
               row.customs_tax = formatTurkishLira(taxData.customsTax);
@@ -170,8 +209,7 @@ router.post('/generate', async (req, res) => {
 
         // Get import expenses data
         try {
-          const importExpenses = await storage.getImportExpensesByReference(procedure.reference || '');
-          console.log(`[custom-report] Found ${importExpenses.length} import expenses for ${procedure.reference}`);
+          const importExpenses = expensesByRef.get(procedure.reference) || [];
           
           // Group expenses by category
           const expensesByCategory: { [key: string]: any[] } = {};
@@ -190,8 +228,6 @@ router.post('/generate', async (req, res) => {
               issuer: expense.issuer
             });
           });
-
-          console.log(`[custom-report] Expenses by category for ${procedure.reference}:`, Object.keys(expensesByCategory));
 
           // Map UI categories to database categories
           const categoryMapping: { [key: string]: string } = {
@@ -219,17 +255,6 @@ router.post('/generate', async (req, res) => {
                   // Use appropriate document number based on category
                   let documentRef = '';
                   
-                  // Debug logging for insurance category
-                  if (categoryKey === 'insurance') {
-                    console.log(`[custom-report] DEBUG Insurance for ${procedure.reference}:`, {
-                      categoryKey,
-                      policyNumber: exp.policyNumber,
-                      documentNumber: exp.documentNumber,
-                      invoiceNumber: exp.invoiceNumber,
-                      allFields: Object.keys(exp)
-                    });
-                  }
-                  
                   if (categoryKey === 'export_registry_fee' && exp.documentNumber) {
                     documentRef = `(${exp.documentNumber})`;
                   } else if (categoryKey === 'insurance' && exp.policyNumber) {
@@ -241,7 +266,6 @@ router.post('/generate', async (req, res) => {
                   return `${exp.amount || '0'} ${exp.currency || 'TRY'} ${documentRef} ${exp.issuer ? `- ${exp.issuer}` : ''} ${exp.invoiceDate ? `- ${exp.invoiceDate}` : ''}`;
                 }).join('; ');
                 row[categoryKey] = expenseDetails;
-                console.log(`[custom-report] Added ${categoryKey} for ${procedure.reference}: ${expenseDetails}`);
               } else {
                 row[categoryKey] = '';
               }
@@ -250,7 +274,7 @@ router.post('/generate', async (req, res) => {
 
           // Get service invoices
           if (!filters.categories || filters.categories.includes('service_invoice')) {
-            const serviceInvoices = await storage.getImportServiceInvoicesByReference(procedure.reference);
+            const serviceInvoices = serviceInvoicesByRef.get(procedure.reference) || [];
             if (serviceInvoices.length > 0) {
               const serviceDetails = serviceInvoices.map(invoice => 
                 `${invoice.amount} ${invoice.currency} (${invoice.invoiceNumber}) - ${format(new Date(invoice.date), 'dd/MM/yyyy')}`
@@ -286,7 +310,7 @@ router.post('/generate', async (req, res) => {
 
         // Get financial summary
         try {
-          const financialSummary = await storage.calculateFinancialSummary(procedure.reference);
+          const financialSummary = summariesByRef.get(procedure.reference) ?? EMPTY_FINANCIAL_SUMMARY;
           
           if (!filters.categories || filters.categories.includes('total_expenses')) {
             row.total_expenses = financialSummary.totalExpenses;
@@ -573,7 +597,7 @@ const fetchReportData = async (reportType: string, filters: ReportFilters) => {
     // Add import expenses data for relevant report types
     if (reportType === 'import_expenses' || reportType === 'all_details') {
       try {
-        const importExpenses = await storage.getImportExpensesByReference(procedure.reference || '');
+        const importExpenses = expensesByRef.get(procedure.reference) || [];
         
         // Debug: Check what fields we have for export_registry_fee and insurance
         const debugExpenses = importExpenses.filter(exp => exp.category === 'export_registry_fee' || exp.category === 'insurance');

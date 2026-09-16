@@ -427,13 +427,15 @@ export default function CustomReportPage() {
       const link = document.createElement('a')
       link.href = url
       
-      const reportTypeNames = {
-        'procedure_details': 'Procedure Details',
-        'import_expenses': 'Import Expenses',
-        'payment_expense': 'Payment and Expense Summary'
+      const reportTypeNames: Record<Exclude<ReportType, null>, string> = {
+        import_procedures: 'Import Procedures',
+        tax_details: 'Tax Details',
+        import_expenses: 'Import Expenses',
+        payment_expense: 'Payment and Expense Summary',
+        all_details: 'All Details',
       }
-      
-      const reportName = reportTypeNames[selectedReportType as keyof typeof reportTypeNames] || 'Custom Report'
+
+      const reportName = selectedReportType ? reportTypeNames[selectedReportType] : 'Custom Report'
       const dateStr = format(new Date(), 'yyyyMMdd_HHmmss')
       link.download = `${reportName.replace(/\s+/g, '_')}_${dateStr}.xlsx`
       

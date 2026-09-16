@@ -3679,8 +3679,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 procedureReferences = [String(parsed)];
               }
             } catch (jsonError) {
-              // Not JSON, treat as single string value
-              procedureReferences = [procedureRefs];
+              // Not JSON — front-end sends a comma separated list
+              // (aynı biçim /api/taxes/analytics tarafında da kullanılıyor).
+              procedureReferences = procedureRefs
+                .split(",")
+                .map((ref) => ref.trim())
+                .filter(Boolean);
             }
           }
 
@@ -3762,6 +3766,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Get query parameters with defaults
     const category = req.query.category as string;
     const groupBy = (req.query.groupBy as string) || "month";
+    // İşlem filtresi: front-end virgülle ayrılmış referans listesi gönderir
+    const selectedRefs =
+      typeof req.query.procedureRefs === "string"
+        ? req.query.procedureRefs.split(",").map((ref) => ref.trim()).filter(Boolean)
+        : [];
 
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
@@ -3792,6 +3801,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dateClause = ` AND p.import_dec_date::date BETWEEN $2::date AND $3::date`;
       }
 
+      let refClause = "";
+      if (selectedRefs.length > 0) {
+        params.push(selectedRefs);
+        refClause = ` AND e.procedure_reference = ANY($${params.length}::text[])`;
+      }
+
       const result = await pool.query(
         `
         SELECT
@@ -3805,7 +3820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         JOIN
           procedures p ON e.procedure_reference = p.reference
         WHERE
-          e.category = $1${dateClause}
+          e.category = $1${dateClause}${refClause}
         ORDER BY
           p.import_dec_date ASC
       `,
