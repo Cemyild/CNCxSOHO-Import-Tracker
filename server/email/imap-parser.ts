@@ -16,6 +16,8 @@ export interface ImapStructureNode {
   part?: string;
   type: string;
   parameters?: Record<string, string>;
+  /** Content-ID. Doluysa parça mailin gövdesinde gösteriliyor demektir. */
+  id?: string;
   disposition?: string;
   dispositionParameters?: Record<string, string>;
   size?: number;
@@ -41,6 +43,25 @@ function filenameOf(node: ImapStructureNode): string {
   return node.dispositionParameters?.filename ?? node.parameters?.name ?? "";
 }
 
+/** Outlook ve Gmail imza resimlerini image001.png gibi adlandırır. */
+const AUTO_IMAGE_NAME = /^image\d+\.(png|jpe?g|gif|bmp)$/i;
+
+/**
+ * Mail imzasındaki logo/resim mi? Bu parçalar gövdenin içinde gösterilmek
+ * üzere taşınıyor, kullanıcının "eki" değiller — listede gürültü yapıyorlar.
+ * Yalnızca RESİM parçaları imza sayılabilir: gövdede gösterilen bir PDF bile
+ * gerçek belgedir.
+ */
+export function isSignatureImage(node: ImapStructureNode): boolean {
+  const filename = filenameOf(node);
+  if (filename === "") return false;
+  if (!(node.type ?? "").toLowerCase().startsWith("image/")) return false;
+
+  if ((node.disposition ?? "").toLowerCase() === "inline") return true;
+  if (node.id) return true;
+  return AUTO_IMAGE_NAME.test(filename);
+}
+
 export function analyzeBodyStructure(root: ImapStructureNode): ImapStructureResult {
   const attachments: ParsedAttachment[] = [];
   let plain: ImapStructureNode | null = null;
@@ -52,8 +73,8 @@ export function analyzeBodyStructure(root: ImapStructureNode): ImapStructureResu
     const filename = filenameOf(node);
     if (filename !== "") {
       // Dosya adı olan parça asla gövde sayılmaz. Parça numarası yoksa sonradan
-      // indirilemeyeceği için listelenmez de.
-      if (node.part) {
+      // indirilemeyeceği için listelenmez de; imza resimleri de listelenmez.
+      if (node.part && !isSignatureImage(node)) {
         attachments.push({
           gmailAttachmentId: node.part,
           filename,
@@ -97,6 +118,8 @@ export function decodeTextPart(buffer: Buffer, charset: string): string {
 
 export function buildParsedMessage(input: {
   uid: string;
+  /** Gmail'in X-GM-THRID değeri; aynı konuşmadaki mailler bunu paylaşır. */
+  threadId?: string | null;
   envelope: ImapEnvelope;
   structure: ImapStructureNode;
   textContent: string;
@@ -111,9 +134,10 @@ export function buildParsedMessage(input: {
   const to = input.envelope.to?.[0];
 
   return {
-    // IMAP'te konuşma kimliği yok; UID hem mesaj hem konu kimliği olarak kullanılır.
     gmailMessageId: input.uid,
-    gmailThreadId: input.uid,
+    // Gmail konu kimliği verirse aynı konuşmadaki mailler gruplanabilir;
+    // vermezse her mail kendi başına bir konuşma sayılır.
+    gmailThreadId: input.threadId || input.uid,
     fromAddress: (from?.address ?? "").toLowerCase(),
     fromName: from?.name ?? "",
     toAddress: (to?.address ?? "").toLowerCase(),

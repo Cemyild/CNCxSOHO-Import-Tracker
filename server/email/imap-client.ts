@@ -149,7 +149,7 @@ export function createImapClient(creds: ImapCredentials): MailClient {
       const imap = await connected();
       const message = await imap.fetchOne(
         uid,
-        { envelope: true, bodyStructure: true },
+        { envelope: true, bodyStructure: true, threadId: true },
         { uid: true },
       );
       if (!message) throw new Error(`Mail bulunamadı: ${uid}`);
@@ -165,6 +165,7 @@ export function createImapClient(creds: ImapCredentials): MailClient {
 
       return buildParsedMessage({
         uid,
+        threadId: message.threadId ?? null,
         envelope: (message.envelope ?? {}) as any,
         structure,
         textContent,

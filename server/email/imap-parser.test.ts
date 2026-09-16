@@ -3,6 +3,7 @@ import {
   analyzeBodyStructure,
   decodeTextPart,
   buildParsedMessage,
+  isSignatureImage,
   type ImapStructureNode,
 } from "./imap-parser";
 
@@ -140,6 +141,88 @@ describe("analyzeBodyStructure", () => {
   });
 });
 
+describe("isSignatureImage", () => {
+  const image = (over: Partial<ImapStructureNode>): ImapStructureNode => ({
+    part: "2",
+    type: "image/png",
+    size: 5000,
+    dispositionParameters: { filename: "image001.png" },
+    ...over,
+  });
+
+  it("gövdeye gömülü resmi imza sayar (Content-ID)", () => {
+    expect(isSignatureImage(image({ id: "<abc123@mail>" }))).toBe(true);
+  });
+
+  it("disposition inline olan resmi imza sayar", () => {
+    expect(isSignatureImage(image({ disposition: "inline" }))).toBe(true);
+  });
+
+  it("imageNNN kalıbındaki adı imza sayar", () => {
+    expect(isSignatureImage(image({ dispositionParameters: { filename: "image014.jpg" } }))).toBe(
+      true,
+    );
+    expect(isSignatureImage(image({ type: "image/jpeg", dispositionParameters: { filename: "image002.jpeg" } }))).toBe(true);
+  });
+
+  it("gerçek adı olan resmi imza saymaz", () => {
+    expect(
+      isSignatureImage(image({ dispositionParameters: { filename: "gumruk-damgasi.png" } })),
+    ).toBe(false);
+  });
+
+  it("resim olmayan hiçbir parçayı imza saymaz", () => {
+    // Gömülü gösterilen bir PDF bile gerçek belgedir.
+    expect(
+      isSignatureImage({
+        part: "2",
+        type: "application/pdf",
+        disposition: "inline",
+        id: "<x@y>",
+        dispositionParameters: { filename: "fatura.pdf" },
+      }),
+    ).toBe(false);
+  });
+
+  it("dosya adı olmayan parçayı imza saymaz", () => {
+    expect(isSignatureImage({ part: "2", type: "image/png" })).toBe(false);
+  });
+});
+
+describe("analyzeBodyStructure imza resimleri", () => {
+  it("imza resimlerini ek listesine koymaz, gerçek belgeyi korur", () => {
+    const result = analyzeBodyStructure({
+      type: "multipart/mixed",
+      childNodes: [
+        { part: "1", type: "text/plain", parameters: { charset: "utf-8" } },
+        {
+          part: "2",
+          type: "image/png",
+          size: 134506,
+          id: "<sig@mail>",
+          dispositionParameters: { filename: "image002.png" },
+        },
+        {
+          part: "3",
+          type: "image/jpeg",
+          size: 2620,
+          dispositionParameters: { filename: "image001.jpg" },
+        },
+        {
+          part: "4",
+          type: "application/pdf",
+          size: 67200,
+          dispositionParameters: { filename: "mawb US26005716.pdf" },
+        },
+      ],
+    });
+
+    expect(result.attachments).toHaveLength(1);
+    expect(result.attachments[0].filename).toBe("mawb US26005716.pdf");
+    expect(result.textPart).toBe("1");
+  });
+});
+
 describe("decodeTextPart", () => {
   it("utf-8 metni çözer", () => {
     expect(decodeTextPart(Buffer.from("Gümrük işlemi", "utf8"), "utf-8")).toBe("Gümrük işlemi");
@@ -216,6 +299,23 @@ describe("buildParsedMessage", () => {
       textContent: "x".repeat(25000),
     });
     expect(parsed.bodyText).toHaveLength(20000);
+  });
+
+  it("Gmail konu kimliğini kullanır", () => {
+    const parsed = buildParsedMessage({
+      uid: "4711",
+      threadId: "1846290000000000123",
+      envelope,
+      structure,
+      textContent: "gövde",
+    });
+    expect(parsed.gmailMessageId).toBe("4711");
+    expect(parsed.gmailThreadId).toBe("1846290000000000123");
+  });
+
+  it("konu kimliği yoksa mail kimliğine düşer", () => {
+    const parsed = buildParsedMessage({ uid: "4711", envelope, structure, textContent: "gövde" });
+    expect(parsed.gmailThreadId).toBe("4711");
   });
 
   it("eksik zarf alanlarında çökmez", () => {
