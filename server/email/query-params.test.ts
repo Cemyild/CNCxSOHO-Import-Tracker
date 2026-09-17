@@ -112,6 +112,16 @@ describe("sanitizeActionItems", () => {
     });
   });
 
+  it("geri açılan iş otomatik kapatma işaretini bırakır", () => {
+    // Tikini kaldırmak "bu kapanmamalıydı" demek; işaret kalırsa hem açık hem
+    // otomatik kapatılmış görünen çelişkili bir satır oluşuyor.
+    const result = sanitizeActionItems([
+      { id: "a", text: "iş", done: false, autoClosed: true, closedReason: "x" },
+    ]);
+    expect("autoClosed" in result[0]).toBe(false);
+    expect("closedReason" in result[0]).toBe(false);
+  });
+
   it("otomatik kapatılmamış işe kapatma alanları eklemez", () => {
     const result = sanitizeActionItems([{ id: "a", text: "iş", done: false, closedReason: "x" }]);
     expect("autoClosed" in result[0]).toBe(false);

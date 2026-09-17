@@ -389,6 +389,28 @@ describe("runSync", () => {
     );
   });
 
+  it("kendine kopyasını attığın mail gelen kutusunda da olsa iş üretmez", async () => {
+    // Takip edilen adrese yazıp kendini CC'ye koyduğunda mailin bir kopyası
+    // gelen kutusuna da düşüyor; kendi yazdığından iş çıkarılmamalı.
+    const { deps, store, decideClosures } = makeDeps({
+      mail: {
+        listMessageIds: vi.fn().mockResolvedValue(["m5"]),
+        listSentMessageIds: vi.fn().mockResolvedValue([]),
+        getMessage: vi.fn().mockResolvedValue({
+          ...mailMessage("m5", "kendi mailim", "gövde"),
+          fromAddress: "cem@sirket.com",
+        }),
+      },
+    });
+
+    await runSync(deps);
+
+    expect(store.insertParsedMessage).toHaveBeenCalledWith(1, expect.anything(), "outgoing");
+    // Kapatma kararı YALNIZCA gönderilenler klasöründen gelen maille alınır;
+    // başlığa güvenip karar vermek sahte bir mailin işleri kapatmasına izin verirdi.
+    expect(decideClosures).not.toHaveBeenCalled();
+  });
+
   it("gelen mail için kapatma kararı hiç sorulmaz", async () => {
     const { deps, decideClosures } = makeDeps();
     await runSync(deps);

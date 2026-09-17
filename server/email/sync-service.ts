@@ -114,13 +114,21 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
 
     const newIds = await store.filterNewMessageIds(uniqueIds);
     for (const id of newIds) {
+      // Klasör kaynaklı: yalnızca bu, iş kapatma kararını tetikleyebilir.
       const outgoing = outgoingIds.has(id);
       try {
         const parsed = await mail.getMessage(id);
+        // Takip edilen adrese yazıp kendini kopyaya koyduğunda mailin bir
+        // örneği gelen kutusuna da düşüyor. Başlığa yalnızca "bu benim
+        // yazdığım" demek için güveniyoruz — kendi metninden iş çıkarmasın
+        // diye. Kapatma kararı için yeterli DEĞİL; sahte bir başlık işleri
+        // kapatabilirdi.
+        const selfSent =
+          parsed.fromAddress.trim().toLowerCase() === account.emailAddress.trim().toLowerCase();
         const emailId = await store.insertParsedMessage(
           account.id,
           parsed,
-          outgoing ? "outgoing" : "incoming",
+          outgoing || selfSent ? "outgoing" : "incoming",
         );
         if (emailId !== null) {
           await store.insertAttachments(emailId, parsed.attachments);

@@ -98,7 +98,10 @@ export function sanitizeActionItems(items: unknown[]): SanitizedActionItem[] {
       done: Boolean(item.done),
     };
 
-    if (item.autoClosed === true) {
+    // Tik kaldırıldıysa iş yeniden açılmış demektir; otomatik kapatma kaydı da
+    // düşer, yoksa hem açık hem "otomatik kapatıldı" görünen çelişkili bir
+    // satır kalır.
+    if (item.autoClosed === true && mapped.done) {
       mapped.autoClosed = true;
       mapped.closedReason = String(item.closedReason ?? "").slice(0, MAX_CLOSE_REASON);
       if (Number.isInteger(item.closedByEmailId)) {
