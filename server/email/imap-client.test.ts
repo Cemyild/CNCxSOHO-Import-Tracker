@@ -4,7 +4,10 @@ import {
   capUids,
   describeImapError,
   imapOptions,
-  pickSearchMailbox,
+  pickSentMailbox,
+  encodeMessageId,
+  decodeMessageId,
+  SENT_PREFIX,
   MAX_SENDERS_PER_QUERY,
   MAX_UIDS_PER_RUN,
 } from "./imap-client";
@@ -49,25 +52,43 @@ describe("buildSearchQuery", () => {
   });
 });
 
-describe("pickSearchMailbox", () => {
-  it("Gmail'in 'Tüm Postalar' klasörünü etiketinden bulur", () => {
-    // Klasör adı dile göre değişiyor ("All Mail" / "Tüm Postalar"); ada değil
-    // özel kullanım etiketine bakıyoruz.
+describe("pickSentMailbox", () => {
+  it("Gönderilenler klasörünü etiketinden bulur", () => {
+    // Klasör adı dile göre değişiyor; ada değil özel kullanım etiketine bakıyoruz.
     // imapflow bu değerleri tek ters bölü ile verir: "\\All", "\\Sent".
     const boxes = [
       { path: "INBOX", specialUse: "\\Inbox" },
       { path: "[Gmail]/Tüm Postalar", specialUse: "\\All" },
       { path: "[Gmail]/Gönderilmiş Postalar", specialUse: "\\Sent" },
     ];
-    expect(pickSearchMailbox(boxes)).toBe("[Gmail]/Tüm Postalar");
+    expect(pickSentMailbox(boxes)).toBe("[Gmail]/Gönderilmiş Postalar");
   });
 
-  it("Tüm Postalar yoksa gelen kutusuna düşer", () => {
-    expect(pickSearchMailbox([{ path: "INBOX", specialUse: "\\Inbox" }])).toBe("INBOX");
+  it("Gönderilenler klasörü yoksa null döner", () => {
+    expect(pickSentMailbox([{ path: "INBOX", specialUse: "\\Inbox" }])).toBeNull();
+    expect(pickSentMailbox([])).toBeNull();
+  });
+});
+
+describe("encodeMessageId / decodeMessageId", () => {
+  it("gelen kutusu maili çıplak numarayla saklanır", () => {
+    // Mevcut kayıtlar bu biçimde; bozulmamalı.
+    expect(encodeMessageId(false, "4711")).toBe("4711");
+    expect(decodeMessageId("4711")).toEqual({ sent: false, uid: "4711" });
   });
 
-  it("hiç klasör bilgisi yoksa gelen kutusuna düşer", () => {
-    expect(pickSearchMailbox([])).toBe("INBOX");
+  it("gönderilen mail ayrı önekle saklanır", () => {
+    // IMAP numaraları klasöre özeldir: önek olmadan gelen ve giden kutusunun
+    // numaraları çakışır ve yanlış maile/eke gidilir.
+    expect(encodeMessageId(true, "12")).toBe(`${SENT_PREFIX}12`);
+    expect(decodeMessageId(`${SENT_PREFIX}12`)).toEqual({ sent: true, uid: "12" });
+  });
+
+  it("çözme işlemi kodlamanın tersidir", () => {
+    for (const sent of [false, true]) {
+      const encoded = encodeMessageId(sent, "999");
+      expect(decodeMessageId(encoded)).toEqual({ sent, uid: "999" });
+    }
   });
 });
 

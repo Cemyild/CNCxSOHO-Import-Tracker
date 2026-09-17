@@ -63,6 +63,7 @@ function makeDeps(overrides: any = {}) {
 
   const mail = {
     listMessageIds: vi.fn().mockResolvedValue(["m1"]),
+    listSentMessageIds: vi.fn().mockResolvedValue([]),
     getMessage: vi.fn().mockResolvedValue(mailMessage("m1", "CNCALO-112 evrak", "Konşimento lazım")),
     getAttachment: vi.fn(),
     close: vi.fn().mockResolvedValue(undefined),
@@ -296,6 +297,7 @@ describe("runSync", () => {
       },
       mail: {
         listMessageIds: vi.fn().mockResolvedValue([]),
+        listSentMessageIds: vi.fn().mockResolvedValue([]),
         getMessage: vi
           .fn()
           .mockResolvedValueOnce({ ...mailMessage("m7", "konu", "g"), gmailThreadId: "T1" })
@@ -317,6 +319,7 @@ describe("runSync", () => {
       },
       mail: {
         listMessageIds: vi.fn().mockResolvedValue([]),
+        listSentMessageIds: vi.fn().mockResolvedValue([]),
         getMessage: vi.fn().mockRejectedValue(new Error("mail arşivlenmiş")),
       },
     });
@@ -333,6 +336,7 @@ describe("runSync", () => {
       },
       mail: {
         listMessageIds: vi.fn().mockResolvedValue([]),
+        listSentMessageIds: vi.fn().mockResolvedValue([]),
         getMessage: vi.fn().mockRejectedValue(new Error("mail silinmiş")),
       },
     });
@@ -347,21 +351,15 @@ describe("runSync", () => {
   it("kendi gönderdiğim maili 'giden' olarak kaydeder", async () => {
     const { deps, store } = makeDeps({
       mail: {
-        listMessageIds: vi.fn().mockResolvedValue(["m9"]),
-        getMessage: vi.fn().mockResolvedValue({
-          ...mailMessage("m9", "RE: evrak", "ekte gönderiyorum"),
-          fromAddress: "cem@sirket.com",
-        }),
+        listMessageIds: vi.fn().mockResolvedValue([]),
+        listSentMessageIds: vi.fn().mockResolvedValue(["sent:9"]),
+        getMessage: vi.fn().mockResolvedValue(mailMessage("sent:9", "RE: evrak", "ekte gönderiyorum")),
       },
     });
 
     await runSync(deps);
 
-    expect(store.insertParsedMessage).toHaveBeenCalledWith(
-      1,
-      expect.objectContaining({ fromAddress: "cem@sirket.com" }),
-      "outgoing",
-    );
+    expect(store.insertParsedMessage).toHaveBeenCalledWith(1, expect.anything(), "outgoing");
   });
 
   it("giden mail aynı konuşmadaki işi kapatır", async () => {
@@ -376,11 +374,9 @@ describe("runSync", () => {
           .mockResolvedValue([{ emailId: 3, itemId: "a", text: "Konşimentoyu gönder" }]),
       },
       mail: {
-        listMessageIds: vi.fn().mockResolvedValue(["m9"]),
-        getMessage: vi.fn().mockResolvedValue({
-          ...mailMessage("m9", "RE: evrak", "ekte gönderiyorum"),
-          fromAddress: "cem@sirket.com",
-        }),
+        listMessageIds: vi.fn().mockResolvedValue([]),
+        listSentMessageIds: vi.fn().mockResolvedValue(["sent:9"]),
+        getMessage: vi.fn().mockResolvedValue(mailMessage("sent:9", "RE: evrak", "ekte gönderiyorum")),
       },
     });
 
@@ -408,11 +404,9 @@ describe("runSync", () => {
           .mockResolvedValue([{ emailId: 3, itemId: "a", text: "bir iş" }]),
       },
       mail: {
-        listMessageIds: vi.fn().mockResolvedValue(["m9"]),
-        getMessage: vi.fn().mockResolvedValue({
-          ...mailMessage("m9", "RE", "gövde"),
-          fromAddress: "cem@sirket.com",
-        }),
+        listMessageIds: vi.fn().mockResolvedValue([]),
+        listSentMessageIds: vi.fn().mockResolvedValue(["sent:9"]),
+        getMessage: vi.fn().mockResolvedValue(mailMessage("sent:9", "RE", "gövde")),
       },
     });
 

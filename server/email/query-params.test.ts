@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { readMessageFilter, DEFAULT_LIMIT, MAX_LIMIT, parseId, escapeLikePattern } from "./query-params";
+import {
+  readMessageFilter,
+  DEFAULT_LIMIT,
+  MAX_LIMIT,
+  parseId,
+  escapeLikePattern,
+  sanitizeActionItems,
+} from "./query-params";
 
 describe("readMessageFilter", () => {
   it("boş sorguda varsayılanları verir", () => {
@@ -74,5 +81,54 @@ describe("escapeLikePattern", () => {
   });
   it("sıradan metni değiştirmez", () => {
     expect(escapeLikePattern("CNCALO-112")).toBe("CNCALO-112");
+  });
+});
+
+describe("sanitizeActionItems", () => {
+  it("temel alanları kırparak alır", () => {
+    expect(sanitizeActionItems([{ id: "a", text: "iş", done: true }])).toEqual([
+      { id: "a", text: "iş", done: true },
+    ]);
+  });
+
+  it("otomatik kapatma kaydını korur", () => {
+    // Bu kayıt silinirse yanlış kapanan iş, kullanıcının kendi kapattığından
+    // ayırt edilemez hale gelir.
+    const items = [
+      {
+        id: "a",
+        text: "iş",
+        done: true,
+        autoClosed: true,
+        closedReason: "ekte gönderildi",
+        closedByEmailId: 12,
+        closedAt: "2026-09-17T09:00:00.000Z",
+      },
+    ];
+    expect(sanitizeActionItems(items)[0]).toMatchObject({
+      autoClosed: true,
+      closedReason: "ekte gönderildi",
+      closedByEmailId: 12,
+    });
+  });
+
+  it("otomatik kapatılmamış işe kapatma alanları eklemez", () => {
+    const result = sanitizeActionItems([{ id: "a", text: "iş", done: false, closedReason: "x" }]);
+    expect("autoClosed" in result[0]).toBe(false);
+    expect("closedReason" in result[0]).toBe(false);
+  });
+
+  it("en fazla 100 madde alır", () => {
+    const many = Array.from({ length: 150 }, (_, i) => ({ id: String(i), text: "x", done: false }));
+    expect(sanitizeActionItems(many)).toHaveLength(100);
+  });
+
+  it("aşırı uzun metni kırpar", () => {
+    const result = sanitizeActionItems([{ id: "a", text: "x".repeat(2000), done: false }]);
+    expect(result[0].text).toHaveLength(500);
+  });
+
+  it("bozuk girdide çökmez", () => {
+    expect(sanitizeActionItems([null, undefined, 42] as any)).toHaveLength(3);
   });
 });

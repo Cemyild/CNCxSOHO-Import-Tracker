@@ -96,20 +96,27 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
       appPassword: account.appPassword,
     });
 
-    // 1) Listele + yeni olanları kaydet
-    const ids: string[] = [];
+    // 1) Listele + yeni olanları kaydet.
+    //
+    // Gelen ve gönderilen ayrı klasörlerde aranıyor. Yön KLASÖRDEN belirleniyor,
+    // gönderen başlığından değil: başlık sahte olabilir ve sahte bir "giden"
+    // mail, işleri kapatma kararına kendi metnini sokabilirdi.
+    const incomingIds: string[] = [];
+    const sentIds: string[] = [];
     for (const query of queries) {
-      ids.push(...(await mail.listMessageIds(query)));
+      incomingIds.push(...(await mail.listMessageIds(query)));
+      sentIds.push(...(await mail.listSentMessageIds(query)));
     }
-    const uniqueIds = Array.from(new Set(ids));
+
+    const uniqueIds = Array.from(new Set([...incomingIds, ...sentIds]));
     result.fetched = uniqueIds.length;
+    const outgoingIds = new Set(sentIds);
 
     const newIds = await store.filterNewMessageIds(uniqueIds);
     for (const id of newIds) {
+      const outgoing = outgoingIds.has(id);
       try {
         const parsed = await mail.getMessage(id);
-        const outgoing =
-          parsed.fromAddress.trim().toLowerCase() === account.emailAddress.trim().toLowerCase();
         const emailId = await store.insertParsedMessage(
           account.id,
           parsed,
@@ -133,7 +140,8 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
                 open,
               );
               if (closures.length > 0) {
-                result.closed = (result.closed ?? 0) + (await store.closeActionItems(closures, emailId));
+                result.closed =
+                  (result.closed ?? 0) + (await store.closeActionItems(closures, emailId));
               }
             } catch (error) {
               // Kapatma bir kolaylık; başarısızlığı turu bozmamalı.

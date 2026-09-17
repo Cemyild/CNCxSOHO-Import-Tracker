@@ -3,7 +3,7 @@ import type { Request, Response } from "express";
 import { requireRole } from "../auth-middleware";
 import { storage } from "../storage";
 import * as store from "./store";
-import { readMessageFilter, parseId } from "./query-params";
+import { readMessageFilter, parseId, sanitizeActionItems } from "./query-params";
 import { testImapConnection, describeImapError } from "./imap-client";
 import { runSync, isSyncRunning } from "./sync-service";
 import {
@@ -196,11 +196,7 @@ router.patch("/messages/:id", requireRole("admin"), async (req, res) => {
       patch.procedureId = value;
     }
     if (Array.isArray(req.body?.actionItems)) {
-      patch.actionItems = req.body.actionItems.slice(0, 100).map((item: any) => ({
-        id: String(item?.id ?? "").slice(0, 100),
-        text: String(item?.text ?? "").slice(0, 500),
-        done: Boolean(item?.done),
-      }));
+      patch.actionItems = sanitizeActionItems(req.body.actionItems) as any;
     }
 
     await store.updateMessage(id, patch);

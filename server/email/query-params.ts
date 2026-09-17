@@ -67,3 +67,48 @@ export function parseId(value: unknown): number | null {
 export function escapeLikePattern(value: string): string {
   return value.replace(/([\\%_])/g, "\\$1");
 }
+
+export const MAX_ACTION_ITEMS = 100;
+export const MAX_ACTION_TEXT = 500;
+export const MAX_CLOSE_REASON = 300;
+
+export interface SanitizedActionItem {
+  id: string;
+  text: string;
+  done: boolean;
+  autoClosed?: boolean;
+  closedReason?: string;
+  closedByEmailId?: number;
+  closedAt?: string;
+}
+
+/**
+ * İstemciden gelen yapılacaklar listesini yazmadan önce temizler.
+ *
+ * Otomatik kapatma kaydı (autoClosed / gerekçe / kaynak mail) KORUNUR: istemci
+ * her tikte listenin tamamını geri gönderiyor, bu alanlar düşerse yanlış kapanan
+ * bir iş kullanıcının kendi kapattığından ayırt edilemez hale gelir.
+ */
+export function sanitizeActionItems(items: unknown[]): SanitizedActionItem[] {
+  return items.slice(0, MAX_ACTION_ITEMS).map((raw) => {
+    const item = (raw ?? {}) as Record<string, unknown>;
+    const mapped: SanitizedActionItem = {
+      id: String(item.id ?? "").slice(0, 100),
+      text: String(item.text ?? "").slice(0, MAX_ACTION_TEXT),
+      done: Boolean(item.done),
+    };
+
+    if (item.autoClosed === true) {
+      mapped.autoClosed = true;
+      mapped.closedReason = String(item.closedReason ?? "").slice(0, MAX_CLOSE_REASON);
+      if (Number.isInteger(item.closedByEmailId)) {
+        mapped.closedByEmailId = item.closedByEmailId as number;
+      }
+      if (typeof item.closedAt === "string") {
+        mapped.closedAt = item.closedAt.slice(0, 40);
+      }
+    }
+
+    return mapped;
+  });
+}

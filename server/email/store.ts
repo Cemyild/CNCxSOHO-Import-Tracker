@@ -647,9 +647,16 @@ export async function listThreads(
     LIMIT ${filter.limit} OFFSET ${filter.offset}
   `);
 
-  const totals = await db.execute<{ value: number }>(
-    sql`SELECT COUNT(DISTINCT m.gmail_thread_id)::int AS value FROM (${matching}) AS m`,
-  );
+  // Sayım da listeyle aynı kuralı uygulamalı: yalnızca gelen maili olan
+  // konuşmalar listeleniyor, sayı da onları saymalı.
+  const totals = await db.execute<{ value: number }>(sql`
+    SELECT COUNT(*)::int AS value FROM (
+      SELECT m.gmail_thread_id
+      FROM (${matching}) AS m
+      GROUP BY m.gmail_thread_id
+      HAVING BOOL_OR(m.direction = ${DIRECTION_INCOMING})
+    ) AS t
+  `);
   const value = totals.rows?.[0]?.value ?? 0;
 
   return {
@@ -706,7 +713,9 @@ export async function listOtherActionItems(): Promise<ProcedureActionItem[]> {
   const rows = await db.execute<any>(sql`
     SELECT e.id AS email_id, e.subject AS email_subject, e.sent_at,
            ai->>'id' AS item_id, ai->>'text' AS text,
-           COALESCE((ai->>'done')::boolean, false) AS done
+           COALESCE((ai->>'done')::boolean, false) AS done,
+           COALESCE((ai->>'autoClosed')::boolean, false) AS auto_closed,
+           ai->>'closedReason' AS closed_reason
     FROM emails e,
          jsonb_array_elements(
            CASE WHEN jsonb_typeof(e.action_items) = 'array' THEN e.action_items ELSE '[]'::jsonb END
@@ -722,6 +731,8 @@ export async function listOtherActionItems(): Promise<ProcedureActionItem[]> {
     itemId: r.item_id ?? "",
     text: r.text ?? "",
     done: r.done === true,
+    autoClosed: r.auto_closed === true,
+    closedReason: r.closed_reason ?? "",
   }));
 }
 
@@ -843,6 +854,8 @@ export async function listProcedureDocuments(
 
 export interface ProcedureActionItem {
   emailId: number;
+  autoClosed?: boolean;
+  closedReason?: string;
   emailSubject: string | null;
   sentAt: Date | null;
   itemId: string;
@@ -857,7 +870,9 @@ export async function listProcedureActionItems(
   const rows = await db.execute<any>(sql`
     SELECT e.id AS email_id, e.subject AS email_subject, e.sent_at,
            ai->>'id' AS item_id, ai->>'text' AS text,
-           COALESCE((ai->>'done')::boolean, false) AS done
+           COALESCE((ai->>'done')::boolean, false) AS done,
+           COALESCE((ai->>'autoClosed')::boolean, false) AS auto_closed,
+           ai->>'closedReason' AS closed_reason
     FROM emails e,
          jsonb_array_elements(
            CASE WHEN jsonb_typeof(e.action_items) = 'array' THEN e.action_items ELSE '[]'::jsonb END
@@ -873,6 +888,8 @@ export async function listProcedureActionItems(
     itemId: r.item_id ?? "",
     text: r.text ?? "",
     done: r.done === true,
+    autoClosed: r.auto_closed === true,
+    closedReason: r.closed_reason ?? "",
   }));
 }
 
@@ -943,11 +960,12 @@ export async function closeActionItems(
 
     const reasons = new Map(items.map((i) => [i.itemId, i.reason]));
     let changed = false;
+    let changedCount = 0;
 
     const next = (row.actionItems as any[]).map((item) => {
       if (!reasons.has(item?.id) || item?.done === true) return item;
       changed = true;
-      closed++;
+      changedCount++;
       return {
         ...item,
         done: true,
@@ -963,6 +981,8 @@ export async function closeActionItems(
         .update(emails)
         .set({ actionItems: next, updatedAt: new Date() })
         .where(eq(emails.id, emailId));
+      // Yalnızca gerçekten yazılanlar sayılır.
+      closed += changedCount;
     }
   }
 

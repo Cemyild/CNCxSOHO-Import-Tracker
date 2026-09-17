@@ -7,7 +7,7 @@
  * çalışmaya devam ediyor.
  */
 
-import { ImapFlow, type MailboxLockObject } from "imapflow";
+import { ImapFlow } from "imapflow";
 import {
   analyzeBodyStructure,
   buildParsedMessage,
@@ -32,9 +32,12 @@ export interface ImapCredentials {
 }
 
 export interface MailClient {
+  /** Gelen kutusundaki eşleşen mailler. */
   listMessageIds(query: string): Promise<string[]>;
-  getMessage(uid: string): Promise<ParsedMessage>;
-  getAttachment(uid: string, partId: string): Promise<Buffer>;
+  /** Gönderilenler klasöründeki eşleşen mailler (kimlikleri öneklidir). */
+  listSentMessageIds(query: string): Promise<string[]>;
+  getMessage(id: string): Promise<ParsedMessage>;
+  getAttachment(id: string, partId: string): Promise<Buffer>;
   close(): Promise<void>;
 }
 
@@ -107,19 +110,34 @@ export function imapOptions(creds: ImapCredentials) {
   };
 }
 
-export const FALLBACK_MAILBOX = "INBOX";
+export const INBOX_MAILBOX = "INBOX";
+/** Gönderilen mailin kimliğine eklenen önek; gelen kutusu kimlikleri çıplak kalır. */
+export const SENT_PREFIX = "sent:";
 
 /**
- * Aranacak klasörü seçer. Gmail'in "Tüm Postalar"ı hem gelen hem giden
- * mailleri içerir (çöp ve spam hariç), böylece tek sorguda iki yönü de
- * tarayabiliyoruz. Klasör adı hesabın diline göre değiştiği için ada değil
- * özel kullanım etiketine (\All) bakılır.
+ * Gönderilenler klasörünü bulur. Klasör adı hesabın diline göre değiştiği için
+ * ada değil özel kullanım etiketine (\Sent) bakılır. Bulunamazsa null döner ve
+ * yalnızca gelen kutusu taranır.
  */
-export function pickSearchMailbox(
+export function pickSentMailbox(
   mailboxes: Array<{ path: string; specialUse?: string }>,
-): string {
-  const all = mailboxes.find((box) => box.specialUse === "\\All");
-  return all?.path ?? FALLBACK_MAILBOX;
+): string | null {
+  return mailboxes.find((box) => box.specialUse === "\\Sent")?.path ?? null;
+}
+
+/**
+ * IMAP numaraları KLASÖRE ÖZELDİR: gelen kutusundaki 4711 ile gönderilenlerdeki
+ * 4711 farklı maillerdir. Bu yüzden gönderilen maillerin kimliği öneklenir.
+ * Gelen kutusu kimlikleri çıplak bırakılıyor ki mevcut kayıtlar geçerli kalsın.
+ */
+export function encodeMessageId(sent: boolean, uid: string): string {
+  return sent ? `${SENT_PREFIX}${uid}` : uid;
+}
+
+export function decodeMessageId(id: string): { sent: boolean; uid: string } {
+  return id.startsWith(SENT_PREFIX)
+    ? { sent: true, uid: id.slice(SENT_PREFIX.length) }
+    : { sent: false, uid: id };
 }
 
 function newConnection(creds: ImapCredentials): ImapFlow {
@@ -140,15 +158,14 @@ async function readStream(stream: NodeJS.ReadableStream): Promise<Buffer> {
  */
 export function createImapClient(creds: ImapCredentials): MailClient {
   let client: ImapFlow | null = null;
-  let lock: MailboxLockObject | null = null;
+  let sentMailbox: string | null = null;
 
   async function connected(): Promise<ImapFlow> {
     if (client) return client;
     const fresh = newConnection(creds);
     try {
       await fresh.connect();
-      const mailboxes = await fresh.list();
-      lock = await fresh.getMailboxLock(pickSearchMailbox(mailboxes as any));
+      sentMailbox = pickSentMailbox((await fresh.list()) as any);
     } catch (error) {
       try {
         await fresh.logout();
@@ -161,52 +178,84 @@ export function createImapClient(creds: ImapCredentials): MailClient {
     return client;
   }
 
+  /** Her işlem kendi klasör kilidini alır; iki klasör arasında geçiş gerekiyor. */
+  async function inMailbox<T>(path: string, fn: (imap: ImapFlow) => Promise<T>): Promise<T> {
+    const imap = await connected();
+    const lock = await imap.getMailboxLock(path);
+    try {
+      return await fn(imap);
+    } finally {
+      lock.release();
+    }
+  }
+
+  async function search(path: string, query: string, sent: boolean): Promise<string[]> {
+    return inMailbox(path, async (imap) => {
+      const uids = await imap.search({ gmailRaw: query }, { uid: true });
+      return capUids(uids || []).map((uid) => encodeMessageId(sent, uid));
+    });
+  }
+
   return {
     async listMessageIds(query: string) {
-      const imap = await connected();
-      const uids = await imap.search({ gmailRaw: query }, { uid: true });
-      return capUids(uids || []);
+      return search(INBOX_MAILBOX, query, false);
     },
 
-    async getMessage(uid: string) {
-      const imap = await connected();
-      const message = await imap.fetchOne(
-        uid,
-        { envelope: true, bodyStructure: true, threadId: true },
-        { uid: true },
-      );
-      if (!message) throw new Error(`Mail bulunamadı: ${uid}`);
+    async listSentMessageIds(query: string) {
+      await connected();
+      if (!sentMailbox) return [];
+      return search(sentMailbox, query, true);
+    },
 
-      const structure = message.bodyStructure as unknown as ImapStructureNode;
-      const analysis = analyzeBodyStructure(structure);
+    async getMessage(id: string) {
+      const { sent, uid } = decodeMessageId(id);
+      await connected();
+      const path = sent ? sentMailbox : INBOX_MAILBOX;
+      if (!path) throw new Error(`Klasör bulunamadı: ${id}`);
 
-      let textContent = "";
-      if (analysis.textPart) {
-        const part = await imap.download(uid, analysis.textPart, { uid: true });
-        textContent = decodeTextPart(await readStream(part.content), analysis.textCharset);
-      }
+      return inMailbox(path, async (imap) => {
+        const message = await imap.fetchOne(
+          uid,
+          { envelope: true, bodyStructure: true, threadId: true },
+          { uid: true },
+        );
+        if (!message) throw new Error(`Mail bulunamadı: ${id}`);
 
-      return buildParsedMessage({
-        uid,
-        threadId: message.threadId ?? null,
-        envelope: (message.envelope ?? {}) as any,
-        structure,
-        textContent,
-        textType: analysis.textType,
+        const structure = message.bodyStructure as unknown as ImapStructureNode;
+        const analysis = analyzeBodyStructure(structure);
+
+        let textContent = "";
+        if (analysis.textPart) {
+          const part = await imap.download(uid, analysis.textPart, { uid: true });
+          textContent = decodeTextPart(await readStream(part.content), analysis.textCharset);
+        }
+
+        const parsed = buildParsedMessage({
+          uid,
+          threadId: message.threadId ?? null,
+          envelope: (message.envelope ?? {}) as any,
+          structure,
+          textContent,
+          textType: analysis.textType,
+        });
+        // Kimlik klasörü de taşımalı, yoksa ek indirirken yanlış klasöre gidilir.
+        return { ...parsed, gmailMessageId: id };
       });
     },
 
-    async getAttachment(uid: string, partId: string) {
-      const imap = await connected();
-      const part = await imap.download(uid, partId, { uid: true });
-      return readStream(part.content);
+    async getAttachment(id: string, partId: string) {
+      const { sent, uid } = decodeMessageId(id);
+      await connected();
+      const path = sent ? sentMailbox : INBOX_MAILBOX;
+      if (!path) throw new Error(`Klasör bulunamadı: ${id}`);
+
+      return inMailbox(path, async (imap) => {
+        const part = await imap.download(uid, partId, { uid: true });
+        return readStream(part.content);
+      });
     },
 
     async close() {
-      if (lock) {
-        lock.release();
-        lock = null;
-      }
       if (client) {
         try {
           await client.logout();
