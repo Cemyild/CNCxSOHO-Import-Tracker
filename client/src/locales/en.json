@@ -1118,7 +1118,9 @@
       "attachmentDismissed": "Marked as not relevant",
       "attachmentAlreadyHandled": "This attachment has already been handled",
       "documentType": "Document type",
-      "tooLarge": "Attachment is larger than 25 MB; download it from Gmail"
+      "tooLarge": "Attachment is larger than 25 MB; download it from Gmail",
+      "markOther": "Other / To-do",
+      "markOtherHelp": "Not tied to a procedure but still needs follow-up"
     },
     "thread": {
       "messageCount": "{{count}} emails",
@@ -1128,8 +1130,10 @@
     },
     "tabs": {
       "mails": "Emails",
-      "procedures": "Procedure Mails"
-    }
+      "procedures": "Procedure Mails",
+      "other": "Other Emails"
+    },
+    "otherBadge": "Other"
   },
   "mailSettings": {
     "title": "Mailbox Connection",
@@ -3002,6 +3006,25 @@
     "mails": {
       "empty": "No emails for this procedure",
       "open": "Open in Email Inbox"
+    }
+  },
+  "otherMails": {
+    "title": "Other Emails",
+    "description": "Emails that are not tied to a procedure but still need follow-up, and the to-dos they produced.",
+    "empty": "No email has been marked as \"Other\" yet.",
+    "emptyHelp": "Open an email and choose \"Other / To-do\" in the procedure picker to see it here.",
+    "loadError": "Could not load",
+    "sections": {
+      "todos": "To-dos",
+      "mails": "Emails"
+    },
+    "todos": {
+      "empty": "Nothing pending",
+      "done": "Completed",
+      "saveFailed": "Could not save"
+    },
+    "mails": {
+      "empty": "Nothing here"
     }
   }
 }

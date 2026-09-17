@@ -16,8 +16,12 @@ describe("readMessageFilter", () => {
     expect(readMessageFilter({ status: "uydurma" }).status).toBeUndefined();
   });
 
-  it("matched değerini yes/no'ya sınırlar", () => {
+  it("matched değerini yes/no/other'a sınırlar", () => {
     expect(readMessageFilter({ matched: "yes" }).matched).toBe("yes");
+    expect(readMessageFilter({ matched: "no" }).matched).toBe("no");
+    // "other": işleme ait olmadığı ELLE işaretlenmiş mailler; hiç bakılmamış
+    // olanlardan ("no") ayrı bir durum.
+    expect(readMessageFilter({ matched: "other" }).matched).toBe("other");
     expect(readMessageFilter({ matched: "belki" }).matched).toBeUndefined();
   });
 

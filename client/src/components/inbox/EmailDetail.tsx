@@ -13,6 +13,9 @@ import { apiRequest } from "@/lib/queryClient";
 import { AttachmentActions } from "./AttachmentActions";
 import type { ActionItem, MessageDetail } from "./types";
 
+/** Seçicide "bir işleme ait değil ama takip edilecek" seçeneğinin değeri. */
+const OTHER_VALUE = "other";
+
 interface Props {
   emailId: number | null;
 }
@@ -190,13 +193,25 @@ export function EmailDetail({ emailId }: Props) {
         <h3 className="text-sm font-medium">{t("emailInbox.detail.match")}</h3>
         <div className="flex flex-wrap items-center gap-2">
           <Select
-            value={email.procedureId ? String(email.procedureId) : ""}
-            onValueChange={(value) => patch.mutate({ procedureId: Number(value) })}
+            value={
+              email.procedureId
+                ? String(email.procedureId)
+                : email.matchConfidence === OTHER_VALUE
+                  ? OTHER_VALUE
+                  : ""
+            }
+            onValueChange={(value) =>
+              value === OTHER_VALUE
+                ? patch.mutate({ markOther: true })
+                : patch.mutate({ procedureId: Number(value) })
+            }
           >
             <SelectTrigger className="w-[280px]" aria-label={t("emailInbox.detail.selectProcedure")}>
               <SelectValue placeholder={t("emailInbox.detail.selectProcedure")} />
             </SelectTrigger>
             <SelectContent>
+              {/* Bir işleme ait olmayan ama takip edilecek mailler için. */}
+              <SelectItem value={OTHER_VALUE}>{t("emailInbox.detail.markOther")}</SelectItem>
               {(procedures.data ?? [])
                 .filter((p) => p.reference)
                 .map((p) => (
@@ -206,6 +221,19 @@ export function EmailDetail({ emailId }: Props) {
                 ))}
             </SelectContent>
           </Select>
+
+          {!email.procedureId && email.matchConfidence === OTHER_VALUE && (
+            <>
+              <Badge variant="secondary">{t("emailInbox.otherBadge")}</Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => patch.mutate({ procedureId: null })}
+              >
+                {t("emailInbox.detail.clearMatch")}
+              </Button>
+            </>
+          )}
 
           {email.procedureId && (
             <>

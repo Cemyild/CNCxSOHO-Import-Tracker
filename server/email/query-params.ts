@@ -9,7 +9,7 @@ export interface MessageFilter {
   status?: string;
   category?: string;
   urgency?: string;
-  matched?: "yes" | "no";
+  matched?: "yes" | "no" | "other";
   sender?: string;
   q?: string;
   procedureId?: number;
@@ -45,8 +45,8 @@ export function readMessageFilter(query: Record<string, unknown>): MessageFilter
   if (category) filter.category = category;
   const urgency = oneOf(query.urgency, URGENCIES);
   if (urgency) filter.urgency = urgency;
-  const matched = oneOf(query.matched, ["yes", "no"]);
-  if (matched) filter.matched = matched as "yes" | "no";
+  const matched = oneOf(query.matched, ["yes", "no", "other"]);
+  if (matched) filter.matched = matched as "yes" | "no" | "other";
   const sender = text(query.sender);
   if (sender) filter.sender = sender;
   const q = text(query.q);

@@ -1118,7 +1118,9 @@
       "attachmentDismissed": "İlgisiz olarak işaretlendi",
       "attachmentAlreadyHandled": "Bu ek zaten işlendi",
       "documentType": "Belge türü",
-      "tooLarge": "Ek 25 MB'tan büyük; Gmail'den elle indirin"
+      "tooLarge": "Ek 25 MB'tan büyük; Gmail'den elle indirin",
+      "markOther": "Diğer / Yapılacak",
+      "markOtherHelp": "Bir işleme ait değil ama takip edilecek"
     },
     "thread": {
       "messageCount": "{{count}} mail",
@@ -1128,8 +1130,10 @@
     },
     "tabs": {
       "mails": "Mailler",
-      "procedures": "İşlem Mailleri"
-    }
+      "procedures": "İşlem Mailleri",
+      "other": "Diğer Mailler"
+    },
+    "otherBadge": "Diğer"
   },
   "mailSettings": {
     "title": "Mail Bağlantısı",
@@ -3002,6 +3006,25 @@
     "mails": {
       "empty": "Bu işleme ait mail yok",
       "open": "Mail Takibi'nde aç"
+    }
+  },
+  "otherMails": {
+    "title": "Diğer Mailler",
+    "description": "Bir işleme ait olmayan ama takip edilmesi gereken mailler ve bunlardan çıkan işler.",
+    "empty": "Henüz \"Diğer\" olarak işaretlenmiş mail yok.",
+    "emptyHelp": "Bir maili açıp işlem seçicisinden \"Diğer / Yapılacak\" seçersen burada görünür.",
+    "loadError": "Yüklenemedi",
+    "sections": {
+      "todos": "Yapılacaklar",
+      "mails": "Mailler"
+    },
+    "todos": {
+      "empty": "Bekleyen iş yok",
+      "done": "Tamamlananlar",
+      "saveFailed": "Kaydedilemedi"
+    },
+    "mails": {
+      "empty": "Liste boş"
     }
   }
 }

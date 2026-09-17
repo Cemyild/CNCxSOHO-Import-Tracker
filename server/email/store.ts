@@ -226,6 +226,13 @@ export type PendingEmail = EmailRow & { attachmentNames: string[] };
 export const MAX_THREAD_REPAIR_ATTEMPTS = 3;
 
 /**
+ * "Bir işleme ait değil ama yapılacak işi var" durumu. Hiç bakılmamış maillerden
+ * (match_confidence 'none' veya boş) ayırmak için match_confidence alanında
+ * saklanıyor; ayrı bir kolon gerekmiyor.
+ */
+export const OTHER_BUCKET = "other";
+
+/**
  * Konu kimliği kendi mail kimliğine eşit olan kayıtlar: bunlar Gmail konu
  * kimliği çekilmeden önce kaydedilmişti, senkron turu bunları onarıyor.
  */
@@ -348,7 +355,17 @@ function filterConditions(filter: MessageFilter) {
   if (filter.category) conditions.push(eq(emails.category, filter.category));
   if (filter.urgency) conditions.push(eq(emails.urgency, filter.urgency));
   if (filter.matched === "yes") conditions.push(sql`${emails.procedureId} IS NOT NULL`);
-  if (filter.matched === "no") conditions.push(sql`${emails.procedureId} IS NULL`);
+  if (filter.matched === "no") {
+    // Hiç bakılmamış: işleme bağlı değil ve "diğer" olarak da işaretlenmemiş.
+    conditions.push(
+      sql`${emails.procedureId} IS NULL AND COALESCE(${emails.matchConfidence}, '') <> ${OTHER_BUCKET}`,
+    );
+  }
+  if (filter.matched === "other") {
+    conditions.push(
+      sql`${emails.procedureId} IS NULL AND ${emails.matchConfidence} = ${OTHER_BUCKET}`,
+    );
+  }
   if (filter.procedureId !== undefined) conditions.push(eq(emails.procedureId, filter.procedureId));
   if (filter.sender) {
     conditions.push(
@@ -432,23 +449,39 @@ export async function getMessage(id: number) {
   return { ...row.email, procedureReference: row.procedureReference, procedureShipper: row.procedureShipper, attachments };
 }
 
-export async function updateMessage(
-  id: number,
-  patch: {
-    status?: string;
-    procedureId?: number | null;
-    actionItems?: Array<{ id: string; text: string; done: boolean }>;
-  },
-): Promise<void> {
+export interface MessagePatchInput {
+  status?: string;
+  procedureId?: number | null;
+  /** true: işleme ait değil ama takip edilecek ("Diğer / Yapılacak"). */
+  markOther?: boolean;
+  actionItems?: Array<{ id: string; text: string; done: boolean }>;
+}
+
+/**
+ * Gelen isteği yazılacak kolonlara çevirir. Eşleşme alanlarına yalnızca
+ * gerçekten eşleşme değiştiğinde dokunulur; "Diğer" ile işlem aynı anda
+ * gönderilirse "Diğer" kazanır, çünkü mail aynı anda iki yerde olamaz.
+ */
+export function buildMessagePatch(patch: MessagePatchInput): Record<string, unknown> {
   const set: Record<string, unknown> = { updatedAt: new Date() };
   if (patch.status) set.status = patch.status;
   if (patch.actionItems) set.actionItems = patch.actionItems;
-  if (patch.procedureId !== undefined) {
+
+  if (patch.markOther) {
+    set.procedureId = null;
+    set.matchConfidence = OTHER_BUCKET;
+    set.matchReason = "Diğer / yapılacak olarak işaretlendi";
+  } else if (patch.procedureId !== undefined) {
     set.procedureId = patch.procedureId;
     set.matchConfidence = patch.procedureId === null ? "none" : "manual";
     set.matchReason = patch.procedureId === null ? null : "Elle eşleştirildi";
   }
-  await db.update(emails).set(set).where(eq(emails.id, id));
+
+  return set;
+}
+
+export async function updateMessage(id: number, patch: MessagePatchInput): Promise<void> {
+  await db.update(emails).set(buildMessagePatch(patch)).where(eq(emails.id, id));
 }
 
 export async function resetForReprocess(id: number): Promise<void> {
@@ -651,6 +684,30 @@ export async function listThreadMessages(threadId: string): Promise<MessageListI
     .leftJoin(procedures, eq(emails.procedureId, procedures.id))
     .where(eq(emails.gmailThreadId, threadId))
     .orderBy(emails.sentAt, emails.id);
+}
+
+/** "Diğer" olarak işaretlenmiş maillerin yapılacakları. */
+export async function listOtherActionItems(): Promise<ProcedureActionItem[]> {
+  const rows = await db.execute<any>(sql`
+    SELECT e.id AS email_id, e.subject AS email_subject, e.sent_at,
+           ai->>'id' AS item_id, ai->>'text' AS text,
+           COALESCE((ai->>'done')::boolean, false) AS done
+    FROM emails e,
+         jsonb_array_elements(
+           CASE WHEN jsonb_typeof(e.action_items) = 'array' THEN e.action_items ELSE '[]'::jsonb END
+         ) ai
+    WHERE e.procedure_id IS NULL AND e.match_confidence = ${OTHER_BUCKET}
+    ORDER BY COALESCE((ai->>'done')::boolean, false), e.sent_at DESC NULLS LAST
+  `);
+
+  return (rows.rows ?? []).map((r: any) => ({
+    emailId: Number(r.email_id),
+    emailSubject: r.email_subject,
+    sentAt: r.sent_at,
+    itemId: r.item_id ?? "",
+    text: r.text ?? "",
+    done: r.done === true,
+  }));
 }
 
 export interface ProcedureMailSummary {

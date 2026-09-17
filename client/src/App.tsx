@@ -34,6 +34,7 @@ import BulkDownloadPage from "@/pages/bulk-download";
 import InvoiceMakerPage from "@/pages/invoice-maker";
 import InboxPage from "@/pages/inbox";
 import ProcedureMailsPage from "@/pages/procedure-mails";
+import OtherMailsPage from "@/pages/other-mails";
 import TareksReportsPage from "@/pages/tareks-reports";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
@@ -244,6 +245,13 @@ function Router() {
         {() => (
           <ProtectedRoute>
             <ProcedureMailsPage />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/other-mails">
+        {() => (
+          <ProtectedRoute>
+            <OtherMailsPage />
           </ProtectedRoute>
         )}
       </Route>

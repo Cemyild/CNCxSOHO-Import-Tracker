@@ -183,7 +183,9 @@ router.patch("/messages/:id", requireRole("admin"), async (req, res) => {
       }
       patch.status = req.body.status;
     }
-    if (req.body?.procedureId !== undefined) {
+    if (req.body?.markOther === true) {
+      patch.markOther = true;
+    } else if (req.body?.procedureId !== undefined) {
       const value = req.body.procedureId;
       if (value !== null && !Number.isInteger(value)) {
         return res.status(400).json({ message: "Geçersiz prosedür" });
@@ -312,6 +314,25 @@ router.get("/threads/:threadId", requireRole("admin"), async (req, res) => {
       return res.status(400).json({ message: "Geçersiz konuşma" });
     }
     return res.json(await store.listThreadMessages(threadId));
+  } catch (error) {
+    return fail(res, error);
+  }
+});
+
+// --- İşlem dışı ("Diğer") mailler ---------------------------------------------
+
+router.get("/other", requireRole("admin"), async (_req, res) => {
+  try {
+    const [threads, actionItems] = await Promise.all([
+      store.listThreads({ matched: "other", limit: 100, offset: 0 }),
+      store.listOtherActionItems(),
+    ]);
+    return res.json({
+      threads: threads.items,
+      total: threads.total,
+      actionItems,
+      openCount: actionItems.filter((a) => !a.done).length,
+    });
   } catch (error) {
     return fail(res, error);
   }

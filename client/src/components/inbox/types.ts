@@ -120,3 +120,10 @@ export interface ProcedureMailDetail {
   actionItems: ProcedureActionItem[];
   threads: ThreadListItem[];
 }
+
+export interface OtherMailsResponse {
+  threads: ThreadListItem[];
+  total: number;
+  actionItems: ProcedureActionItem[];
+  openCount: number;
+}
