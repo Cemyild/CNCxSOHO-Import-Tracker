@@ -13,6 +13,7 @@ import {
 import { encryptToken, decryptToken } from "./token-crypto";
 import type { ParsedAttachment, ParsedMessage } from "./message-parser";
 import type { ExtractedRefs } from "./reference-extractor";
+import type { ClosureDecision, OpenTodo } from "./todo-closer";
 import { escapeLikePattern, type MessageFilter } from "./query-params";
 
 // ---------------------------------------------------------------------------
@@ -171,6 +172,7 @@ export async function filterNewMessageIds(ids: string[]): Promise<string[]> {
 export async function insertParsedMessage(
   accountId: number,
   parsed: ParsedMessage,
+  direction: string = DIRECTION_INCOMING,
 ): Promise<number | null> {
   const [row] = await db
     .insert(emails)
@@ -186,6 +188,9 @@ export async function insertParsedMessage(
       snippet: parsed.snippet,
       bodyText: parsed.bodyText,
       hasAttachments: parsed.attachments.length > 0,
+      direction,
+      // Giden mailden yeni iş çıkarılmaz; özetleme kuyruğuna hiç girmesin.
+      aiStatus: direction === DIRECTION_OUTGOING ? "skipped" : "pending",
     })
     .onConflictDoNothing({ target: emails.gmailMessageId })
     .returning({ id: emails.id });
@@ -280,7 +285,13 @@ export async function listPendingForAi(limit: number): Promise<PendingEmail[]> {
       )`,
     })
     .from(emails)
-    .where(and(eq(emails.aiStatus, "pending"), sql`${emails.aiAttempts} < 3`))
+    .where(
+      and(
+        eq(emails.aiStatus, "pending"),
+        eq(emails.direction, DIRECTION_INCOMING),
+        sql`${emails.aiAttempts} < 3`,
+      ),
+    )
     .orderBy(desc(emails.sentAt))
     .limit(limit);
 
@@ -613,6 +624,9 @@ export async function listThreads(
              ), 0)::int AS open_action_count
       FROM matching m
       GROUP BY m.gmail_thread_id
+      -- Yalnızca bizim gönderdiğimiz maillerden oluşan konuşmalar listeyi
+      -- kalabalıklaştırmasın; cevap gelince zaten görünürler.
+      HAVING BOOL_OR(m.direction = ${DIRECTION_INCOMING})
     )
     SELECT agg.gmail_thread_id AS thread_id,
            agg.message_count, agg.unread_count, agg.has_attachments,
@@ -677,6 +691,7 @@ export async function listThreadMessages(threadId: string): Promise<MessageListI
       status: emails.status,
       aiStatus: emails.aiStatus,
       hasAttachments: emails.hasAttachments,
+      direction: emails.direction,
       procedureId: emails.procedureId,
       procedureReference: procedures.reference,
     })
@@ -859,4 +874,97 @@ export async function listProcedureActionItems(
     text: r.text ?? "",
     done: r.done === true,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Giden mailler ve işlerin otomatik kapanması
+// ---------------------------------------------------------------------------
+
+export const DIRECTION_OUTGOING = "outgoing";
+export const DIRECTION_INCOMING = "incoming";
+
+/** Hiç giden mail kaydedildi mi? Geriye dönük tarama kararı buna bakıyor. */
+export async function hasOutgoingMail(): Promise<boolean> {
+  const [row] = await db
+    .select({ id: emails.id })
+    .from(emails)
+    .where(eq(emails.direction, DIRECTION_OUTGOING))
+    .limit(1);
+  return !!row;
+}
+
+/** Aynı konuşmadaki açık işler; giden mailin hangilerini kapattığı buradan seçilir. */
+export async function listOpenTodosInThread(threadId: string): Promise<OpenTodo[]> {
+  const rows = await db.execute<any>(sql`
+    SELECT e.id AS email_id, ai->>'id' AS item_id, ai->>'text' AS text
+    FROM emails e,
+         jsonb_array_elements(
+           CASE WHEN jsonb_typeof(e.action_items) = 'array' THEN e.action_items ELSE '[]'::jsonb END
+         ) ai
+    WHERE e.gmail_thread_id = ${threadId}
+      AND e.direction = ${DIRECTION_INCOMING}
+      AND COALESCE((ai->>'done')::boolean, false) = false
+  `);
+
+  return (rows.rows ?? [])
+    .map((r: any) => ({
+      emailId: Number(r.email_id),
+      itemId: r.item_id ?? "",
+      text: r.text ?? "",
+    }))
+    .filter((t: OpenTodo) => t.itemId !== "" && t.text !== "");
+}
+
+/**
+ * Kararları uygular. İş silinmez: "done" yapılır ve üzerine neden/kaynak
+ * yazılır, böylece kullanıcı yanlış kapanmayı görüp geri açabilir.
+ */
+export async function closeActionItems(
+  decisions: ClosureDecision[],
+  closedByEmailId: number,
+): Promise<number> {
+  const byEmail = new Map<number, ClosureDecision[]>();
+  for (const decision of decisions) {
+    const list = byEmail.get(decision.emailId) ?? [];
+    list.push(decision);
+    byEmail.set(decision.emailId, list);
+  }
+
+  let closed = 0;
+  const closedAt = new Date().toISOString();
+
+  for (const [emailId, items] of byEmail) {
+    const [row] = await db
+      .select({ actionItems: emails.actionItems })
+      .from(emails)
+      .where(eq(emails.id, emailId))
+      .limit(1);
+    if (!row || !Array.isArray(row.actionItems)) continue;
+
+    const reasons = new Map(items.map((i) => [i.itemId, i.reason]));
+    let changed = false;
+
+    const next = (row.actionItems as any[]).map((item) => {
+      if (!reasons.has(item?.id) || item?.done === true) return item;
+      changed = true;
+      closed++;
+      return {
+        ...item,
+        done: true,
+        autoClosed: true,
+        closedReason: reasons.get(item.id) ?? "",
+        closedByEmailId,
+        closedAt,
+      };
+    });
+
+    if (changed) {
+      await db
+        .update(emails)
+        .set({ actionItems: next, updatedAt: new Date() })
+        .where(eq(emails.id, emailId));
+    }
+  }
+
+  return closed;
 }

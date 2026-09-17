@@ -1133,7 +1133,10 @@
       "procedures": "İşlem Mailleri",
       "other": "Diğer Mailler"
     },
-    "otherBadge": "Diğer"
+    "otherBadge": "Diğer",
+    "sent": "Gönderildi",
+    "autoClosed": "otomatik kapatıldı",
+    "reopen": "Geri aç"
   },
   "mailSettings": {
     "title": "Mail Bağlantısı",

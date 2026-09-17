@@ -1133,7 +1133,10 @@
       "procedures": "Procedure Mails",
       "other": "Other Emails"
     },
-    "otherBadge": "Other"
+    "otherBadge": "Other",
+    "sent": "Sent",
+    "autoClosed": "auto-closed",
+    "reopen": "Reopen"
   },
   "mailSettings": {
     "title": "Mailbox Connection",

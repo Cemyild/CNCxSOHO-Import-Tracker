@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS emails (
   ai_attempts       INTEGER NOT NULL DEFAULT 0,
   has_attachments   BOOLEAN NOT NULL DEFAULT FALSE,
   thread_repair_attempts INTEGER NOT NULL DEFAULT 0,
+  direction         TEXT NOT NULL DEFAULT 'incoming',
   created_at        TIMESTAMP DEFAULT NOW(),
   updated_at        TIMESTAMP DEFAULT NOW()
 );

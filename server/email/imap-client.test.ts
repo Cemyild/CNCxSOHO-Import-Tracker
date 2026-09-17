@@ -4,19 +4,24 @@ import {
   capUids,
   describeImapError,
   imapOptions,
+  pickSearchMailbox,
   MAX_SENDERS_PER_QUERY,
   MAX_UIDS_PER_RUN,
 } from "./imap-client";
 
 describe("buildSearchQuery", () => {
-  it("gönderenleri OR ile birleştirip tarih sınırı ekler", () => {
+  it("gelen ve giden mailleri birlikte arar", () => {
+    // Kullanıcının bu firmalara GÖNDERDİĞİ mailler de lazım: açık işlerin
+    // yapılıp yapılmadığı oradan anlaşılıyor.
     expect(buildSearchQuery(["ops@iss.com", "@dhl.com"], 1757836800)).toEqual([
-      "(from:ops@iss.com OR from:dhl.com) after:1757836800",
+      "(from:ops@iss.com OR to:ops@iss.com OR from:dhl.com OR to:dhl.com) after:1757836800",
     ]);
   });
 
   it("alan adı kalıbındaki baştaki @ işaretini atar", () => {
-    expect(buildSearchQuery(["@dhl.com"], 1)[0]).toContain("from:dhl.com");
+    const query = buildSearchQuery(["@dhl.com"], 1)[0];
+    expect(query).toContain("from:dhl.com");
+    expect(query).toContain("to:dhl.com");
   });
 
   it("boşlukları kırpar ve küçük harfe çevirir", () => {
@@ -27,8 +32,9 @@ describe("buildSearchQuery", () => {
     const many = Array.from({ length: MAX_SENDERS_PER_QUERY + 3 }, (_, i) => `a${i}@x.com`);
     const queries = buildSearchQuery(many, 1757836800);
     expect(queries).toHaveLength(2);
-    expect(queries[0].split(" OR ")).toHaveLength(MAX_SENDERS_PER_QUERY);
-    expect(queries[1].split(" OR ")).toHaveLength(3);
+    // Her gönderen artık iki şart üretiyor (from + to).
+    expect(queries[0].split(" OR ")).toHaveLength(MAX_SENDERS_PER_QUERY * 2);
+    expect(queries[1].split(" OR ")).toHaveLength(6);
   });
 
   it("tam sınır sayıda göndereni tek sorguda tutar", () => {
@@ -40,6 +46,28 @@ describe("buildSearchQuery", () => {
 
   it("gönderen yoksa hiç sorgu üretmez", () => {
     expect(buildSearchQuery([], 1757836800)).toEqual([]);
+  });
+});
+
+describe("pickSearchMailbox", () => {
+  it("Gmail'in 'Tüm Postalar' klasörünü etiketinden bulur", () => {
+    // Klasör adı dile göre değişiyor ("All Mail" / "Tüm Postalar"); ada değil
+    // özel kullanım etiketine bakıyoruz.
+    // imapflow bu değerleri tek ters bölü ile verir: "\\All", "\\Sent".
+    const boxes = [
+      { path: "INBOX", specialUse: "\\Inbox" },
+      { path: "[Gmail]/Tüm Postalar", specialUse: "\\All" },
+      { path: "[Gmail]/Gönderilmiş Postalar", specialUse: "\\Sent" },
+    ];
+    expect(pickSearchMailbox(boxes)).toBe("[Gmail]/Tüm Postalar");
+  });
+
+  it("Tüm Postalar yoksa gelen kutusuna düşer", () => {
+    expect(pickSearchMailbox([{ path: "INBOX", specialUse: "\\Inbox" }])).toBe("INBOX");
+  });
+
+  it("hiç klasör bilgisi yoksa gelen kutusuna düşer", () => {
+    expect(pickSearchMailbox([])).toBe("INBOX");
   });
 });
 

@@ -182,6 +182,16 @@ export function EmailDetail({ emailId }: Props) {
                 />
                 <label htmlFor={`action-${item.id}`} className="text-sm leading-tight">
                   {item.text}
+                  {/* Gönderdiğin bir mail yüzünden kapandıysa sebebi görünsün;
+                      yanlışsa tikini kaldırıp geri açabilirsin. */}
+                  {item.autoClosed && (
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      <Badge variant="outline" className="mr-1">
+                        {t("emailInbox.autoClosed")}
+                      </Badge>
+                      {item.closedReason}
+                    </span>
+                  )}
                 </label>
               </li>
             ))}

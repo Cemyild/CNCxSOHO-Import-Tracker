@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../db", () => ({ db: {}, pool: {}, rawDb: {} }));
 
-import { runSync, FIRST_RUN_LOOKBACK_MS } from "./sync-service";
+import { runSync, FIRST_RUN_LOOKBACK_MS, SENT_BACKFILL_MS } from "./sync-service";
 
 /** IMAP istemcisi artık ham veri değil, hazır ParsedMessage döndürüyor. */
 function mailMessage(uid: string, subject: string, body: string) {
@@ -55,6 +55,9 @@ function makeDeps(overrides: any = {}) {
     listMessagesNeedingThreadId: vi.fn().mockResolvedValue([]),
     setThreadId: vi.fn().mockResolvedValue(undefined),
     markThreadRepairAttempt: vi.fn().mockResolvedValue(undefined),
+    hasOutgoingMail: vi.fn().mockResolvedValue(true),
+    listOpenTodosInThread: vi.fn().mockResolvedValue([]),
+    closeActionItems: vi.fn().mockResolvedValue(0),
     ...overrides.store,
   };
 
@@ -81,8 +84,11 @@ function makeDeps(overrides: any = {}) {
     analyzeText: vi.fn(),
   };
 
+  const decideClosures = overrides.decideClosures ?? vi.fn().mockResolvedValue([]);
+
   return {
-    deps: { store, createMailClient: () => mail, summarize, matcherDeps } as any,
+    deps: { store, createMailClient: () => mail, summarize, matcherDeps, decideClosures } as any,
+    decideClosures,
     store, mail, summarize, matcherDeps, inserted, aiSaved, aiFailed,
   };
 }
@@ -336,6 +342,105 @@ describe("runSync", () => {
     expect(result.skipped).toBeUndefined();
     expect(store.setThreadId).not.toHaveBeenCalled();
     expect(store.markAccountSynced).toHaveBeenCalledTimes(1);
+  });
+
+  it("kendi gönderdiğim maili 'giden' olarak kaydeder", async () => {
+    const { deps, store } = makeDeps({
+      mail: {
+        listMessageIds: vi.fn().mockResolvedValue(["m9"]),
+        getMessage: vi.fn().mockResolvedValue({
+          ...mailMessage("m9", "RE: evrak", "ekte gönderiyorum"),
+          fromAddress: "cem@sirket.com",
+        }),
+      },
+    });
+
+    await runSync(deps);
+
+    expect(store.insertParsedMessage).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ fromAddress: "cem@sirket.com" }),
+      "outgoing",
+    );
+  });
+
+  it("giden mail aynı konuşmadaki işi kapatır", async () => {
+    const decideClosures = vi
+      .fn()
+      .mockResolvedValue([{ emailId: 3, itemId: "a", reason: "ekte gönderildi" }]);
+    const { deps, store } = makeDeps({
+      decideClosures,
+      store: {
+        listOpenTodosInThread: vi
+          .fn()
+          .mockResolvedValue([{ emailId: 3, itemId: "a", text: "Konşimentoyu gönder" }]),
+      },
+      mail: {
+        listMessageIds: vi.fn().mockResolvedValue(["m9"]),
+        getMessage: vi.fn().mockResolvedValue({
+          ...mailMessage("m9", "RE: evrak", "ekte gönderiyorum"),
+          fromAddress: "cem@sirket.com",
+        }),
+      },
+    });
+
+    await runSync(deps);
+
+    expect(decideClosures).toHaveBeenCalledTimes(1);
+    expect(store.closeActionItems).toHaveBeenCalledWith(
+      [{ emailId: 3, itemId: "a", reason: "ekte gönderildi" }],
+      expect.any(Number),
+    );
+  });
+
+  it("gelen mail için kapatma kararı hiç sorulmaz", async () => {
+    const { deps, decideClosures } = makeDeps();
+    await runSync(deps);
+    expect(decideClosures).not.toHaveBeenCalled();
+  });
+
+  it("kapatma kararı alınamazsa tur yine tamamlanır", async () => {
+    const { deps, store } = makeDeps({
+      decideClosures: vi.fn().mockRejectedValue(new Error("529")),
+      store: {
+        listOpenTodosInThread: vi
+          .fn()
+          .mockResolvedValue([{ emailId: 3, itemId: "a", text: "bir iş" }]),
+      },
+      mail: {
+        listMessageIds: vi.fn().mockResolvedValue(["m9"]),
+        getMessage: vi.fn().mockResolvedValue({
+          ...mailMessage("m9", "RE", "gövde"),
+          fromAddress: "cem@sirket.com",
+        }),
+      },
+    });
+
+    const result = await runSync(deps);
+
+    expect(result.skipped).toBeUndefined();
+    expect(store.markAccountSynced).toHaveBeenCalledTimes(1);
+  });
+
+  it("giden mail hiç yokken pencereyi 3 güne genişletir", async () => {
+    // Özellik açıldığında geçmişte gönderilmiş mailler de taranmalı ki mevcut
+    // açık işler kapanabilsin.
+    const now = new Date("2026-09-17T12:00:00Z");
+    const lastSynced = new Date("2026-09-17T11:50:00Z");
+    const { deps, gmail, mail } = makeDeps({
+      store: {
+        hasOutgoingMail: vi.fn().mockResolvedValue(false),
+        getAccount: vi.fn().mockResolvedValue({
+          id: 1, userId: 1, emailAddress: "cem@sirket.com",
+          appPassword: "uygulama-sifresi", lastSyncedAt: lastSynced, status: "connected",
+        }),
+      },
+    });
+
+    await runSync({ ...deps, now: () => now });
+
+    const query = (mail ?? gmail).listMessageIds.mock.calls[0][0] as string;
+    expect(query).toContain(`after:${Math.floor((now.getTime() - SENT_BACKFILL_MS) / 1000)}`);
   });
 
   it("aynı anda ikinci kez çağrılırsa ikincisi atlanır", async () => {

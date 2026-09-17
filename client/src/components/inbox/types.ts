@@ -1,4 +1,5 @@
 export interface MessageListItem {
+  direction?: string;
   id: number;
   fromName: string | null;
   fromAddress: string | null;
@@ -32,6 +33,10 @@ export interface ActionItem {
   id: string;
   text: string;
   done: boolean;
+  /** Gönderilen bir mail sayesinde kendiliğinden kapandıysa dolu. */
+  autoClosed?: boolean;
+  closedReason?: string;
+  closedByEmailId?: number;
 }
 
 export interface AttachmentItem {
@@ -107,6 +112,8 @@ export interface ProcedureMailDocument {
 
 export interface ProcedureActionItem {
   emailId: number;
+  autoClosed?: boolean;
+  closedReason?: string;
   emailSubject: string | null;
   sentAt: string | null;
   itemId: string;

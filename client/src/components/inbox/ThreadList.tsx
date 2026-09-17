@@ -57,6 +57,11 @@ function ThreadMessages({
               <span
                 className={cn("truncate text-xs", message.status === "new" && "font-semibold")}
               >
+                {message.direction === "outgoing" && (
+                  <Badge variant="outline" className="mr-1">
+                    {t("emailInbox.sent")}
+                  </Badge>
+                )}
                 {message.fromName || message.fromAddress}
               </span>
               <span className="shrink-0 text-[11px] text-muted-foreground">

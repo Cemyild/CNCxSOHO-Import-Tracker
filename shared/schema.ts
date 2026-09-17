@@ -769,6 +769,8 @@ export const emails = pgTable("emails", {
   hasAttachments: boolean("has_attachments").notNull().default(false),
   /** Konu kimliği onarımı kaç kez denendi; başarısız kayıtlar kuyruğu tıkamasın. */
   threadRepairAttempts: integer("thread_repair_attempts").notNull().default(0),
+  /** 'incoming' | 'outgoing' — giden mailler yeni iş üretmez. */
+  direction: text("direction").notNull().default("incoming"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -12,18 +12,26 @@ import {
   matchEmailToProcedure,
   type MatcherDeps,
 } from "./procedure-matcher";
+import { decideClosures as defaultDecideClosures } from "./todo-closer";
 
 export const OVERLAP_MS = 10 * 60 * 1000;
 export const FIRST_RUN_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 export const MAX_AI_PER_RUN = 30;
 /** Tur başına onarılacak eksik konu kimliği sayısı. */
 export const MAX_THREAD_REPAIR_PER_RUN = 50;
+/**
+ * Giden mail hiç kaydedilmemişken tarama penceresi: özellik açıldığında son
+ * günlerde gönderilmiş mailler de görülsün ki mevcut açık işler kapanabilsin.
+ */
+export const SENT_BACKFILL_MS = 3 * 24 * 60 * 60 * 1000;
 
 export interface SyncResult {
   fetched: number;
   inserted: number;
   processed: number;
   failed: number;
+  /** Giden mail sayesinde otomatik kapanan iş sayısı. */
+  closed?: number;
   skipped?: "no-account" | "no-senders" | "already-running" | "error";
   error?: string;
 }
@@ -52,6 +60,7 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
   const createClient = overrides.createMailClient ?? defaultCreateMailClient;
   const summarize = overrides.summarize ?? defaultSummarize;
   const matcherDeps = overrides.matcherDeps ?? createDbMatcherDeps();
+  const decideClosures = overrides.decideClosures ?? defaultDecideClosures;
   const now = overrides.now ?? (() => new Date());
 
   const result: SyncResult = { fetched: 0, inserted: 0, processed: 0, failed: 0 };
@@ -70,9 +79,15 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
 
     const startedAt = now();
     const firstRunFloor = startedAt.getTime() - FIRST_RUN_LOOKBACK_MS;
-    const afterMs = account.lastSyncedAt
+    let afterMs = account.lastSyncedAt
       ? Math.min(account.lastSyncedAt.getTime() - OVERLAP_MS, startedAt.getTime() - OVERLAP_MS)
       : firstRunFloor;
+
+    // Giden mail okuma sonradan eklendi: hiç giden mail yoksa pencereyi bir
+    // kereliğine geriye açıyoruz, yoksa açık işler kapanmadan kalırdı.
+    if (!(await store.hasOutgoingMail())) {
+      afterMs = Math.min(afterMs, startedAt.getTime() - SENT_BACKFILL_MS);
+    }
     const queries = buildSearchQuery(patterns, Math.floor(afterMs / 1000));
 
     // IMAP bağlantısı durumludur; tur bitince mutlaka kapatılır.
@@ -93,10 +108,38 @@ export async function runSync(overrides: Partial<SyncDeps> = {}): Promise<SyncRe
     for (const id of newIds) {
       try {
         const parsed = await mail.getMessage(id);
-        const emailId = await store.insertParsedMessage(account.id, parsed);
+        const outgoing =
+          parsed.fromAddress.trim().toLowerCase() === account.emailAddress.trim().toLowerCase();
+        const emailId = await store.insertParsedMessage(
+          account.id,
+          parsed,
+          outgoing ? "outgoing" : "incoming",
+        );
         if (emailId !== null) {
           await store.insertAttachments(emailId, parsed.attachments);
           result.inserted++;
+
+          // Gönderdiğimiz mail aynı konuşmadaki bir işi tamamlamış olabilir.
+          if (outgoing) {
+            try {
+              const open = await store.listOpenTodosInThread(parsed.gmailThreadId);
+              const closures = await decideClosures(
+                {
+                  subject: parsed.subject,
+                  bodyText: parsed.bodyText,
+                  attachmentNames: parsed.attachments.map((a) => a.filename),
+                  sentAt: parsed.sentAt,
+                },
+                open,
+              );
+              if (closures.length > 0) {
+                result.closed = (result.closed ?? 0) + (await store.closeActionItems(closures, emailId));
+              }
+            } catch (error) {
+              // Kapatma bir kolaylık; başarısızlığı turu bozmamalı.
+              console.error(`[email-inbox] iş kapatma adımı atlandı (${id}):`, error);
+            }
+          }
         }
       } catch (error) {
         // Tek bir mailin alınamaması turu durdurmaz: zaman damgası yine

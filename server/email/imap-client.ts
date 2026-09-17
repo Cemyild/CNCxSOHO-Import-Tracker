@@ -38,7 +38,13 @@ export interface MailClient {
   close(): Promise<void>;
 }
 
-/** Gmail sorgu uzunluğu sınırlı olduğu için gönderen listesi parçalara bölünür. */
+/**
+ * Takip edilen firmalarla olan yazışmanın TAMAMINI arar: hem onlardan gelenler
+ * hem de onlara gönderdiklerimiz. Gönderdiğimiz mailler yeni iş üretmez ama
+ * açık işlerin yapılıp yapılmadığı oradan anlaşılıyor.
+ *
+ * Gmail sorgu uzunluğu sınırlı olduğu için gönderen listesi parçalara bölünür.
+ */
 export function buildSearchQuery(patterns: string[], afterEpochSeconds: number): string[] {
   const cleaned = patterns
     .map((p) => p.trim().toLowerCase().replace(/^@/, ""))
@@ -47,7 +53,8 @@ export function buildSearchQuery(patterns: string[], afterEpochSeconds: number):
   const queries: string[] = [];
   for (let i = 0; i < cleaned.length; i += MAX_SENDERS_PER_QUERY) {
     const chunk = cleaned.slice(i, i + MAX_SENDERS_PER_QUERY);
-    queries.push(`(${chunk.map((p) => `from:${p}`).join(" OR ")}) after:${afterEpochSeconds}`);
+    const terms = chunk.flatMap((p) => [`from:${p}`, `to:${p}`]);
+    queries.push(`(${terms.join(" OR ")}) after:${afterEpochSeconds}`);
   }
   return queries;
 }
@@ -100,6 +107,21 @@ export function imapOptions(creds: ImapCredentials) {
   };
 }
 
+export const FALLBACK_MAILBOX = "INBOX";
+
+/**
+ * Aranacak klasörü seçer. Gmail'in "Tüm Postalar"ı hem gelen hem giden
+ * mailleri içerir (çöp ve spam hariç), böylece tek sorguda iki yönü de
+ * tarayabiliyoruz. Klasör adı hesabın diline göre değiştiği için ada değil
+ * özel kullanım etiketine (\All) bakılır.
+ */
+export function pickSearchMailbox(
+  mailboxes: Array<{ path: string; specialUse?: string }>,
+): string {
+  const all = mailboxes.find((box) => box.specialUse === "\\All");
+  return all?.path ?? FALLBACK_MAILBOX;
+}
+
 function newConnection(creds: ImapCredentials): ImapFlow {
   return new ImapFlow(imapOptions(creds));
 }
@@ -125,7 +147,8 @@ export function createImapClient(creds: ImapCredentials): MailClient {
     const fresh = newConnection(creds);
     try {
       await fresh.connect();
-      lock = await fresh.getMailboxLock("INBOX");
+      const mailboxes = await fresh.list();
+      lock = await fresh.getMailboxLock(pickSearchMailbox(mailboxes as any));
     } catch (error) {
       try {
         await fresh.logout();
