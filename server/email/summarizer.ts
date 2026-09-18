@@ -1,10 +1,11 @@
 import { analyzeText } from "../claude";
 import type { ExtractedRefs } from "./reference-extractor";
+import { stripQuotedHistory } from "./message-parser";
 
 const CATEGORIES = ["payment", "document", "customs", "shipment", "other"] as const;
 const URGENCIES = ["high", "normal", "low"] as const;
 
-export const MAX_SUMMARY_CHARS = 2000;
+export const MAX_SUMMARY_CHARS = 400;
 export const MAX_ACTION_ITEMS = 20;
 export const MAX_ACTION_ITEM_CHARS = 500;
 export const MAX_REFERENCES_PER_KIND = 50;
@@ -75,7 +76,7 @@ ${neutralizeDelimiters(input.bodyText)}
 
 Şu JSON şemasıyla cevap ver:
 {
-  "summary": "Türkçe, 2-3 cümle: ne isteniyor ve neden önemli",
+  "summary": "Türkçe, TEK kısa cümle: ne isteniyor",
   "category": "payment | document | customs | shipment | other",
   "urgency": "high | normal | low",
   "actionItems": ["Türkçe, emir kipinde, tek cümlelik yapılacak iş"],
@@ -88,6 +89,9 @@ ${neutralizeDelimiters(input.bodyText)}
 }
 
 Kurallar:
+- Özet TEK cümle olsun, uzun anlatma.
+- Yalnızca BU mesajdaki isteklerden iş çıkar. Metinde eski yazışmadan kalıntı
+  varsa onlardaki işleri tekrar yazma; çoğu çoktan halledilmiştir.
 - Mailde yapılacak bir iş yoksa "actionItems" boş dizi olsun; iş uydurma.
 - Numaraları yalnızca mailde gerçekten geçiyorsa yaz; tahmin etme.
 - "urgency": tarih/ceza/gecikme riski varsa high, salt bilgilendirme ise low.`;

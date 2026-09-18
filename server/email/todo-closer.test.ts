@@ -20,7 +20,28 @@ const sentMail = {
 };
 
 describe("parseCloseDecision", () => {
-  it("tamamlanan işleri gerekçesiyle döner", () => {
+  it("yalnızca completed=true olanları kapatır", () => {
+    // Eski biçimde model bir işi listeye koyup gerekçede "bunu kapatmamalıyım"
+    // yazabiliyordu ve iş yine de kapanıyordu. Açık bir evet/hayır bunu önler.
+    const raw = JSON.stringify({
+      items: [
+        { id: "a", completed: true, reason: "Konşimento ekte gönderilmiş" },
+        { id: "b", completed: false, reason: "sadece söz verilmiş" },
+      ],
+    });
+    expect(parseCloseDecision(raw, todos)).toEqual([
+      { emailId: 1, itemId: "a", reason: "Konşimento ekte gönderilmiş" },
+    ]);
+  });
+
+  it("completed alanı yoksa kapatmaz", () => {
+    // Emin olunmayan durumda açık kalması yeğdir.
+    expect(parseCloseDecision(JSON.stringify({ items: [{ id: "a", reason: "belki" }] }), todos)).toEqual(
+      [],
+    );
+  });
+
+  it("eski biçimdeki tamamlanan işleri gerekçesiyle döner", () => {
     const raw = JSON.stringify({
       completed: [{ id: "a", reason: "Konşimento ekte gönderilmiş" }],
     });
@@ -36,26 +57,34 @@ describe("parseCloseDecision", () => {
 
   it("listede olmayan bir işi kapatmaz", () => {
     // Uydurulmuş bir kimlik başka bir mailin işini kapatmamalı.
-    const raw = JSON.stringify({ completed: [{ id: "zzz", reason: "uydurma" }] });
+    const raw = JSON.stringify({ items: [{ id: "zzz", completed: true, reason: "uydurma" }] });
     expect(parseCloseDecision(raw, todos)).toEqual([]);
   });
 
   it("boş liste döndüğünde hiçbir şey kapatmaz", () => {
-    expect(parseCloseDecision(JSON.stringify({ completed: [] }), todos)).toEqual([]);
+    expect(parseCloseDecision(JSON.stringify({ items: [] }), todos)).toEqual([]);
   });
 
   it("bozuk cevapta hiçbir şey kapatmaz", () => {
     expect(parseCloseDecision("bu JSON değil", todos)).toEqual([]);
-    expect(parseCloseDecision(JSON.stringify({ completed: "hepsi" }), todos)).toEqual([]);
+    expect(parseCloseDecision(JSON.stringify({ items: "hepsi" }), todos)).toEqual([]);
   });
 
   it("gerekçe yoksa boş gerekçeyle döner", () => {
-    const result = parseCloseDecision(JSON.stringify({ completed: [{ id: "a" }] }), todos);
+    const result = parseCloseDecision(
+      JSON.stringify({ items: [{ id: "a", completed: true }] }),
+      todos,
+    );
     expect(result[0].reason).toBe("");
   });
 
   it("aynı işi iki kez saymaz", () => {
-    const raw = JSON.stringify({ completed: [{ id: "a" }, { id: "a", reason: "tekrar" }] });
+    const raw = JSON.stringify({
+      items: [
+        { id: "a", completed: true },
+        { id: "a", completed: true, reason: "tekrar" },
+      ],
+    });
     expect(parseCloseDecision(raw, todos)).toHaveLength(1);
   });
 });
@@ -81,13 +110,20 @@ describe("buildClosePrompt", () => {
   it("emin olunmayan işin açık bırakılmasını ister", () => {
     expect(buildClosePrompt(sentMail, todos).toLowerCase()).toContain("emin");
   });
+
+  it("söz vermenin işi kapatmadığını örnekle söyler", () => {
+    const prompt = buildClosePrompt(sentMail, todos).toLowerCase();
+    expect(prompt).toContain("yapacağım");
+  });
 });
 
 describe("decideClosures", () => {
   it("Claude'un seçtiği işleri döner", async () => {
     const analyzeText = vi
       .fn()
-      .mockResolvedValue(JSON.stringify({ completed: [{ id: "a", reason: "ekte gönderildi" }] }));
+      .mockResolvedValue(
+        JSON.stringify({ items: [{ id: "a", completed: true, reason: "ekte gönderildi" }] }),
+      );
     const result = await decideClosures(sentMail, todos, { analyzeText });
     expect(result).toEqual([{ emailId: 1, itemId: "a", reason: "ekte gönderildi" }]);
     expect(analyzeText).toHaveBeenCalledTimes(1);
