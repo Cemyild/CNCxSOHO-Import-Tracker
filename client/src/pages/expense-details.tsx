@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import InvoiceLineItemsTable from "@/components/ui/invoice-line-items-table";
 import ExpenseTrendsChart from "@/components/ui/expense-trends-chart";
+import { ProcedureInfoCard } from "@/components/procedure/ProcedureInfoCard";
 
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
@@ -355,55 +356,8 @@ export default function ExpenseDetailsPage() {
           </div>
         </div>
 
-        {/* Expense Header Card */}
-        <Card className="mb-8">
-          <CardHeader>
-            <div className="space-y-2">
-              <CardTitle className="text-2xl">{procedure.reference}</CardTitle>
-              <CardDescription>
-                {t('expenseDetails.overview')}
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 text-center">
-              <div className="flex flex-col items-center">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">{t('expenseDetails.reference')}</h4>
-                <p className="font-medium">{procedure.reference}</p>
-              </div>
-              <div className="flex flex-col items-center">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">{t('expenseDetails.shipper')}</h4>
-                <p className="font-medium">{procedure.shipper}</p>
-              </div>
-              <div className="flex flex-col items-center">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">{t('expenseDetails.invoiceNo')}</h4>
-                <p className="font-medium">{procedure.invoice_no || t('expenseDetails.na')}</p>
-              </div>
-              <div className="flex flex-col items-center">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">{t('expenseDetails.invoiceDate')}</h4>
-                <p className="font-medium">
-                  {procedure.invoice_date 
-                    ? new Date(procedure.invoice_date).toLocaleDateString()
-                    : t('expenseDetails.na')
-                  }
-                </p>
-              </div>
-              <div className="flex flex-col items-center">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">{t('expenseDetails.amount')}</h4>
-                <p className="font-medium">
-                  {procedure.amount
-                    ? formatCurrency(parseFloat(procedure.amount), procedure.currency || "TRY")
-                    : t('expenseDetails.na')
-                  }
-                </p>
-              </div>
-              <div className="flex flex-col items-center">
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">{t('expenseDetails.piece')}</h4>
-                <p className="font-medium">{procedure.piece || t('expenseDetails.na')}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Procedure Information Card (same as Procedure Details) */}
+        <ProcedureInfoCard procedure={procedure} />
 
         {/* Financial Information Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
