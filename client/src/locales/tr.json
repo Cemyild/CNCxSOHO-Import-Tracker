@@ -97,7 +97,8 @@
       "waiting_response": "Yanıt Bekleniyor",
       "inspection_date_confirmed": "Muayene Tarihi Onaylandı",
       "samples_taken": "Numune Alındı",
-      "lab_testing": "Laboratuvar Testi"
+      "lab_testing": "Laboratuvar Testi",
+      "finalized": "Tamamlandı"
     }
   },
   "procedures": {

@@ -97,7 +97,8 @@
       "waiting_response": "Waiting Response",
       "inspection_date_confirmed": "Inspection Date Confirmed",
       "samples_taken": "Samples Taken",
-      "lab_testing": "Lab Testing"
+      "lab_testing": "Lab Testing",
+      "finalized": "Finalized"
     }
   },
   "procedures": {

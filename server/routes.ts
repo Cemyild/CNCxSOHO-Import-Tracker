@@ -4989,6 +4989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         inspection_date_confirmed: "Inspection Date Confirmed",
         samples_taken: "Samples Taken",
         lab_testing: "Lab Testing",
+        finalized: "Finalized",
       };
 
       const workbook = new ExcelJS.Workbook();

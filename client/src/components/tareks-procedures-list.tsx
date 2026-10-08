@@ -38,6 +38,7 @@ const TAREKS_STATUSES = [
   { value: "inspection_date_confirmed" },
   { value: "samples_taken" },
   { value: "lab_testing" },
+  { value: "finalized" },
 ] as const;
 
 type TareksStatusValue = typeof TAREKS_STATUSES[number]["value"];
@@ -47,6 +48,7 @@ const STATUS_BADGE_STYLES: Record<TareksStatusValue, string> = {
   inspection_date_confirmed: "bg-blue-100 text-blue-800 border-blue-200",
   samples_taken: "bg-orange-100 text-orange-800 border-orange-200",
   lab_testing: "bg-purple-100 text-purple-800 border-purple-200",
+  finalized: "bg-green-100 text-green-800 border-green-200",
 };
 
 function formatDate(date: string | null): string {
