@@ -1,13 +1,74 @@
 import { Router } from "express";
 import { db } from "./db";
-import { invoiceMakerHistory, taxCalculationItems } from "@shared/schema";
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import {
+  invoiceMakerHistory,
+  invoiceMakerOptions,
+  taxCalculationItems,
+} from "@shared/schema";
+import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   buildCommercialInvoiceXlsx,
   type ExportPayload,
 } from "./invoice-maker-export";
 
 const router = Router();
+
+const OPTION_KINDS = ["goods", "port", "destination", "paymentTerm"] as const;
+
+// User-added dropdown options, grouped by kind, oldest first.
+router.get("/options", async (_req, res) => {
+  try {
+    const rows = await db
+      .select({ kind: invoiceMakerOptions.kind, value: invoiceMakerOptions.value })
+      .from(invoiceMakerOptions)
+      .orderBy(asc(invoiceMakerOptions.id));
+    const options: Record<string, string[]> = {};
+    for (const kind of OPTION_KINDS) options[kind] = [];
+    for (const row of rows) {
+      (options[row.kind] ??= []).push(row.value);
+    }
+    res.json({ options });
+  } catch (error) {
+    console.error("Error fetching invoice maker options:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to fetch options", error: String(error) });
+  }
+});
+
+// Add one option (or several via `values`); duplicates are ignored.
+router.post("/options", async (req, res) => {
+  try {
+    const kind = req.body?.kind;
+    if (!OPTION_KINDS.includes(kind)) {
+      return res.status(400).json({ message: "Invalid kind" });
+    }
+    const raw: unknown[] = Array.isArray(req.body?.values)
+      ? req.body.values
+      : [req.body?.value];
+    const values = Array.from(
+      new Set(
+        raw
+          .filter((v): v is string => typeof v === "string")
+          .map((v) => v.trim().toUpperCase())
+          .filter((v) => v.length > 0 && v.length <= 200),
+      ),
+    ).slice(0, 100);
+    if (values.length === 0) {
+      return res.status(400).json({ message: "value is required" });
+    }
+    await db
+      .insert(invoiceMakerOptions)
+      .values(values.map((value) => ({ kind, value })))
+      .onConflictDoNothing();
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Error adding invoice maker option:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to add option", error: String(error) });
+  }
+});
 
 // Resolve TR HS codes for a list of styles from past tax calculation items.
 // For each style the most recently entered tr_hs_code wins.

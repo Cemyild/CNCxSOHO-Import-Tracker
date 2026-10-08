@@ -714,6 +714,17 @@ export const invoiceMakerHistory = pgTable("invoice_maker_history", {
 
 export type InvoiceMakerHistory = typeof invoiceMakerHistory.$inferSelect;
 
+// User-added Invoice Maker dropdown options, shared by everyone.
+// DDL: db/manual-ddl/007_invoice_maker_options.sql
+export const invoiceMakerOptions = pgTable("invoice_maker_options", {
+  id: serial("id").primaryKey(),
+  kind: text("kind").notNull(),
+  value: text("value").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  kindValueUnique: unique("invoice_maker_options_kind_value_key").on(table.kind, table.value),
+}));
+
 // ---------------------------------------------------------------------------
 // Admin mail takibi (2026-09-14). Durum kolonları bilinçli olarak text; DDL:
 // db/manual-ddl/004_email_inbox.sql

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -72,35 +72,77 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function loadCustomOptions(storageKey: string): string[] {
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
-  } catch {
-    return [];
-  }
+// User-added dropdown options live in the database so everyone sees them.
+type OptionKind = "goods" | "port" | "destination" | "paymentTerm";
+
+const OPTIONS_QUERY_KEY = ["/api/invoice-maker/options"];
+
+// Older builds kept added options in each browser's localStorage under these
+// keys; they are uploaded once and then removed.
+const LEGACY_STORAGE_KEYS: Record<OptionKind, string> = {
+  goods: "invoiceMaker.customGoodsDescriptions",
+  port: "invoiceMaker.customPorts",
+  destination: "invoiceMaker.customDestinations",
+  paymentTerm: "invoiceMaker.customPaymentTerms",
+};
+
+function useInvoiceOptions() {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({
+    queryKey: OPTIONS_QUERY_KEY,
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/invoice-maker/options");
+      return (await res.json()) as {
+        options: Partial<Record<OptionKind, string[]>>;
+      };
+    },
+  });
+
+  const addOptions = async (kind: OptionKind, values: string[]) => {
+    await apiRequest("POST", "/api/invoice-maker/options", { kind, values });
+    await queryClient.invalidateQueries({ queryKey: OPTIONS_QUERY_KEY });
+  };
+
+  return {
+    custom: (kind: OptionKind) => data?.options?.[kind] ?? [],
+    addOptions,
+  };
 }
 
-function saveCustomOptions(storageKey: string, options: string[]) {
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(options));
-  } catch {
-    // localStorage unavailable — options just won't persist
-  }
+function useMigrateLegacyOptions(
+  addOptions: (kind: OptionKind, values: string[]) => Promise<void>,
+) {
+  useEffect(() => {
+    for (const [kind, key] of Object.entries(LEGACY_STORAGE_KEYS)) {
+      let values: string[] = [];
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) ?? "[]");
+        if (Array.isArray(parsed)) {
+          values = parsed.filter((v) => typeof v === "string");
+        }
+      } catch {
+        continue;
+      }
+      if (values.length === 0) continue;
+      addOptions(kind as OptionKind, values)
+        .then(() => localStorage.removeItem(key))
+        .catch(() => {
+          // keep them locally and retry on the next visit
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }
 
 // ---------------------------------------------------------------------------
 // AddableSelect: dropdown with an inline "add new option" popover.
-// User-added options persist in localStorage under storageKey.
 // ---------------------------------------------------------------------------
 
 type AddableSelectProps = {
   value: string;
   onChange: (value: string) => void;
   defaultOptions: string[];
-  storageKey: string;
+  kind: OptionKind;
   placeholder: string;
   addLabel: string;
 };
@@ -109,29 +151,28 @@ function AddableSelect({
   value,
   onChange,
   defaultOptions,
-  storageKey,
+  kind,
   placeholder,
   addLabel,
 }: AddableSelectProps) {
   const { t } = useTranslation();
-  const [customOptions, setCustomOptions] = useState<string[]>(() =>
-    loadCustomOptions(storageKey),
-  );
+  const { toast } = useToast();
+  const { custom, addOptions } = useInvoiceOptions();
   const [addOpen, setAddOpen] = useState(false);
   const [draft, setDraft] = useState("");
 
   const allOptions = [
     ...defaultOptions,
-    ...customOptions.filter((o) => !defaultOptions.includes(o)),
+    ...custom(kind).filter((o) => !defaultOptions.includes(o)),
   ];
 
   const handleAdd = () => {
     const next = draft.trim().toUpperCase();
     if (!next) return;
     if (!allOptions.includes(next)) {
-      const updated = [...customOptions, next];
-      setCustomOptions(updated);
-      saveCustomOptions(storageKey, updated);
+      addOptions(kind, [next]).catch((e) =>
+        toast({ title: String(e?.message ?? e), variant: "destructive" }),
+      );
     }
     onChange(next);
     setDraft("");
@@ -141,7 +182,7 @@ function AddableSelect({
   return (
     <div className="flex gap-2">
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="flex-1" data-testid={`select-${storageKey}`}>
+        <SelectTrigger className="flex-1" data-testid={`select-${kind}`}>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
@@ -234,6 +275,13 @@ export default function InvoiceMakerPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<InvoiceHeaderForm>(EMPTY_INVOICE_HEADER);
   const [goodsOpen, setGoodsOpen] = useState(false);
+  const { custom: customOptions, addOptions } = useInvoiceOptions();
+  useMigrateLegacyOptions(addOptions);
+  const [goodsDraft, setGoodsDraft] = useState("");
+  const allGoods = [
+    ...GOODS_DESCRIPTIONS,
+    ...customOptions("goods").filter((g) => !GOODS_DESCRIPTIONS.includes(g)),
+  ];
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
   const [resolvingHs, setResolvingHs] = useState(false);
   const draftFileRef = useRef<HTMLInputElement>(null);
@@ -393,7 +441,8 @@ export default function InvoiceMakerPage() {
       ...prev,
       { id: nextLineItemId(), ...palletDraft },
     ]);
-    setPalletDraft(EMPTY_PALLET_DRAFT);
+    // Values are kept so the next (often identical) pallet can be added
+    // straight away or with a small tweak.
   };
 
   const removePallet = (id: string) =>
@@ -559,11 +608,28 @@ export default function InvoiceMakerPage() {
       "goodsDescriptions",
       form.goodsDescriptions.includes(item)
         ? form.goodsDescriptions.filter((g) => g !== item)
-        : // keep canonical order from GOODS_DESCRIPTIONS
-          GOODS_DESCRIPTIONS.filter(
+        : // keep canonical order from the option list
+          allGoods.filter(
             (g) => form.goodsDescriptions.includes(g) || g === item,
           ),
     );
+  };
+
+  const addGoods = () => {
+    const next = goodsDraft.trim().toUpperCase();
+    if (!next) return;
+    if (!allGoods.includes(next)) {
+      addOptions("goods", [next]).catch((e) =>
+        toast({ title: String(e?.message ?? e), variant: "destructive" }),
+      );
+    }
+    if (!form.goodsDescriptions.includes(next)) {
+      set("goodsDescriptions", [
+        ...allGoods.filter((g) => form.goodsDescriptions.includes(g)),
+        next,
+      ]);
+    }
+    setGoodsDraft("");
   };
 
   return (
@@ -720,7 +786,7 @@ export default function InvoiceMakerPage() {
                   value={form.portOfLoading}
                   onChange={(v) => set("portOfLoading", v)}
                   defaultOptions={DEFAULT_PORTS_OF_LOADING}
-                  storageKey="invoiceMaker.customPorts"
+                  kind="port"
                   placeholder={t("invoiceMaker.selectPort")}
                   addLabel={t("invoiceMaker.addNewPort")}
                 />
@@ -731,7 +797,7 @@ export default function InvoiceMakerPage() {
                   value={form.finalDestination}
                   onChange={(v) => set("finalDestination", v)}
                   defaultOptions={DEFAULT_FINAL_DESTINATIONS}
-                  storageKey="invoiceMaker.customDestinations"
+                  kind="destination"
                   placeholder={t("invoiceMaker.selectDestination")}
                   addLabel={t("invoiceMaker.addNewDestination")}
                 />
@@ -742,7 +808,7 @@ export default function InvoiceMakerPage() {
                   value={form.paymentTerm}
                   onChange={(v) => set("paymentTerm", v)}
                   defaultOptions={DEFAULT_PAYMENT_TERMS}
-                  storageKey="invoiceMaker.customPaymentTerms"
+                  kind="paymentTerm"
                   placeholder={t("invoiceMaker.selectPaymentTerm")}
                   addLabel={t("invoiceMaker.addNewPaymentTerm")}
                 />
@@ -825,7 +891,7 @@ export default function InvoiceMakerPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-72" align="start">
                   <div className="space-y-3">
-                    {GOODS_DESCRIPTIONS.map((g) => (
+                    {allGoods.map((g) => (
                       <label
                         key={g}
                         className="flex cursor-pointer items-center gap-2 text-sm"
@@ -837,6 +903,29 @@ export default function InvoiceMakerPage() {
                         {g}
                       </label>
                     ))}
+                    <div className="flex gap-2 border-t pt-3">
+                      <Input
+                        className="h-8"
+                        value={goodsDraft}
+                        onChange={(e) => setGoodsDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addGoods();
+                          }
+                        }}
+                        placeholder={t("invoiceMaker.typeNewValue")}
+                        data-testid="input-new-goods-description"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={addGoods}
+                        disabled={!goodsDraft.trim()}
+                        data-testid="button-add-goods-description"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </PopoverContent>
               </Popover>
