@@ -1551,6 +1551,12 @@ export class DatabaseStorage implements IStorage {
     const [expense] = await db.select().from(importExpenses).where(eq(importExpenses.id, id));
     if (!expense) return false;
     
+    // Remove the attached receipt rows too; otherwise they linger as orphans
+    // under the procedure (File View / Bulk Download) with no expense behind them.
+    await db.delete(expenseDocuments).where(and(
+      eq(expenseDocuments.expenseType, 'import_expense'),
+      eq(expenseDocuments.expenseId, id)
+    ));
     const result = await db.delete(importExpenses).where(eq(importExpenses.id, id)).returning();
     
     if (result.length > 0) {
@@ -1637,6 +1643,12 @@ export class DatabaseStorage implements IStorage {
     const [invoice] = await db.select().from(importServiceInvoices).where(eq(importServiceInvoices.id, id));
     if (!invoice) return false;
     
+    // Remove the attached receipt rows too; otherwise they linger as orphans
+    // under the procedure (File View / Bulk Download) with no expense behind them.
+    await db.delete(expenseDocuments).where(and(
+      eq(expenseDocuments.expenseType, 'service_invoice'),
+      eq(expenseDocuments.expenseId, id)
+    ));
     const result = await db.delete(importServiceInvoices).where(eq(importServiceInvoices.id, id)).returning();
     
     if (result.length > 0) {

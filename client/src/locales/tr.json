@@ -133,6 +133,32 @@
     "previousPage": "Önceki sayfaya git",
     "nextPage": "Sonraki sayfaya git",
     "lastPage": "Son sayfaya git",
+    "fileView": {
+      "button": "Dosya Görünümü",
+      "name": "Ad",
+      "size": "Boyut",
+      "date": "Yüklenme",
+      "fileCount_one": "{{count}} dosya",
+      "fileCount_other": "{{count}} dosya",
+      "procedureCount_one": "{{count}} prosedür",
+      "procedureCount_other": "{{count}} prosedür",
+      "pieces_one": "{{value}} adet",
+      "pieces_other": "{{value}} adet",
+      "pallets_one": "{{value}} palet",
+      "pallets_other": "{{value}} palet",
+      "empty": "Bu prosedürde henüz belge yok.",
+      "loadError": "Belgeler yüklenemedi.",
+      "open": "Aç",
+      "download": "İndir",
+      "numberLabel": "No: {{number}}",
+      "folders": {
+        "import_document": "İthalat Belgeleri",
+        "import_expense": "Masraf Makbuzları",
+        "service_invoice": "Hizmet Faturaları",
+        "tax": "Vergi Belgeleri",
+        "other": "Diğer"
+      }
+    },
     "col": {
       "reference": "Referans",
       "shipper": "Gönderici",

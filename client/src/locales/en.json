@@ -133,6 +133,32 @@
     "previousPage": "Go to previous page",
     "nextPage": "Go to next page",
     "lastPage": "Go to last page",
+    "fileView": {
+      "button": "File View",
+      "name": "Name",
+      "size": "Size",
+      "date": "Uploaded",
+      "fileCount_one": "{{count}} file",
+      "fileCount_other": "{{count}} files",
+      "procedureCount_one": "{{count}} procedure",
+      "procedureCount_other": "{{count}} procedures",
+      "pieces_one": "{{value}} pcs",
+      "pieces_other": "{{value}} pcs",
+      "pallets_one": "{{value}} pallet",
+      "pallets_other": "{{value}} pallets",
+      "empty": "No documents in this procedure yet.",
+      "loadError": "Documents could not be loaded.",
+      "open": "Open",
+      "download": "Download",
+      "numberLabel": "No: {{number}}",
+      "folders": {
+        "import_document": "Import Documents",
+        "import_expense": "Expense Receipts",
+        "service_invoice": "Service Invoices",
+        "tax": "Tax Documents",
+        "other": "Other"
+      }
+    },
     "col": {
       "reference": "Reference",
       "shipper": "Shipper",

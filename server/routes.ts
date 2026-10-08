@@ -32,6 +32,7 @@ import {
   paymentDistributions,
   taxCalculations,
   taxCalculationItems,
+  expenseDocuments,
 } from "@shared/schema";
 import { calculateAllItems, checkMissingAtrRates } from "./tax-calculation-service";
 import { jsPDF } from "jspdf";
@@ -4029,6 +4030,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Document count per procedure reference (File View on the Procedures page).
+  // Kept outside /api/expense-documents/* so it can't be swallowed by /:id.
+  app.get("/api/expense-document-counts", async (_req, res) => {
+    try {
+      // Skip receipts whose expense / service invoice no longer exists (orphans).
+      const rows = await db
+        .select({
+          reference: expenseDocuments.procedureReference,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(expenseDocuments)
+        .where(sql`not (
+          (${expenseDocuments.expenseType} = 'import_expense'
+            and not exists (select 1 from ${importExpenses} where ${importExpenses.id} = ${expenseDocuments.expenseId}))
+          or (${expenseDocuments.expenseType} = 'service_invoice'
+            and not exists (select 1 from ${importServiceInvoices} where ${importServiceInvoices.id} = ${expenseDocuments.expenseId}))
+        )`)
+        .groupBy(expenseDocuments.procedureReference);
+      const counts: Record<string, number> = {};
+      for (const r of rows) counts[r.reference] = r.count;
+      res.json({ counts });
+    } catch (error) {
+      res
+        .status(500)
+        .json({ message: "Failed to count documents", error: String(error) });
+    }
+  });
+
   // GET documents by procedure reference
   app.get("/api/expense-documents/procedure/:reference", async (req, res) => {
     try {
@@ -4041,7 +4070,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const documents = await storage.getExpenseDocumentsByReference(reference);
-      res.json({ documents });
+      if (req.query.details !== "1") {
+        return res.json({ documents });
+      }
+
+      // ?details=1 (File View): attach the linked expense / service invoice
+      // so the UI can show category, number, date and amount instead of a
+      // bare filename like "page-3.pdf".
+      const expenseIds = documents
+        .filter((d) => d.expenseType === "import_expense")
+        .map((d) => d.expenseId);
+      const serviceIds = documents
+        .filter((d) => d.expenseType === "service_invoice")
+        .map((d) => d.expenseId);
+      const [expenseRows, serviceRows] = await Promise.all([
+        expenseIds.length
+          ? db.select().from(importExpenses).where(inArray(importExpenses.id, expenseIds))
+          : Promise.resolve([] as (typeof importExpenses.$inferSelect)[]),
+        serviceIds.length
+          ? db.select().from(importServiceInvoices).where(inArray(importServiceInvoices.id, serviceIds))
+          : Promise.resolve([] as (typeof importServiceInvoices.$inferSelect)[]),
+      ]);
+      const expenseById = new Map(expenseRows.map((e) => [e.id, e]));
+      const serviceById = new Map(serviceRows.map((s) => [s.id, s]));
+
+      // Receipts whose expense / service invoice was deleted are orphans:
+      // they don't belong to the procedure any more, so leave them out.
+      const linked = documents.filter((d) =>
+        d.expenseType === "import_expense" ? expenseById.has(d.expenseId)
+        : d.expenseType === "service_invoice" ? serviceById.has(d.expenseId)
+        : true,
+      );
+      const enriched = linked.map((d) => {
+        if (d.expenseType === "import_expense") {
+          const e = expenseById.get(d.expenseId);
+          if (e) {
+            return {
+              ...d,
+              expense: {
+                category: e.category,
+                number: e.invoiceNumber || e.documentNumber || e.policyNumber || null,
+                date: e.invoiceDate || null,
+                amount: e.amount,
+                currency: e.currency,
+                issuer: e.issuer || null,
+              },
+            };
+          }
+        } else if (d.expenseType === "service_invoice") {
+          const s = serviceById.get(d.expenseId);
+          if (s) {
+            return {
+              ...d,
+              expense: {
+                category: "service_invoice",
+                number: s.invoiceNumber || null,
+                date: s.date || null,
+                amount: s.amount,
+                currency: s.currency,
+                issuer: null,
+              },
+            };
+          }
+        }
+        return d;
+      });
+      res.json({ documents: enriched });
     } catch (error) {
       res
         .status(500)

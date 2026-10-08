@@ -32,6 +32,7 @@ import {
   Columns3, 
   Ellipsis, 
   Filter, 
+  FolderTree, 
   ListFilter, 
   Plus, 
   Trash 
@@ -90,6 +91,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { ExcelDataEnrichment } from "@/components/ExcelDataEnrichment";
+import { ProceduresFileView } from "@/components/procedures-file-view";
 
 import type { Procedure } from "@shared/schema";
 
@@ -126,6 +128,21 @@ export function ProceduresTable() {
     pageSize: 10,
   });
   const inputRef = useRef<HTMLInputElement>(null);
+  const [fileView, setFileView] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("procedures.fileView") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleFileView = () => {
+    setFileView((prev) => {
+      try {
+        localStorage.setItem("procedures.fileView", prev ? "0" : "1");
+      } catch {}
+      return !prev;
+    });
+  };
 
   const [sorting, setSorting] = useState<SortingState>([]);
 
@@ -790,6 +807,7 @@ const columns: ColumnDef<Procedure>[] = [
             </PopoverContent>
           </Popover>
           {/* Column visibility */}
+          {!fileView && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -821,9 +839,26 @@ const columns: ColumnDef<Procedure>[] = [
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
+          )}
+          {/* Toggle between the table and the folder (file explorer) view */}
+          <Button
+            variant={fileView ? "default" : "outline"}
+            onClick={toggleFileView}
+            aria-pressed={fileView}
+          >
+            <FolderTree
+              className={cn("-ms-1 me-2", !fileView && "opacity-60")}
+              size={16}
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+            {t('procedures.fileView.button')}
+          </Button>
         </div>
         <div className="flex items-center gap-2">
           {/* Row size with dropdown selector */}
+          {!fileView && (
+          <>
           <Label htmlFor={`${id}-rows-per-page`} className="text-xs">
             {t('procedures.perPage')}
           </Label>
@@ -844,6 +879,8 @@ const columns: ColumnDef<Procedure>[] = [
               ))}
             </SelectContent>
           </Select>
+          </>
+          )}
           {/* Excel enrichment and procedure creation - Admin only */}
           {isAdmin && <ExcelDataEnrichment onSuccess={() => refetch()} />}
           {isAdmin && (
@@ -864,6 +901,12 @@ const columns: ColumnDef<Procedure>[] = [
 
       {/* No more multi-select delete button needed */}
 
+      {fileView ? (
+        <ProceduresFileView
+          procedures={table.getPrePaginationRowModel().rows.map((r) => r.original)}
+        />
+      ) : (
+      <>
       {/* Table */}
       <div className="rounded-md border">
         <Table>
@@ -1000,6 +1043,8 @@ const columns: ColumnDef<Procedure>[] = [
           </PaginationContent>
         </Pagination>
       </div>
+      </>
+      )}
     </div>
   );
 }
